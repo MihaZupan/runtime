@@ -29,9 +29,15 @@ namespace System
         {
             Debug.Assert(char.IsHighSurrogate(highSurr));
 
+<<<<<<< Updated upstream
             if (isSurrogatePair = char.IsLowSurrogate(lowSurr))
             {
                 uint utf32 = (uint)char.ConvertToUtf32(highSurr, lowSurr);
+=======
+            if (surrogatePair = char.IsSurrogatePair(highSurr, lowSurr))
+            {
+                uint utf32 = (uint)CharHelper.ConvertToUtf32(highSurr, lowSurr);
+>>>>>>> Stashed changes
 
                 return ((utf32 - 0x10000) <= (0x1FFFD - 0x10000) ||
                     (utf32 - 0x20000) <= (0x2FFFD - 0x20000) ||
@@ -47,9 +53,15 @@ namespace System
                     (utf32 - 0xC0000) <= (0xCFFFD - 0xC0000) ||
                     (utf32 - 0xD0000) <= (0xDFFFD - 0xD0000) ||
                     (utf32 - 0xE1000) <= (0xEFFFD - 0xE1000) ||
+<<<<<<< Updated upstream
                     (isQuery &&
                         ((utf32 - 0xF0000) <= (0xFFFFD - 0xF0000) ||
                         (utf32 - 0x100000) <= (0x10FFFD - 0x100000))));
+=======
+                     (isQuery &&
+                         (utf32 - 0xF0000) <= (0xFFFFD - 0xF0000) ||
+                         (utf32 - 0x100000) <= (0x10FFFD - 0x100000)));
+>>>>>>> Stashed changes
             }
             return false;
         }

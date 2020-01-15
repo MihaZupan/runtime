@@ -276,10 +276,10 @@ namespace System
                     if (tmpEnumerator.MoveNext())
                     {
                         Rune r1 = tmpEnumerator.Current;
-                        if (r1.IsAscii && IsHexDigit((char)r1.Value) && tmpEnumerator.MoveNext())
+                        if (r1.IsAscii && CharHelper.IsHexDigit((char)r1.Value) && tmpEnumerator.MoveNext())
                         {
                             Rune r2 = tmpEnumerator.Current;
-                            if (r2.IsAscii && IsHexDigit((char)r2.Value))
+                            if (r2.IsAscii && CharHelper.IsHexDigit((char)r2.Value))
                             {
                                 vsb.Append('%');
                                 vsb.Append((char)r1.Value);
@@ -683,7 +683,24 @@ namespace System
                 return Uri.c_DummyChar;
             }
 
+<<<<<<< Updated upstream
             return (char)((CharHelper.HexToInt(digit) << 4) + CharHelper.HexToInt(next));
+=======
+            int res = (digit <= '9')
+                ? (digit - '0')
+                : (((digit <= 'F')
+                    ? (digit - 'A')
+                    : (digit - 'a'))
+                       + 10);
+
+            return (char)((res << 4) +
+                ((next <= '9')
+                    ? (next - '0')
+                    : (((next <= 'F')
+                        ? (next - 'A')
+                        : (next - 'a'))
+                       + 10)));
+>>>>>>> Stashed changes
         }
 
         internal const string RFC3986ReservedMarks = @";/?:@&=+$,#[]!'()*";
