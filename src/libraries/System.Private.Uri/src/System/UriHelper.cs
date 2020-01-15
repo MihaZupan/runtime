@@ -683,24 +683,7 @@ namespace System
                 return Uri.c_DummyChar;
             }
 
-<<<<<<< Updated upstream
             return (char)((CharHelper.HexToInt(digit) << 4) + CharHelper.HexToInt(next));
-=======
-            int res = (digit <= '9')
-                ? (digit - '0')
-                : (((digit <= 'F')
-                    ? (digit - 'A')
-                    : (digit - 'a'))
-                       + 10);
-
-            return (char)((res << 4) +
-                ((next <= '9')
-                    ? (next - '0')
-                    : (((next <= 'F')
-                        ? (next - 'A')
-                        : (next - 'a'))
-                       + 10)));
->>>>>>> Stashed changes
         }
 
         internal const string RFC3986ReservedMarks = @";/?:@&=+$,#[]!'()*";
