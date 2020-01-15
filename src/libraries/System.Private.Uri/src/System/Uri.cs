@@ -2352,8 +2352,8 @@ namespace System
                         //Check on some non-canonical cases http://host:0324/, http://host:03, http://host:0, etc
                         if (++idx < info.Offset.End)
                         {
-                            port = unchecked((ushort)(userString[idx] - '0'));
-                            if (port <= unchecked((ushort)('9' - '0')))
+                            port = unchecked(userString[idx] - '0');
+                            if (port <= unchecked('9' - '0'))
                             {
                                 notEmpty = true;
                                 if (port == 0)
@@ -2362,8 +2362,8 @@ namespace System
                                 }
                                 for (++idx; idx < info.Offset.End; ++idx)
                                 {
-                                    ushort val = unchecked((ushort)((ushort)userString[idx] - (ushort)'0'));
-                                    if (val > unchecked((ushort)('9' - '0')))
+                                    int val = unchecked(userString[idx] - '0');
+                                    if (val > unchecked('9' - '0'))
                                     {
                                         break;
                                     }
@@ -3671,7 +3671,7 @@ namespace System
                 if ((c = uriString[idx + 1]) == ':' || c == '|')
                 {
                     //DOS-like path?
-                    if (UriHelper.IsAsciiLetter(uriString[idx]))
+                    if (CharHelper.IsAsciiLetter(uriString[idx]))
                     {
                         if ((c = uriString[idx + 2]) == '\\' || c == '/')
                         {
@@ -3883,7 +3883,7 @@ namespace System
         //
         private static unsafe ParsingError CheckSchemeSyntax(ReadOnlySpan<char> span, ref UriParser? syntax)
         {
-            static char ToLowerCaseAscii(char c) => (uint)(c - 'A') <= 'Z' - 'A' ? (char)(c | 0x20) : c;
+            static char ToLowerCaseAscii(char c) => CharHelper.IsAsciiLowercaseLetter(c) ? (char)(c | 0x20) : c;
 
             if (span.Length == 0)
             {
@@ -3893,11 +3893,11 @@ namespace System
             // The first character must be an alpha.  Validate that and store it as lower-case, as
             // all of the fast-path checks need that value.
             char firstLower = span[0];
-            if ((uint)(firstLower - 'A') <= 'Z' - 'A')
+            if (CharHelper.IsAsciiUppercaseLetter(firstLower))
             {
                 firstLower = (char)(firstLower | 0x20);
             }
-            else if ((uint)(firstLower - 'a') > 'z' - 'a')
+            else if (!CharHelper.IsAsciiLowercaseLetter(firstLower))
             {
                 return ParsingError.BadScheme;
             }
@@ -3962,10 +3962,7 @@ namespace System
             for (int i = 1; i < span.Length; i++)
             {
                 char c = span[i];
-                if ((uint)(c - 'a') > 'z' - 'a' &&
-                    (uint)(c - 'A') > 'Z' - 'A' &&
-                    (uint)(c - '0') > '9' - '0' &&
-                    c != '+' && c != '-' && c != '.')
+                if (!CharHelper.IsAsciiLetterOrDigit(c) && c != '+' && c != '-' && c != '.')
                 {
                     return ParsingError.BadScheme;
                 }
@@ -4098,7 +4095,7 @@ namespace System
                     justNormalized = true;
                 }
             }
-            else if (ch <= '9' && ch >= '0' && syntax.InFact(UriSyntaxFlags.AllowIPv4Host) &&
+            else if (CharHelper.IsAsciiDigit(ch) && syntax.InFact(UriSyntaxFlags.AllowIPv4Host) &&
                 IPv4AddressHelper.IsValid(pString, (int)start, ref end, false, StaticNotAny(flags, Flags.ImplicitFile), syntax.InFact(UriSyntaxFlags.V1_UnknownUri)))
             {
                 flags |= Flags.IPv4HostType;
@@ -4174,14 +4171,13 @@ namespace System
                     int startPort = end;
                     for (idx = (ushort)(end + 1); idx < length; ++idx)
                     {
-                        ushort val = unchecked((ushort)((ushort)pString[idx] - (ushort)'0'));
-                        if ((val >= 0) && (val <= 9))
+                        int val = unchecked(pString[idx] - '0');
+                        if ((uint)val <= 9)
                         {
                             if ((port = (port * 10 + val)) > 0xFFFF)
                                 break;
                         }
-                        else if (val == unchecked((ushort)('/' - '0')) || val == (ushort)('?' - '0')
-                            || val == unchecked((ushort)('#' - '0')))
+                        else if (val == ('/' - '0') || val == ('?' - '0') || val == ('#' - '0'))
                         {
                             break;
                         }
