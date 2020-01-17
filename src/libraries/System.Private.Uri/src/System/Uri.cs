@@ -3332,14 +3332,30 @@ namespace System
                 idx = _info.Offset.Path;
 
                 ushort offset = origIdx;
-                if (IsImplicitFile || ((syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) == 0))
+                if (IsImplicitFile)
                 {
-                    FindEndOfComponent(_originalUnicodeString, ref origIdx, (ushort)_originalUnicodeString.Length, c_DummyChar);
+                    origIdx = (ushort)_originalUnicodeString.Length;
                 }
                 else
                 {
-                    FindEndOfComponent(_originalUnicodeString, ref origIdx, (ushort)_originalUnicodeString.Length,
-                   (_syntax.InFact(UriSyntaxFlags.MayHaveQuery) ? '?' : _syntax.InFact(UriSyntaxFlags.MayHaveFragment) ? '#' : c_EOL));
+                    int index = -1;
+                    ReadOnlySpan<char> span = _originalUnicodeString.AsSpan(origIdx);
+                    if (_syntax.InFact(UriSyntaxFlags.MayHaveQuery))
+                    {
+                        if (_syntax.InFact(UriSyntaxFlags.MayHaveFragment))
+                        {
+                            index = span.IndexOfAny('?', '#');
+                        }
+                        else
+                        {
+                            index = span.IndexOf('?');
+                        }
+                    }
+                    else if (_syntax.InFact(UriSyntaxFlags.MayHaveFragment))
+                    {
+                        index = span.IndexOf('#');
+                    }
+                    origIdx = index == -1 ? (ushort)_originalUnicodeString.Length : (ushort)(origIdx + index);
                 }
 
                 // Correctly escape unescape
@@ -3478,7 +3494,15 @@ namespace System
                 if (origIdx < _originalUnicodeString.Length && _originalUnicodeString[origIdx] == '?')
                 {
                     ++origIdx; // This is to exclude first '?' character from checking
-                    FindEndOfComponent(_originalUnicodeString, ref origIdx, (ushort)_originalUnicodeString.Length, ((syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0) ? '#' : c_EOL);
+                    if ((syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0)
+                    {
+                        int index = _originalUnicodeString.AsSpan(origIdx).IndexOf('#');
+                        origIdx = index == -1 ? (ushort)_originalUnicodeString.Length : (ushort)(index + origIdx);
+                    }
+                    else
+                    {
+                        origIdx = (ushort)_originalUnicodeString.Length;
+                    }
 
                     // Correctly escape unescape
                     string escapedPath = EscapeUnescapeIri(_originalUnicodeString, offset, origIdx, UriComponents.Query);
@@ -3546,7 +3570,7 @@ namespace System
                 if (origIdx < _originalUnicodeString.Length && _originalUnicodeString[origIdx] == '#')
                 {
                     ++origIdx; // This is to exclude first '#' character from checking
-                    FindEndOfComponent(_originalUnicodeString, ref origIdx, (ushort)_originalUnicodeString.Length, c_EOL);
+                    origIdx = (ushort)_originalUnicodeString.Length;
 
                     // Correctly escape unescape
                     string escapedPath = EscapeUnescapeIri(_originalUnicodeString, offset, origIdx, UriComponents.Fragment);
@@ -4058,7 +4082,7 @@ namespace System
                         // Iri'ze userinfo
                         if (iriParsing)
                         {
-                            if (iriParsing && hasUnicode && hostNotUnicodeNormalized)
+                            if (hasUnicode && hostNotUnicodeNormalized)
                             {
                                 // Normalize user info
                                 userInfoString = IriHelper.EscapeUnescapeIri(pString, startInput, start + 1, UriComponents.UserInfo);
@@ -4124,7 +4148,7 @@ namespace System
                 }
             }
             else if (((syntaxFlags & UriSyntaxFlags.AllowDnsHost) != 0)
-                    && ((syntax.InFact(UriSyntaxFlags.AllowIriParsing) && hostNotUnicodeNormalized)
+                    && ((iriParsing && hostNotUnicodeNormalized)
                             || syntax.InFact(UriSyntaxFlags.AllowIdn))
                     && DomainNameHelper.IsValidByIri(pString, start, ref end, ref dnsNotCanonical,
                                             StaticNotAny(flags, Flags.ImplicitFile)))
@@ -4382,37 +4406,6 @@ namespace System
             ReservedFound = 0x20,
             NotIriCanonical = 0x40,
             FoundNonAscii = 0x8
-        }
-
-        //
-        // Finds the end of component
-        //
-
-        private unsafe void FindEndOfComponent(string input, ref ushort idx, ushort end, char delim)
-        {
-            fixed (char* str = input)
-            {
-                FindEndOfComponent(str, ref idx, end, delim);
-            }
-        }
-        private unsafe void FindEndOfComponent(char* str, ref ushort idx, ushort end, char delim)
-        {
-            char c = c_DummyChar;
-            ushort i = idx;
-            for (; i < end; ++i)
-            {
-                c = str[i];
-                if (c == delim)
-                {
-                    break;
-                }
-                else if (delim == '?' && c == '#' && (_syntax != null && _syntax.InFact(UriSyntaxFlags.MayHaveFragment)))
-                {
-                    // this is a special case when deciding on Query/Fragment
-                    break;
-                }
-            }
-            idx = i;
         }
 
         //
