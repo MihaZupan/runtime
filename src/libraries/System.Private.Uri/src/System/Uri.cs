@@ -211,12 +211,6 @@ namespace System
                    (syntax == null)));
         }
 
-        private bool IsIntranet(string schemeHost)
-        {
-            // .NET Native/CoreCLR behavior difference: all URI/IRIs will be treated as Internet.
-            return false;
-        }
-
         internal bool UserDrivenParsing
         {
             get
@@ -4125,8 +4119,8 @@ namespace System
                     && DomainNameHelper.IsValidByIri(pString, start, ref end, ref dnsNotCanonical,
                                             StaticNotAny(flags, Flags.ImplicitFile)))
             {
-                CheckAuthorityHelperHandleDnsIri(pString, start, end, startInput, iriParsing, hasUnicode, syntax,
-                    userInfoString, ref flags, ref justNormalized, ref newHost, ref err);
+                CheckAuthorityHelperHandleDnsIri(pString, start, end, hasUnicode,
+                    ref flags, ref justNormalized, ref newHost, ref err);
             }
             else if ((syntaxFlags & UriSyntaxFlags.AllowUncHost) != 0)
             {
@@ -4241,7 +4235,7 @@ namespace System
                             break;
                         }
                     }
-                    CheckAuthorityHelperHandleAnyHostIri(pString, startInput, end, iriParsing, hasUnicode, syntax,
+                    CheckAuthorityHelperHandleAnyHostIri(pString, startInput, end, iriParsing, hasUnicode,
                                                             ref flags, ref newHost, ref err);
                 }
                 else
@@ -4305,8 +4299,8 @@ namespace System
             return (ushort)end;
         }
 
-        private unsafe void CheckAuthorityHelperHandleDnsIri(char* pString, ushort start, int end, int startInput,
-            bool iriParsing, bool hasUnicode, UriParser syntax, string? userInfoString, ref Flags flags,
+        private unsafe void CheckAuthorityHelperHandleDnsIri(char* pString, ushort start, int end,
+            bool hasUnicode, ref Flags flags,
             ref bool justNormalized, ref string? newHost, ref ParsingError err)
         {
             // comes here only if host has unicode chars and iri is on or idn is allowed
@@ -4330,7 +4324,7 @@ namespace System
         }
 
         private unsafe void CheckAuthorityHelperHandleAnyHostIri(char* pString, int startInput, int end,
-                                            bool iriParsing, bool hasUnicode, UriParser syntax,
+                                            bool iriParsing, bool hasUnicode,
                                             ref Flags flags, ref string? newHost, ref ParsingError err)
         {
             if (StaticNotAny(flags, Flags.HostUnicodeNormalized) && (iriParsing && hasUnicode))
@@ -4414,7 +4408,7 @@ namespace System
         //
         // Used by ParseRemaining as well by InternalIsWellFormedOriginalString
         //
-        private unsafe Check CheckCanonical(char* str, ref ushort idx, ushort end, char delim)
+        private unsafe Check CheckCanonical(char* str, ref ushort idx, int end, char delim)
         {
             Check res = Check.None;
             bool needsEscaping = false;
