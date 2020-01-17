@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -3880,8 +3881,6 @@ namespace System
         //
         private static unsafe ParsingError CheckSchemeSyntax(ReadOnlySpan<char> span, ref UriParser? syntax)
         {
-            static char ToLowerCaseAscii(char c) => (uint)(c - 'A') <= 'Z' - 'A' ? (char)(c | 0x20) : c;
-
             if (0 >= (uint)span.Length)
             {
                 return ParsingError.BadScheme;
@@ -3889,30 +3888,39 @@ namespace System
 
             // The first character must be an alpha.  Validate that and store it as lower-case, as
             // all of the fast-path checks need that value.
-            char firstLower = (char)(span[0] | 0x20);
-            if (!CharHelper.IsAsciiLetter(firstLower))
+            char first = span[0];
+            if (!CharHelper.IsAsciiLetter(first))
             {
                 return ParsingError.BadScheme;
             }
 
             // Special-case common and known schemes to avoid allocations and dictionary lookups in these cases.
-            const int wsMask = 'w' << 8 | 's';
-            const int ftpMask = 'f' << 16 | 't' << 8 | 'p';
-            const int wssMask = 'w' << 16 | 's' << 8 | 's';
-            const int fileMask = 'f' << 24 | 'i' << 16 | 'l' << 8 | 'e';
-            const int httpMask = 'h' << 24 | 't' << 16 | 't' << 8 | 'p';
-            const int mailMask = 'm' << 24 | 'a' << 16 | 'i' << 8 | 'l';
+            const int wsMask = 'w' << 16 | 's';
+            const long ftpMask = (long)'f' << 32 | (long)'t' << 16 | 'p';
+            const long wssMask = (long)'w' << 32 | (long)'s' << 16 | 's';
+            const long fileMask = (long)'f' << 48 | (long)'i' << 32 | (long)'l' << 16 | 'e';
+            const long httpMask = (long)'h' << 48 | (long)'t' << 32 | (long)'t' << 16 | 'p';
+            const long mailMask = (long)'m' << 48 | (long)'a' << 32 | (long)'i' << 16 | 'l';
+            const int toMask = 't' << 16 | 'o';
+
+            const int LowerCaseMask16 = 0x20;
+            const int LowerCaseMask32 = 0x20 << 16 | 0x20;
+            const long LowerCaseMask48 = 0x20L << 32 | 0x20L << 16 | 0x20L;
+            const long LowerCaseMask64 = 0x20L << 48 | 0x20L << 32 | 0x20L << 16 | 0x20L;
+
+            ref char spanRef = ref MemoryMarshal.GetReference(span);
+
             switch (span.Length)
             {
                 case 2:
-                    if (wsMask == (firstLower << 8 | ToLowerCaseAscii(span[1])))
+                    if (wsMask == (Unsafe.As<char, int>(ref spanRef) | LowerCaseMask32))
                     {
                         syntax = UriParser.WsUri;
                         return ParsingError.None;
                     }
                     break;
                 case 3:
-                    switch (firstLower << 16 | ToLowerCaseAscii(span[1]) << 8 | ToLowerCaseAscii(span[2]))
+                    switch ((long)first << 32 | (long)Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 1)) | LowerCaseMask48)
                     {
                         case ftpMask:
                             syntax = UriParser.FtpUri;
@@ -3923,7 +3931,7 @@ namespace System
                     }
                     break;
                 case 4:
-                    switch (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3]))
+                    switch (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64)
                     {
                         case httpMask:
                             syntax = UriParser.HttpUri;
@@ -3934,16 +3942,16 @@ namespace System
                     }
                     break;
                 case 5:
-                    if (httpMask == (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3])) &&
-                        ToLowerCaseAscii(span[4]) == 's')
+                    if (httpMask == (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64)
+                        && (span[4] | LowerCaseMask16) == 's')
                     {
                         syntax = UriParser.HttpsUri;
                         return ParsingError.None;
                     }
                     break;
                 case 6:
-                    if (mailMask == (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3])) &&
-                        ToLowerCaseAscii(span[4]) == 't' && ToLowerCaseAscii(span[5]) == 'o')
+                    if (mailMask == (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64) &&
+                        toMask == (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32))
                     {
                         syntax = UriParser.MailToUri;
                         return ParsingError.None;

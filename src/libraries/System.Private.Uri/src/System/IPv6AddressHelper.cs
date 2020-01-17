@@ -3,6 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -100,18 +102,19 @@ namespace System
             //  0:0:0:0:0:FFFF:127.0.0.1    == 0:0:0:0:0:FFFF:7F00:0001
             //
 
-            return ((numbers[0] == 0)
-                            && (numbers[1] == 0)
-                            && (numbers[2] == 0)
-                            && (numbers[3] == 0)
-                            && (numbers[4] == 0))
-                           && (((numbers[5] == 0)
-                                && (numbers[6] == 0)
-                                && (numbers[7] == 1))
-                               || (((numbers[6] == 0x7F00)
-                                    && (numbers[7] == 0x0001))
-                                   && ((numbers[5] == 0)
-                                       || (numbers[5] == 0xFFFF))));
+            Debug.Assert(numbers.Length == NumberOfLabels);
+            Debug.Assert(2 * sizeof(long) == NumberOfLabels * sizeof(ushort));
+
+            ref long firstHalf = ref Unsafe.As<ushort, long>(ref MemoryMarshal.GetReference(numbers));
+
+            if (firstHalf != 0)
+                return false;
+
+            long secondHalf = Unsafe.Add(ref firstHalf, 1);
+
+            return secondHalf == 0x1
+                || secondHalf == 0x7F00_0001
+                || secondHalf == 0xFFFF_7F00_0001;
         }
 
         //

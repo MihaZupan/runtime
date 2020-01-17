@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -348,24 +350,19 @@ namespace System
 
         private static unsafe bool IsIdnAce(string input, int index)
         {
-            if ((input[index] == 'x') &&
-                (input[index + 1] == 'n') &&
-                (input[index + 2] == '-') &&
-                (input[index + 3] == '-'))
-                return true;
-            else
-                return false;
+            Debug.Assert((uint)(index + 4) <= (uint)input.Length);
+
+            const long XNDashDash = ((long)'x' << 48) | ((long)'n' << 32) | ((long)'-' << 16) | '-';
+
+            return Unsafe.As<char, long>(ref Unsafe.Add(ref Unsafe.AsRef(in input.GetPinnableReference()), index)) == XNDashDash;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsIdnAce(char* input, int index)
         {
-            if ((input[index] == 'x') &&
-                (input[index + 1] == 'n') &&
-                (input[index + 2] == '-') &&
-                (input[index + 3] == '-'))
-                return true;
-            else
-                return false;
+            const long XNDashDash = ((long)'x' << 48) | ((long)'n' << 32) | ((long)'-' << 16) | '-';
+
+            return *(long*)(input + index) == XNDashDash;
         }
 
         //
@@ -430,7 +427,7 @@ namespace System
                     if (!checkedAce)
                     {
                         checkedAce = true;
-                        if ((newPos + 3 < length) && (c == 'x') && IsIdnAce(unescapedHostname, newPos))
+                        if ((newPos + 3 < length) && IsIdnAce(unescapedHostname, newPos))
                             foundAce = true;
                     }
                     if (asciiLabel && (c > '\x7F'))
