@@ -10,11 +10,12 @@ using System.Runtime.Serialization;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Internal.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 namespace System
 {
     [Serializable]
-    [System.Runtime.CompilerServices.TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
+    [TypeForwardedFrom("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public partial class Uri : ISerializable
     {
         public static readonly string UriSchemeFile = UriParser.FileUri.SchemeName;
@@ -156,31 +157,37 @@ namespace System
 
         private bool IsImplicitFile
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.ImplicitFile) != 0; }
         }
 
         private bool IsUncOrDosPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & (Flags.UncPath | Flags.DosPath)) != 0; }
         }
 
         private bool IsDosPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.DosPath) != 0; }
         }
 
         private bool IsUncPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.UncPath) != 0; }
         }
 
         private bool IsUnixPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.UnixPath) != 0; }
         }
 
         private Flags HostType
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return _flags & Flags.HostTypeMask; }
         }
 
@@ -194,6 +201,7 @@ namespace System
 
         private bool IsNotAbsoluteUri
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (object)_syntax == null; }
         }
 
@@ -205,14 +213,15 @@ namespace System
         //
         // Statically checks if Iri parsing is allowed by the syntax & by config
         //
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IriParsingStatic(UriParser? syntax)
         {
-            return (IriParsing && (((syntax != null) && syntax.InFact(UriSyntaxFlags.AllowIriParsing)) ||
-                   (syntax == null)));
+            return syntax is null || syntax.InFact(UriSyntaxFlags.AllowIriParsing);
         }
 
         internal bool UserDrivenParsing
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 return (_flags & Flags.UserDrivenParsing) != 0;
@@ -239,21 +248,25 @@ namespace System
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool NotAny(Flags flags)
         {
             return (_flags & flags) == 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool InFact(Flags flags)
         {
             return (_flags & flags) != 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool StaticNotAny(Flags allFlags, Flags checkFlags)
         {
             return (allFlags & checkFlags) == 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool StaticInFact(Flags allFlags, Flags checkFlags)
         {
             return (allFlags & checkFlags) != 0;
@@ -883,14 +896,11 @@ namespace System
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool StaticIsFile(UriParser syntax)
         {
             return syntax.InFact(UriSyntaxFlags.FileLikeUri);
         }
-
-        // Value from config Uri section
-        // On by default in .NET 4.5+ and cannot be disabled by config.
-        private const bool IriParsing = true; // IRI Parsing is always enabled in .NET Native and CoreCLR
 
         private string GetLocalPath()
         {
@@ -3995,7 +4005,7 @@ namespace System
             ushort start = idx;
             newHost = null;
             bool justNormalized = false;
-            bool iriParsing = (IriParsing && IriParsingStatic(syntax)); // perf
+            bool iriParsing = IriParsingStatic(syntax); // perf
             bool hasUnicode = ((flags & Flags.HasUnicode) != 0); // perf
             bool hostNotUnicodeNormalized = ((flags & Flags.HostUnicodeNormalized) == 0); // perf
             UriSyntaxFlags syntaxFlags = syntax.Flags;
@@ -4081,7 +4091,7 @@ namespace System
             {
                 flags |= Flags.IPv6HostType;
 
-                _iriParsing = (IriParsing && IriParsingStatic(syntax));
+                _iriParsing = IriParsingStatic(syntax);
 
                 if (hasUnicode && iriParsing && hostNotUnicodeNormalized)
                 {

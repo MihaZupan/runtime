@@ -6,6 +6,7 @@
 // only internal implementation of UriParser type
 
 using System.Collections;
+using System.Runtime.CompilerServices;
 
 namespace System
 {
@@ -127,24 +128,28 @@ namespace System
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool NotAny(UriSyntaxFlags flags)
         {
             // Return true if none of the flags specified in 'flags' are set.
             return IsFullMatch(flags, UriSyntaxFlags.None);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool InFact(UriSyntaxFlags flags)
         {
             // Return true if at least one of the flags in 'flags' is set.
             return !IsFullMatch(flags, UriSyntaxFlags.None);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool IsAllSet(UriSyntaxFlags flags)
         {
             // Return true if all flags in 'flags' are set.
             return IsFullMatch(flags, flags);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsFullMatch(UriSyntaxFlags flags, UriSyntaxFlags expected)
         {
             return (_flags & flags) == expected;
