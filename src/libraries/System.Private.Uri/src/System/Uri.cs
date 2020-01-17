@@ -1508,10 +1508,18 @@ namespace System
         // Throws:
         //  ArgumentException
         //
-        public static int FromHex(char digit) =>
-            CharHelper.IsAsciiDigit(digit) ? digit - '0' :
-            CharHelper.IsHexDigitLetter(digit) ? (digit | 0x20) - 'a' + 10 :
-            throw new ArgumentException(nameof(digit));
+        public static int FromHex(char digit)
+        {
+            static int ThrowArgumentException() => throw new ArgumentException(nameof(digit));
+
+            if (CharHelper.IsAsciiDigit(digit))
+                return digit - '0';
+
+            if (CharHelper.IsHexDigitLetter(digit))
+                return (digit | 0x20) - 'a' + 10;
+
+            return ThrowArgumentException();
+        }
 
         //
         // GetHashCode
