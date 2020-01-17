@@ -22,7 +22,7 @@ namespace System
 
             for (int i = end - 1; i >= start; --i)
             {
-                if (str[i] >= 'A' && str[i] <= 'Z')
+                if (CharHelper.IsAsciiUppercaseLetter(str[i]))
                 {
                     res = str.Substring(start, end - start).ToLowerInvariant();
                     break;
@@ -507,18 +507,13 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsASCIILetterOrDigit(char character, ref bool notCanonical)
         {
-            if ((uint)(character - 'a') <= 'z' - 'a' || (uint)(character - '0') <= '9' - '0')
+            if (CharHelper.IsAsciiLetter(character))
             {
+                notCanonical = (character & 0x20) == 0; // IsAsciiUppercaseLetter
                 return true;
             }
 
-            if ((uint)(character - 'A') <= 'Z' - 'A')
-            {
-                notCanonical = true;
-                return true;
-            }
-
-            return false;
+            return CharHelper.IsAsciiDigit(character);
         }
 
         //
@@ -528,12 +523,12 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsValidDomainLabelCharacter(char character, ref bool notCanonical)
         {
-            if ((uint)(character - 'a') <= 'z' - 'a' || (uint)(character - '0') <= '9' - '0' || character == '-' || character == '_')
+            if (CharHelper.IsAsciiLowercaseLetter(character) || CharHelper.IsAsciiDigit(character) || character == '-' || character == '_')
             {
                 return true;
             }
 
-            if ((uint)(character - 'A') <= 'Z' - 'A')
+            if (CharHelper.IsAsciiUppercaseLetter(character))
             {
                 notCanonical = true;
                 return true;

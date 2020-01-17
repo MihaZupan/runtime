@@ -74,7 +74,7 @@ namespace System
                 {
                     validShortName = true;
                 }
-                else if (name[i] < '0' || name[i] > '9')
+                else if (!CharHelper.IsAsciiDigit(name[i]))
                     return false;
             }
 
@@ -104,7 +104,7 @@ namespace System
                     if (!validShortName)
                         return false;
                 }
-                else if (char.IsLetter(name[i]) || (name[i] >= '0' && name[i] <= '9'))
+                else if (char.IsLetter(name[i]) || CharHelper.IsAsciiDigit(name[i]))
                 {
                     if (!validShortName)
                         validShortName = true;

@@ -14,10 +14,10 @@ namespace System
         //
         internal static bool CheckIriUnicodeRange(char unicode, bool isQuery)
         {
-            return ((unicode >= '\u00A0' && unicode <= '\uD7FF') ||
-               (unicode >= '\uF900' && unicode <= '\uFDCF') ||
-               (unicode >= '\uFDF0' && unicode <= '\uFFEF') ||
-               (isQuery && unicode >= '\uE000' && unicode <= '\uF8FF'));
+            return CharHelper.IsInInclusiveRange(unicode, '\u00A0', '\uD7FF')
+                || CharHelper.IsInInclusiveRange(unicode, '\uF900', '\uFDCF')
+                || CharHelper.IsInInclusiveRange(unicode, '\uFDF0', '\uFFEF')
+                || (isQuery && CharHelper.IsInInclusiveRange(unicode, '\uE000', '\uF8FF'));
         }
 
         //

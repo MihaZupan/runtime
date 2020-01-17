@@ -86,14 +86,13 @@ namespace System
         {
             for (int i = 0; i < NumberOfLabels; ++i)
             {
-
-                byte b = 0;
+                int b = 0;
                 char ch;
                 for (; (start < end) && (ch = name[start]) != '.' && ch != ':'; ++start)
                 {
-                    b = (byte)(b * 10 + (byte)(ch - '0'));
+                    b = b * 10 + (ch - '0');
                 }
-                numbers[i] = b;
+                numbers[i] = (byte)b;
                 ++start;
             }
             return numbers[0] == 127;
@@ -133,7 +132,7 @@ namespace System
                     break;
                 }
 
-                if (ch <= '9' && ch >= '0')
+                if (CharHelper.IsAsciiDigit(ch))
                 {
                     if (!haveNumber && (ch == '0'))
                     {
@@ -147,7 +146,7 @@ namespace System
                     }
 
                     haveNumber = true;
-                    number = number * 10 + (name[start] - '0');
+                    number = number * 10 + (ch - '0');
                     if (number > 255)
                     {
                         return false;
@@ -224,21 +223,17 @@ namespace System
                     ch = name[current];
                     int digitValue;
 
-                    if ((numberBase == Decimal || numberBase == Hex) && '0' <= ch && ch <= '9')
+                    if ((numberBase == Decimal || numberBase == Hex) && CharHelper.IsAsciiDigit(ch))
                     {
                         digitValue = ch - '0';
                     }
-                    else if (numberBase == Octal && '0' <= ch && ch <= '7')
+                    else if (numberBase == Octal && CharHelper.IsAsciiOctalDigit(ch))
                     {
                         digitValue = ch - '0';
                     }
-                    else if (numberBase == Hex && 'a' <= ch && ch <= 'f')
+                    else if (numberBase == Hex && CharHelper.IsHexDigitLetter(ch))
                     {
-                        digitValue = ch + 10 - 'a';
-                    }
-                    else if (numberBase == Hex && 'A' <= ch && ch <= 'F')
-                    {
-                        digitValue = ch + 10 - 'A';
+                        digitValue = (ch | 0x20) + 10 - 'a';
                     }
                     else
                     {

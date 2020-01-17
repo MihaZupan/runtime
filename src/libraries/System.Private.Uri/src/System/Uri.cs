@@ -1408,12 +1408,11 @@ namespace System
 
         public static char HexUnescape(string pattern, ref int index)
         {
-            if ((index < 0) || (index >= pattern.Length))
+            if ((uint)index >= (uint)pattern.Length)
             {
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
-            if ((pattern[index] == '%')
-                && (pattern.Length - index >= 3))
+            if ((pattern[index] == '%') && (uint)(index + 2) < (uint)pattern.Length)
             {
                 char ret = UriHelper.EscapedAscii(pattern[index + 1], pattern[index + 2]);
                 if (ret != c_DummyChar)
@@ -1450,7 +1449,7 @@ namespace System
         public static bool IsHexEncoding(string pattern, int index)
         {
             return
-                (pattern.Length - index) >= 3 &&
+                (uint)(index + 2) < (uint)pattern.Length &&
                 pattern[index] == '%' &&
                 IsHexDigit(pattern[index + 1]) &&
                 IsHexDigit(pattern[index + 2]);
@@ -1467,13 +1466,13 @@ namespace System
         {
             if (((object?)schemeName == null)
                 || (schemeName.Length == 0)
-                || !UriHelper.IsAsciiLetter(schemeName[0]))
+                || !CharHelper.IsAsciiLetter(schemeName[0]))
             {
                 return false;
             }
             for (int i = schemeName.Length - 1; i > 0; --i)
             {
-                if (!(UriHelper.IsAsciiLetterOrDigit(schemeName[i])
+                if (!(CharHelper.IsAsciiLetterOrDigit(schemeName[i])
                     || (schemeName[i] == '+')
                     || (schemeName[i] == '-')
                     || (schemeName[i] == '.')))
@@ -1501,9 +1500,8 @@ namespace System
         //  Nothing
         //
         public static bool IsHexDigit(char character) =>
-            (uint)(character - '0') <= '9' - '0' ||
-            (uint)(character - 'A') <= 'F' - 'A' ||
-            (uint)(character - 'a') <= 'f' - 'a';
+            ((uint)(character - '0') <= ('9' - '0')) ||
+            ((uint)((character - 'A') & ~0x20) <= ('F' - 'A'));
 
         //
         // Returns:
@@ -1513,9 +1511,8 @@ namespace System
         //  ArgumentException
         //
         public static int FromHex(char digit) =>
-            (uint)(digit - '0') <= '9' - '0' ? digit - '0' :
-            (uint)(digit - 'A') <= 'F' - 'A' ? digit - 'A' + 10 :
-            (uint)(digit - 'a') <= 'f' - 'a' ? digit - 'a' + 10 :
+            CharHelper.IsAsciiDigit(digit) ? digit - '0' :
+            CharHelper.IsHexDigitLetter(digit) ? (digit | 0x20) - 'a' + 10 :
             throw new ArgumentException(nameof(digit));
 
         //
@@ -2017,7 +2014,7 @@ namespace System
                         }
                         // DOS-like path?
                         if (i + 1 < length && ((c = pUriString[i + 1]) == ':' || c == '|') &&
-                            UriHelper.IsAsciiLetter(pUriString[i]))
+                            CharHelper.IsAsciiLetter(pUriString[i]))
                         {
                             if (i + 2 >= length || ((c = pUriString[i + 2]) != '\\' && c != '/'))
                             {
@@ -3671,7 +3668,7 @@ namespace System
                 if ((c = uriString[idx + 1]) == ':' || c == '|')
                 {
                     //DOS-like path?
-                    if (UriHelper.IsAsciiLetter(uriString[idx]))
+                    if (CharHelper.IsAsciiLetter(uriString[idx]))
                     {
                         if ((c = uriString[idx + 2]) == '\\' || c == '/')
                         {
@@ -3885,19 +3882,15 @@ namespace System
         {
             static char ToLowerCaseAscii(char c) => (uint)(c - 'A') <= 'Z' - 'A' ? (char)(c | 0x20) : c;
 
-            if (span.Length == 0)
+            if (0 >= (uint)span.Length)
             {
                 return ParsingError.BadScheme;
             }
 
             // The first character must be an alpha.  Validate that and store it as lower-case, as
             // all of the fast-path checks need that value.
-            char firstLower = span[0];
-            if ((uint)(firstLower - 'A') <= 'Z' - 'A')
-            {
-                firstLower = (char)(firstLower | 0x20);
-            }
-            else if ((uint)(firstLower - 'a') > 'z' - 'a')
+            char firstLower = (char)(span[0] | 0x20);
+            if (!CharHelper.IsAsciiLetter(firstLower))
             {
                 return ParsingError.BadScheme;
             }
@@ -3962,10 +3955,7 @@ namespace System
             for (int i = 1; i < span.Length; i++)
             {
                 char c = span[i];
-                if ((uint)(c - 'a') > 'z' - 'a' &&
-                    (uint)(c - 'A') > 'Z' - 'A' &&
-                    (uint)(c - '0') > '9' - '0' &&
-                    c != '+' && c != '-' && c != '.')
+                if (!CharHelper.IsAsciiLetterOrDigit(c) && c != '+' && c != '-' && c != '.')
                 {
                     return ParsingError.BadScheme;
                 }
@@ -4098,7 +4088,7 @@ namespace System
                     justNormalized = true;
                 }
             }
-            else if (ch <= '9' && ch >= '0' && syntax.InFact(UriSyntaxFlags.AllowIPv4Host) &&
+            else if (CharHelper.IsAsciiDigit(ch) && syntax.InFact(UriSyntaxFlags.AllowIPv4Host) &&
                 IPv4AddressHelper.IsValid(pString, (int)start, ref end, false, StaticNotAny(flags, Flags.ImplicitFile), syntax.InFact(UriSyntaxFlags.V1_UnknownUri)))
             {
                 flags |= Flags.IPv4HostType;
@@ -4175,7 +4165,7 @@ namespace System
                     for (idx = (ushort)(end + 1); idx < length; ++idx)
                     {
                         ushort val = unchecked((ushort)((ushort)pString[idx] - (ushort)'0'));
-                        if ((val >= 0) && (val <= 9))
+                        if ((uint)val <= 9)
                         {
                             if ((port = (port * 10 + val)) > 0xFFFF)
                                 break;
@@ -4428,7 +4418,7 @@ namespace System
             {
                 c = str[i];
                 // Control chars usually should be escaped in any case
-                if (c <= '\x1F' || (c >= '\x7F' && c <= '\x9F'))
+                if (c <= '\x1F' || CharHelper.IsInInclusiveRange(c, '\x7F', '\x9F'))
                 {
                     needsEscaping = true;
                     foundEscaping = true;
@@ -4508,8 +4498,8 @@ namespace System
                         res |= Check.DotSlashAttn;
                     }
                 }
-                else if (((c <= '"' && c != '!') || (c >= '[' && c <= '^') || c == '>'
-                        || c == '<' || c == '`'))
+                else if (((c <= '"' && c != '!') || CharHelper.IsInInclusiveRange(c, '[', '^')
+                    || c == '>' || c == '<' || c == '`'))
                 {
                     if (!needsEscaping) needsEscaping = true;
 
@@ -4522,7 +4512,7 @@ namespace System
                         res |= Check.NotIriCanonical;
                     }
                 }
-                else if (c >= '{' && c <= '}') // includes '{', '|', '}'
+                else if (CharHelper.IsInInclusiveRange(c, '{', '}')) // includes '{', '|', '}'
                 {
                     needsEscaping = true;
                 }
