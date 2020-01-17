@@ -191,18 +191,12 @@ namespace System
             get { return _flags & Flags.HostTypeMask; }
         }
 
-        private UriParser Syntax
-        {
-            get
-            {
-                return _syntax;
-            }
-        }
+        private UriParser Syntax => _syntax;
 
         private bool IsNotAbsoluteUri
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return (object)_syntax == null; }
+            get => _syntax is null;
         }
 
         //
@@ -293,7 +287,7 @@ namespace System
         private void EnsureHostString(bool allowDnsOptimization)
         {
             EnsureUriInfo();
-            if ((object?)_info.Host == null)
+            if (_info.Host is null)
             {
                 if (allowDnsOptimization && InFact(Flags.CanonicalDnsHost))
                 {
@@ -317,7 +311,7 @@ namespace System
         //
         public Uri(string uriString)
         {
-            if ((object)uriString == null)
+            if (uriString is null)
                 throw new ArgumentNullException(nameof(uriString));
 
             CreateThis(uriString, false, UriKind.Absolute);
@@ -331,7 +325,7 @@ namespace System
         [Obsolete("The constructor has been deprecated. Please use new Uri(string). The dontEscape parameter is deprecated and is always false. https://go.microsoft.com/fwlink/?linkid=14202")]
         public Uri(string uriString, bool dontEscape)
         {
-            if (uriString == null)
+            if (uriString is null)
                 throw new ArgumentNullException(nameof(uriString));
 
             CreateThis(uriString, dontEscape, UriKind.Absolute);
@@ -346,7 +340,7 @@ namespace System
         [Obsolete("The constructor has been deprecated. Please new Uri(Uri, string). The dontEscape parameter is deprecated and is always false. https://go.microsoft.com/fwlink/?linkid=14202")]
         public Uri(Uri baseUri, string? relativeUri, bool dontEscape)
         {
-            if (baseUri == null)
+            if (baseUri is null)
                 throw new ArgumentNullException(nameof(baseUri));
 
             if (!baseUri.IsAbsoluteUri)
@@ -360,7 +354,7 @@ namespace System
         //
         public Uri(string uriString, UriKind uriKind)
         {
-            if ((object)uriString == null)
+            if (uriString is null)
                 throw new ArgumentNullException(nameof(uriString));
 
             CreateThis(uriString, false, uriKind);
@@ -375,7 +369,7 @@ namespace System
         //
         public Uri(Uri baseUri, string? relativeUri)
         {
-            if ((object)baseUri == null)
+            if (baseUri is null)
                 throw new ArgumentNullException(nameof(baseUri));
 
             if (!baseUri.IsAbsoluteUri)
@@ -400,7 +394,7 @@ namespace System
             }
 
             uriString = serializationInfo.GetString("RelativeUri");  // Do not rename (binary serialization)
-            if ((object?)uriString == null)
+            if (uriString is null)
                 throw new ArgumentNullException(nameof(uriString));
 
             CreateThis(uriString, false, UriKind.Relative);
@@ -449,7 +443,7 @@ namespace System
                 // If resolved into a Uri then we build from that Uri
                 if (uriResult != null)
                 {
-                    if ((object)uriResult != (object)this)
+                    if (!ReferenceEquals(uriResult, this))
                         CreateThisFromUri(uriResult);
 
                     return;
@@ -476,7 +470,7 @@ namespace System
         //
         public Uri(Uri baseUri, Uri relativeUri)
         {
-            if ((object)baseUri == null)
+            if (baseUri is null)
                 throw new ArgumentNullException(nameof(baseUri));
 
             if (!baseUri.IsAbsoluteUri)
@@ -498,7 +492,7 @@ namespace System
 
                 if (resolvedRelativeUri != null)
                 {
-                    if ((object)resolvedRelativeUri != (object)this)
+                    if (!ReferenceEquals(resolvedRelativeUri, this))
                         CreateThisFromUri(resolvedRelativeUri);
 
                     return;
@@ -648,12 +642,12 @@ namespace System
             get
             {
                 UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
+                if (info.MoreInfo is null)
                 {
                     info.MoreInfo = new MoreInfo();
                 }
                 string? result = info.MoreInfo.Path;
-                if ((object?)result == null)
+                if (result is null)
                 {
                     result = GetParts(UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
                     info.MoreInfo.Path = result;
@@ -666,18 +660,18 @@ namespace System
         {
             get
             {
-                if (_syntax == null)
+                if (_syntax is null)
                 {
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
                 UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
+                if (info.MoreInfo is null)
                 {
                     info.MoreInfo = new MoreInfo();
                 }
                 string? result = info.MoreInfo.AbsoluteUri;
-                if ((object?)result == null)
+                if (result is null)
                 {
                     result = GetParts(UriComponents.AbsoluteUri, UriFormat.UriEscaped);
                     info.MoreInfo.AbsoluteUri = result;
@@ -786,7 +780,7 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                return (object)_syntax.SchemeName == (object)UriSchemeFile;
+                return ReferenceEquals(_syntax.SchemeName, UriSchemeFile);
             }
         }
 
@@ -1050,12 +1044,12 @@ namespace System
                 }
 
                 UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
+                if (info.MoreInfo is null)
                 {
                     info.MoreInfo = new MoreInfo();
                 }
                 string? result = info.MoreInfo.Query;
-                if ((object?)result == null)
+                if (result is null)
                 {
                     result = GetParts(UriComponents.Query | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
                     info.MoreInfo.Query = result;
@@ -1076,12 +1070,12 @@ namespace System
                 }
 
                 UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
+                if (info.MoreInfo is null)
                 {
                     info.MoreInfo = new MoreInfo();
                 }
                 string? result = info.MoreInfo.Fragment;
-                if ((object?)result == null)
+                if (result is null)
                 {
                     result = GetParts(UriComponents.Fragment | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
                     info.MoreInfo.Fragment = result;
@@ -1254,7 +1248,7 @@ namespace System
         //
         public static UriHostNameType CheckHostName(string? name)
         {
-            if ((object?)name == null || name.Length == 0 || name.Length > short.MaxValue)
+            if (string.IsNullOrEmpty(name) || name.Length > short.MaxValue)
             {
                 return UriHostNameType.Unknown;
             }
@@ -1263,7 +1257,7 @@ namespace System
             {
                 fixed (char* fixedName = name)
                 {
-                    if (name[0] == '[' && name[name.Length - 1] == ']')
+                    if (fixedName[0] == '[' && fixedName[name.Length - 1] == ']')
                     {
                         // we require that _entire_ name is recognized as ipv6 address
                         if (IPv6AddressHelper.IsValid(fixedName, 1, ref end) && end == name.Length)
@@ -1285,8 +1279,7 @@ namespace System
 
                     end = name.Length;
                     dummyBool = false;
-                    if (DomainNameHelper.IsValidByIri(fixedName, 0, ref end, ref dummyBool, false)
-                        && end == name.Length)
+                    if (DomainNameHelper.IsValidByIri(fixedName, 0, ref end, ref dummyBool, false) && end == name.Length)
                     {
                         return UriHostNameType.Dns;
                     }
@@ -1469,7 +1462,7 @@ namespace System
         //
         public static bool CheckSchemeName(string? schemeName)
         {
-            if (((object?)schemeName == null)
+            if ((schemeName is null)
                 || (schemeName.Length == 0)
                 || !CharHelper.IsAsciiLetter(schemeName[0]))
             {
@@ -1535,7 +1528,7 @@ namespace System
 
             // Consider moving hash code storage from m_Info.MoreInfo to m_Info
             UriInfo info = EnsureUriInfo();
-            if ((object?)info.MoreInfo == null)
+            if (info.MoreInfo is null)
             {
                 info.MoreInfo = new MoreInfo();
             }
@@ -1543,7 +1536,7 @@ namespace System
             if (tempHash == 0)
             {
                 string? chkString = info.MoreInfo.RemoteUrl;
-                if ((object?)chkString == null)
+                if (chkString is null)
                     chkString = GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
                 tempHash = CalculateCaseInsensitiveHashCode(chkString);
                 if (tempHash == 0)
@@ -1564,13 +1557,13 @@ namespace System
 
         public override string ToString()
         {
-            if (_syntax == null)
+            if (_syntax is null)
             {
                 return (_iriParsing && InFact(Flags.HasUnicode)) ? _string : OriginalString;
             }
 
             EnsureUriInfo();
-            if ((object?)_info.String == null)
+            if (_info.String is null)
             {
                 if (Syntax!.IsSimple)
                     _info.String = GetComponentsHelper(UriComponents.AbsoluteUri, V1ToStringUnescape);
@@ -1585,11 +1578,11 @@ namespace System
         //
         public static bool operator ==(Uri? uri1, Uri? uri2)
         {
-            if ((object?)uri1 == (object?)uri2)
+            if (ReferenceEquals(uri1, uri2))
             {
                 return true;
             }
-            if ((object?)uri1 == null || (object?)uri2 == null)
+            if (uri1 is null || uri2 is null)
             {
                 return false;
             }
@@ -1601,12 +1594,12 @@ namespace System
         //
         public static bool operator !=(Uri? uri1, Uri? uri2)
         {
-            if ((object?)uri1 == (object?)uri2)
+            if (ReferenceEquals(uri1, uri2))
             {
                 return false;
             }
 
-            if ((object?)uri1 == null || (object?)uri2 == null)
+            if (uri1 is null || uri2 is null)
             {
                 return true;
             }
@@ -1630,12 +1623,12 @@ namespace System
         //
         public override bool Equals(object? comparand)
         {
-            if ((object?)comparand == null)
+            if (comparand is null)
             {
                 return false;
             }
 
-            if ((object?)this == (object?)comparand)
+            if (ReferenceEquals(this, comparand))
             {
                 return true;
             }
@@ -1647,11 +1640,9 @@ namespace System
             // is passed, convert to Uri. This is inefficient, but allows us to
             // canonicalize the comparand, making comparison possible
             //
-            if ((object?)obj == null)
+            if (obj is null)
             {
-                string? s = comparand as string;
-
-                if ((object?)s == null)
+                if (!(comparand is string s))
                     return false;
 
                 if (!TryCreate(s, UriKind.RelativeOrAbsolute, out obj))
@@ -1661,7 +1652,7 @@ namespace System
             // Since v1.0 two Uris are equal if everything but fragment and UserInfo does match
 
             // This check is for a case where we already fixed up the equal references
-            if ((object)_string == (object)obj._string)
+            if (ReferenceEquals(_string, obj._string))
             {
                 return true;
             }
@@ -1779,11 +1770,11 @@ namespace System
 
             UriInfo selfInfo = _info;
             UriInfo otherInfo = obj._info;
-            if ((object?)selfInfo.MoreInfo == null)
+            if (selfInfo.MoreInfo is null)
             {
                 selfInfo.MoreInfo = new MoreInfo();
             }
-            if ((object?)otherInfo.MoreInfo == null)
+            if (otherInfo.MoreInfo is null)
             {
                 otherInfo.MoreInfo = new MoreInfo();
             }
@@ -1791,13 +1782,13 @@ namespace System
             // NB: To avoid a race condition when creating MoreInfo field
             // "selfInfo" and "otherInfo" shall remain as local copies.
             string? selfUrl = selfInfo.MoreInfo.RemoteUrl;
-            if ((object?)selfUrl == null)
+            if (selfUrl is null)
             {
                 selfUrl = GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
                 selfInfo.MoreInfo.RemoteUrl = selfUrl;
             }
             string? otherUrl = otherInfo.MoreInfo.RemoteUrl;
-            if ((object?)otherUrl == null)
+            if (otherUrl is null)
             {
                 otherUrl = obj.GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
                 otherInfo.MoreInfo.RemoteUrl = otherUrl;
@@ -1842,7 +1833,7 @@ namespace System
 
         public Uri MakeRelativeUri(Uri uri)
         {
-            if ((object?)uri == null)
+            if (uri is null)
                 throw new ArgumentNullException(nameof(uri));
 
             if (IsNotAbsoluteUri || uri.IsNotAbsoluteUri)
@@ -2473,7 +2464,7 @@ namespace System
                 else if (NotAny(Flags.CanonicalDnsHost))
                 {
                     // Check to see if we can take the canonical host string out of m_String
-                    if ((object?)_info.ScopeId != null)
+                    if (_info.ScopeId is { })
                     {
                         // IPv6 ScopeId is included when serializing a Uri
                         flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
@@ -2569,7 +2560,7 @@ namespace System
             string host = _syntax.InternalGetComponents(this, UriComponents.Host, UriFormat.UriEscaped);
 
             // ATTN: Check on whether recursion has not happened
-            if ((object?)_info.Host == null)
+            if (_info.Host is null)
             {
                 if (host.Length >= c_MaxUriBufferSize)
                     throw GetException(ParsingError.SizeLimit)!;
@@ -2612,7 +2603,7 @@ namespace System
             //
             string portStr = _syntax.InternalGetComponents(this, UriComponents.StrongPort, UriFormat.UriEscaped);
             int port = 0;
-            if ((object)portStr == null || portStr.Length == 0)
+            if (string.IsNullOrEmpty(portStr))
             {
                 // It's like no port
                 _flags &= ~Flags.NotDefaultPort;
@@ -2624,7 +2615,7 @@ namespace System
                 for (int idx = 0; idx < portStr.Length; ++idx)
                 {
                     int val = portStr[idx] - '0';
-                    if (val < 0 || val > 9 || (port = (port * 10 + val)) > 0xFFFF)
+                    if ((uint)val > 9 || (port = (port * 10 + val)) > 0xFFFF)
                         throw new UriFormatException(SR.Format(SR.net_uri_PortOutOfRange, _syntax.GetType(), portStr));
                 }
                 if (port != _info.Offset.PortValue)
@@ -2678,7 +2669,7 @@ namespace System
             if (((int)uriParts & nonCanonical) == 0)
             {
                 string? ret = GetUriPartsFromUserString(uriParts);
-                if ((object?)ret != null)
+                if (ret is { })
                 {
                     return ret;
                 }
@@ -2711,7 +2702,7 @@ namespace System
             if (((int)uriParts & nonCanonical) == 0)
             {
                 string? ret = GetUriPartsFromUserString(uriParts);
-                if ((object?)ret != null)
+                if (ret is { })
                 {
                     return ret;
                 }
@@ -2849,7 +2840,7 @@ namespace System
 
                 // A fix up only for SerializationInfo and IpV6 host with a scopeID
                 if ((parts & UriComponents.SerializationInfoString) != 0 && HostType == Flags.IPv6HostType &&
-                    (object?)_info.ScopeId != null)
+                    _info.ScopeId is { })
                 {
                     _info.ScopeId.CopyTo(0, chars, count - 1, _info.ScopeId.Length);
                     count += _info.ScopeId.Length;
@@ -4345,7 +4336,7 @@ namespace System
                 string temp = UriHelper.StripBidiControlCharacter(pString, start, end - start);
                 try
                 {
-                    newHost += ((temp != null) ? temp.Normalize(NormalizationForm.FormC) : null);
+                    newHost += temp?.Normalize(NormalizationForm.FormC);
                 }
                 catch (ArgumentException)
                 {
@@ -5262,7 +5253,7 @@ namespace System
         [Obsolete("The method has been deprecated. Please use MakeRelativeUri(Uri uri). https://go.microsoft.com/fwlink/?linkid=14202")]
         public string MakeRelative(Uri toUri)
         {
-            if (toUri == null)
+            if (toUri is null)
                 throw new ArgumentNullException(nameof(toUri));
 
             if (IsNotAbsoluteUri || toUri.IsNotAbsoluteUri)

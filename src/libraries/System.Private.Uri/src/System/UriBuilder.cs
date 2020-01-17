@@ -46,7 +46,7 @@ namespace System
 
         public UriBuilder(Uri uri)
         {
-            if ((object?)uri == null)
+            if (uri is null)
                 throw new ArgumentNullException(nameof(uri));
 
             Init(uri);
@@ -129,7 +129,7 @@ namespace System
         {
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -174,7 +174,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -196,7 +196,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -221,7 +221,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -272,7 +272,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -294,7 +294,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -341,7 +341,7 @@ namespace System
             }
             set
             {
-                if (value == null)
+                if (value is null)
                 {
                     value = string.Empty;
                 }
@@ -354,7 +354,7 @@ namespace System
 
         public override bool Equals(object? rparam)
         {
-            if (rparam == null)
+            if (rparam is null)
             {
                 return false;
             }

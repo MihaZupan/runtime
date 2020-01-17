@@ -260,7 +260,7 @@ namespace System
         internal UriParser InternalOnNewUri()
         {
             UriParser effectiveParser = OnNewUri();
-            if ((object)this != (object)effectiveParser)
+            if (!ReferenceEquals(this, effectiveParser))
             {
                 effectiveParser._scheme = _scheme;
                 effectiveParser._port = _port;

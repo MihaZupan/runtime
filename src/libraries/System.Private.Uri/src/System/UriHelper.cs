@@ -222,7 +222,7 @@ namespace System
 
             static void EnsureCapacity(char[]? dest, int destSize, int requiredSize)
             {
-                if (dest == null || dest.Length - destSize < requiredSize)
+                if (dest is null || dest.Length - destSize < requiredSize)
                 {
                     Array.Resize(ref dest, destSize + requiredSize + 120); // 120 == arbitrary minimum-empty space copied from previous implementation
                 }
@@ -504,7 +504,7 @@ namespace System
 
                         int byteCount = 1;
                         // lazy initialization of max size, will reuse the array for next sequences
-                        if ((object?)bytes == null)
+                        if (bytes is null)
                             bytes = new byte[end - next];
 
                         bytes[0] = (byte)ch;
@@ -532,7 +532,7 @@ namespace System
                             }
                         }
 
-                        if (unescapedChars == null || unescapedChars.Length < bytes.Length)
+                        if (unescapedChars is null || unescapedChars.Length < bytes.Length)
                         {
                             unescapedChars = new char[bytes.Length];
                         }

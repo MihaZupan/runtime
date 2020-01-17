@@ -142,10 +142,10 @@ namespace System
         //
         public static void Register(UriParser uriParser, string schemeName, int defaultPort)
         {
-            if (uriParser == null)
+            if (uriParser is null)
                 throw new ArgumentNullException(nameof(uriParser));
 
-            if (schemeName == null)
+            if (schemeName is null)
                 throw new ArgumentNullException(nameof(schemeName));
 
             if (schemeName.Length == 1)
@@ -166,7 +166,7 @@ namespace System
         //
         public static bool IsKnownScheme(string schemeName)
         {
-            if (schemeName == null)
+            if (schemeName is null)
                 throw new ArgumentNullException(nameof(schemeName));
 
             if (!Uri.CheckSchemeName(schemeName))

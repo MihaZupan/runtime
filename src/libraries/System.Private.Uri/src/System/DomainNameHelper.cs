@@ -33,12 +33,12 @@ namespace System
                     end = i;
             }
 
-            if (res == null)
+            if (res is null)
             {
                 res = str.Substring(start, end - start);
             }
 
-            if (res == Localhost || res == Loopback)
+            if (res.Equals(Localhost, StringComparison.Ordinal) || res.Equals(Loopback, StringComparison.Ordinal))
             {
                 loopback = true;
                 return Localhost;
@@ -399,12 +399,12 @@ namespace System
 
             string? unicodeEqvlHost = null;
             int curPos = 0;
-            int newPos = 0;
+            int newPos;
             int length = unescapedHostname.Length;
-            bool asciiLabel = true;
-            bool foundAce = false;
-            bool checkedAce = false;
-            bool foundDot = false;
+            bool asciiLabel;
+            bool foundAce;
+            bool checkedAce;
+            bool foundDot;
 
 
             // We run a loop where for every label
