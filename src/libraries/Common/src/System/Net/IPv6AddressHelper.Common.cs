@@ -190,7 +190,7 @@ namespace System
                                 i += 2;
                                 for (; i < end; i++)
                                 {
-                                    if (!CharHelper.IsAsciiDigit(name[i]))
+                                    if ((uint)(name[i] - '0') > ('9' - '0')) // if (is NOT Ascii digit)
                                     {
                                         return false;
                                     }

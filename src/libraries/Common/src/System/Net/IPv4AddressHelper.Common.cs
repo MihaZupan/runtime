@@ -132,7 +132,7 @@ namespace System
                     break;
                 }
 
-                if (CharHelper.IsAsciiDigit(ch))
+                if ((uint)(ch - '0') <= ('9' - '0'))
                 {
                     if (!haveNumber && (ch == '0'))
                     {
@@ -223,15 +223,15 @@ namespace System
                     ch = name[current];
                     int digitValue;
 
-                    if ((numberBase == Decimal || numberBase == Hex) && CharHelper.IsAsciiDigit(ch))
+                    if ((numberBase == Decimal || numberBase == Hex) && (uint)(ch - '0') <= ('9' - '0'))
                     {
                         digitValue = ch - '0';
                     }
-                    else if (numberBase == Octal && CharHelper.IsAsciiOctalDigit(ch))
+                    else if (numberBase == Octal && (uint)(ch - '0') <= ('7' - '0'))
                     {
                         digitValue = ch - '0';
                     }
-                    else if (numberBase == Hex && CharHelper.IsHexDigitLetter(ch))
+                    else if (numberBase == Hex && (uint)((ch - 'A') & ~0x20) <= ('F' - 'A'))
                     {
                         digitValue = (ch | 0x20) + 10 - 'a';
                     }
