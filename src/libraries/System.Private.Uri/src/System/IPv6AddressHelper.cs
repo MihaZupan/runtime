@@ -3,8 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -90,29 +88,24 @@ namespace System
             return new string(stackSpace.Slice(0, pos));
         }
 
-        private static unsafe bool IsLoopback(ReadOnlySpan<ushort> numbers)
+        private static bool IsLoopback(ReadOnlySpan<ushort> numbers)
         {
             //
             // is the address loopback? Loopback is defined as one of:
             //
-            //  0:0:0:0:0:0:0:1
-            //  0:0:0:0:0:0:127.0.0.1       == 0:0:0:0:0:0:7F00:0001
-            //  0:0:0:0:0:FFFF:127.0.0.1    == 0:0:0:0:0:FFFF:7F00:0001
+            //  0:0:0:0:0:0:0:1             == 0:0:0:0:0: 0000:0000 :1
+            //  0:0:0:0:0:0:127.0.0.1       == 0:0:0:0:0: 0000:7F00 :1
+            //  0:0:0:0:0:FFFF:127.0.0.1    == 0:0:0:0:0: FFFF:7F00 :1
             //
 
-            Debug.Assert(numbers.Length == NumberOfLabels);
-            Debug.Assert(2 * sizeof(long) == NumberOfLabels * sizeof(ushort));
-
-            ref long firstHalf = ref Unsafe.As<ushort, long>(ref MemoryMarshal.GetReference(numbers));
-
-            if (firstHalf != 0)
-                return false;
-
-            long secondHalf = Unsafe.Add(ref firstHalf, 1);
-
-            return secondHalf == 0x1
-                || secondHalf == 0x7F00_0001
-                || secondHalf == 0xFFFF_7F00_0001;
+            return numbers[7] == 1 // Hoist index range check
+                && numbers[0] == 0
+                && numbers[1] == 0
+                && numbers[2] == 0
+                && numbers[3] == 0
+                && numbers[4] == 0
+                && ((numbers[5] == 0 && (numbers[6] == 0 || numbers[6] == 0x7F00))
+                    || (numbers[5] == 0xFFFF && numbers[6] == 0x7F00));
         }
 
         //

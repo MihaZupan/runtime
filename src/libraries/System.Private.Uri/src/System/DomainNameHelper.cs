@@ -352,17 +352,31 @@ namespace System
         {
             Debug.Assert((uint)(index + 4) <= (uint)input.Length);
 
-            const long XNDashDash = ((long)'x' << 48) | ((long)'n' << 32) | ((long)'-' << 16) | '-';
-
-            return Unsafe.As<char, long>(ref Unsafe.Add(ref Unsafe.AsRef(in input.GetPinnableReference()), index)) == XNDashDash;
+            if (BitConverter.IsLittleEndian)
+            {
+                const long XNDashDash = 'x' | 'n' << 16 | (long)'-' << 32 | (long)'-' << 48;
+                return Unsafe.As<char, long>(ref Unsafe.Add(ref Unsafe.AsRef(in input.GetPinnableReference()), index)) == XNDashDash;
+            }
+            else
+            {
+                const long XNDashDash = (long)'x' << 48 | (long)'n' << 32 | '-' << 16 | '-';
+                return Unsafe.As<char, long>(ref Unsafe.Add(ref Unsafe.AsRef(in input.GetPinnableReference()), index)) == XNDashDash;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsIdnAce(char* input, int index)
         {
-            const long XNDashDash = ((long)'x' << 48) | ((long)'n' << 32) | ((long)'-' << 16) | '-';
-
-            return *(long*)(input + index) == XNDashDash;
+            if (BitConverter.IsLittleEndian)
+            {
+                const long XNDashDash = 'x' | 'n' << 16 | (long)'-' << 32 | (long)'-' << 48;
+                return *(long*)(input + index) == XNDashDash;
+            }
+            else
+            {
+                const long XNDashDash = (long)'x' << 48 | (long)'n' << 32 | '-' << 16 | '-';
+                return *(long*)(input + index) == XNDashDash;
+            }
         }
 
         //
