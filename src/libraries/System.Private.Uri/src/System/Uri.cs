@@ -1202,6 +1202,7 @@ namespace System
         //
         public bool IsAbsoluteUri
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 return _syntax != null;
@@ -1212,6 +1213,7 @@ namespace System
         //  Returns 'true' if the 'dontEscape' parameter was set to 'true ' when the Uri instance was created.
         public bool UserEscaped
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 return InFact(Flags.UserEscaped);
@@ -3643,6 +3645,17 @@ namespace System
         private static unsafe int ParseSchemeCheckImplicitFile(char* uriString, int length,
             ref ParsingError err, ref Flags flags, ref UriParser? syntax)
         {
+            if (length > 5)
+            {
+                // Special-case common schemes, currently: http, https, file, wss
+                // Must have at least 6 characters (https:) available to read
+                syntax = CheckCommonSchemes(uriString);
+                if (syntax != null)
+                {
+                    return syntax.SchemeName.Length + 1;
+                }
+            }
+
             int idx = 0;
 
             //skip whitespace
@@ -3667,18 +3680,6 @@ namespace System
             while (end < length && uriString[end] != ':')
             {
                 ++end;
-            }
-
-            // NB: On 64-bits we will use less optimized code from CheckSchemeSyntax()
-            //
-            if (IntPtr.Size == 4)
-            {
-                // long = 4chars: The minimal size of a known scheme is 2 + ':'
-                if (end != length && end >= idx + 2 &&
-                    CheckKnownSchemes((long*)(uriString + idx), (end - idx), ref syntax))
-                {
-                    return end + 1;
-                }
             }
 
             //NB: A string must have at least 3 characters and at least 1 before ':'
@@ -3748,158 +3749,73 @@ namespace System
         }
 
         //
-        // Quickly parses well known schemes.
-        // nChars does not include the last ':'. Assuming there is one at the end of passed buffer
-        private static unsafe bool CheckKnownSchemes(long* lptr, int nChars, ref UriParser? syntax)
+        // Quickly parses well known schemes. Assumes there are at least 6 chars valid to read
+        // Returns null for not found
+        private static unsafe UriParser? CheckCommonSchemes(char* chars)
         {
-            //NOTE beware of too short input buffers!
+            const int LowerCaseMask32 = 0x200020;
+            const long LowercaseMask64 = 0x20002000200020L;
 
-            const long _HTTP_Mask0 = 'h' | ('t' << 16) | ((long)'t' << 32) | ((long)'p' << 48);
-            const char _HTTPS_Mask1 = 's';
-            const int _WS_Mask = 'w' | ('s' << 16);
-            const long _WSS_Mask = 'w' | ('s' << 16) | ((long)'s' << 32) | ((long)':' << 48);
-            const long _FTP_Mask = 'f' | ('t' << 16) | ((long)'p' << 32) | ((long)':' << 48);
-            const long _FILE_Mask0 = 'f' | ('i' << 16) | ((long)'l' << 32) | ((long)'e' << 48);
-            const long _GOPHER_Mask0 = 'g' | ('o' << 16) | ((long)'p' << 32) | ((long)'h' << 48);
-            const int _GOPHER_Mask1 = 'e' | ('r' << 16);
-            const long _MAILTO_Mask0 = 'm' | ('a' << 16) | ((long)'i' << 32) | ((long)'l' << 48);
-            const int _MAILTO_Mask1 = 't' | ('o' << 16);
-            const long _NEWS_Mask0 = 'n' | ('e' << 16) | ((long)'w' << 32) | ((long)'s' << 48);
-            const long _NNTP_Mask0 = 'n' | ('n' << 16) | ((long)'t' << 32) | ((long)'p' << 48);
-            const long _UUID_Mask0 = 'u' | ('u' << 16) | ((long)'i' << 32) | ((long)'d' << 48);
-
-            const long _TELNET_Mask0 = 't' | ('e' << 16) | ((long)'l' << 32) | ((long)'n' << 48);
-            const int _TELNET_Mask1 = 'e' | ('t' << 16);
-
-            const long _NETXXX_Mask0 = 'n' | ('e' << 16) | ((long)'t' << 32) | ((long)'.' << 48);
-            const long _NETTCP_Mask1 = 't' | ('c' << 16) | ((long)'p' << 32) | ((long)':' << 48);
-            const long _NETPIPE_Mask1 = 'p' | ('i' << 16) | ((long)'p' << 32) | ((long)'e' << 48);
-
-            const long _LDAP_Mask0 = 'l' | ('d' << 16) | ((long)'a' << 32) | ((long)'p' << 48);
-
-
-            const long _LOWERCASE_Mask = 0x0020002000200020L;
-            const int _INT_LOWERCASE_Mask = 0x00200020;
-
-            if (nChars == 2)
+            if (BitConverter.IsLittleEndian)
             {
-                // This is the only known scheme of length 2
-                if ((unchecked((int)*lptr) | _INT_LOWERCASE_Mask) == _WS_Mask)
+                const long HttpMask = 'h' | 't' << 16 | (long)'t' << 32 | (long)'p' << 48;
+                const int HttpsMask2 = 's' | ':' << 16;
+                const long FileMask = 'f' | 'i' << 16 | (long)'l' << 32 | (long)'e' << 48;
+                const long WssMask = 'w' | 's' << 16 | (long)'s' << 32 | (long)':' << 48;
+
+                long firstFour = *(long*)chars | LowercaseMask64;
+
+                if (firstFour == HttpMask)
                 {
-                    syntax = UriParser.WsUri;
-                    return true;
+                    if ((*(int*)(chars + 4) | LowerCaseMask32) == HttpsMask2)
+                    {
+                        return UriParser.HttpsUri;
+                    }
+                    else if ((*(chars + 4) | 0x20) == ':')
+                    {
+                        return UriParser.HttpUri;
+                    }
                 }
-                return false;
+                else if (firstFour == FileMask && (*(chars + 4) | 0x20) == ':')
+                {
+                    return UriParser.FileUri;
+                }
+                else if (firstFour == WssMask)
+                {
+                    return UriParser.WssUri;
+                }
             }
-
-            //Map to a known scheme if possible
-            //upgrade 4 letters to ASCII lower case, keep a false case to stay false
-            switch (*lptr | _LOWERCASE_Mask)
+            else
             {
-                case _HTTP_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.HttpUri;
-                        return true;
-                    }
-                    if (nChars == 5 && ((*(char*)(lptr + 1)) | 0x20) == _HTTPS_Mask1)
-                    {
-                        syntax = UriParser.HttpsUri;
-                        return true;
-                    }
-                    break;
-                case _WSS_Mask:
-                    if (nChars == 3)
-                    {
-                        syntax = UriParser.WssUri;
-                        return true;
-                    }
-                    break;
-                case _FILE_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.FileUri;
-                        return true;
-                    }
-                    break;
-                case _FTP_Mask:
-                    if (nChars == 3)
-                    {
-                        syntax = UriParser.FtpUri;
-                        return true;
-                    }
-                    break;
+                const long HttpMask = (long)'h' << 48 | (long)'t' << 32 | 't' << 16 | 'p';
+                const int HttpsMask2 = 's' << 16 | ':';
+                const long FileMask = (long)'f' << 48 | (long)'i' << 32 | 'l' << 16 | 'e';
+                const long WssMask = (long)'w' << 48 | (long)'s' << 32 | 's' << 16 | ':';
 
-                case _NEWS_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.NewsUri;
-                        return true;
-                    }
-                    break;
+                long firstFour = *(long*)chars | LowercaseMask64;
 
-                case _NNTP_Mask0:
-                    if (nChars == 4)
+                if (firstFour == HttpMask)
+                {
+                    if ((*(int*)(chars + 4) | LowerCaseMask32) == HttpsMask2)
                     {
-                        syntax = UriParser.NntpUri;
-                        return true;
+                        return UriParser.HttpsUri;
                     }
-                    break;
-
-                case _UUID_Mask0:
-                    if (nChars == 4)
+                    else if ((*(chars + 4) | 0x20) == ':')
                     {
-                        syntax = UriParser.UuidUri;
-                        return true;
+                        return UriParser.HttpUri;
                     }
-                    break;
-
-                case _GOPHER_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _GOPHER_Mask1)
-                    {
-                        syntax = UriParser.GopherUri;
-                        return true;
-                    }
-                    break;
-                case _MAILTO_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _MAILTO_Mask1)
-                    {
-                        syntax = UriParser.MailToUri;
-                        return true;
-                    }
-                    break;
-
-                case _TELNET_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _TELNET_Mask1)
-                    {
-                        syntax = UriParser.TelnetUri;
-                        return true;
-                    }
-                    break;
-
-                case _NETXXX_Mask0:
-                    if (nChars == 8 && (*(lptr + 1) | _LOWERCASE_Mask) == _NETPIPE_Mask1)
-                    {
-                        syntax = UriParser.NetPipeUri;
-                        return true;
-                    }
-                    else if (nChars == 7 && (*(lptr + 1) | _LOWERCASE_Mask) == _NETTCP_Mask1)
-                    {
-                        syntax = UriParser.NetTcpUri;
-                        return true;
-                    }
-                    break;
-
-                case _LDAP_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.LdapUri;
-                        return true;
-                    }
-                    break;
-                default: break;
+                }
+                else if (firstFour == FileMask && (*(chars + 4) | 0x20) == ':')
+                {
+                    return UriParser.FileUri;
+                }
+                else if (firstFour == WssMask)
+                {
+                    return UriParser.WssUri;
+                }
             }
-            return false;
+
+            return null;
         }
 
         //
@@ -3907,82 +3823,321 @@ namespace System
         //
         private static unsafe ParsingError CheckSchemeSyntax(ReadOnlySpan<char> span, ref UriParser? syntax)
         {
-            if (0 >= (uint)span.Length)
+            // The first character must be an alpha
+            if (0 >= (uint)span.Length || !CharHelper.IsAsciiLetter(span[0]))
             {
                 return ParsingError.BadScheme;
             }
 
-            // The first character must be an alpha.  Validate that and store it as lower-case, as
-            // all of the fast-path checks need that value.
-            char first = span[0];
-            if (!CharHelper.IsAsciiLetter(first))
-            {
-                return ParsingError.BadScheme;
-            }
-
-            // Special-case common and known schemes to avoid allocations and dictionary lookups in these cases.
-            const int wsMask = 'w' << 16 | 's';
-            const long ftpMask = (long)'f' << 32 | (long)'t' << 16 | 'p';
-            const long wssMask = (long)'w' << 32 | (long)'s' << 16 | 's';
-            const long fileMask = (long)'f' << 48 | (long)'i' << 32 | (long)'l' << 16 | 'e';
-            const long httpMask = (long)'h' << 48 | (long)'t' << 32 | (long)'t' << 16 | 'p';
-            const long mailMask = (long)'m' << 48 | (long)'a' << 32 | (long)'i' << 16 | 'l';
-            const int toMask = 't' << 16 | 'o';
-
-            const int LowerCaseMask16 = 0x20;
-            const int LowerCaseMask32 = 0x20 << 16 | 0x20;
-            const long LowerCaseMask48 = 0x20L << 32 | 0x20L << 16 | 0x20L;
-            const long LowerCaseMask64 = 0x20L << 48 | 0x20L << 32 | 0x20L << 16 | 0x20L;
+            const int LowerCaseMask32 = 0x200020;
+            const long LowerCaseMask64 = 0x20002000200020;
 
             ref char spanRef = ref MemoryMarshal.GetReference(span);
 
-            switch (span.Length)
+            Debug.Assert(Unsafe.Add(ref spanRef, span.Length) == ':');
+
+            // Special-case common and known schemes to avoid allocations and dictionary lookups in these cases.
+            if (BitConverter.IsLittleEndian)
             {
-                case 2:
-                    if (wsMask == (Unsafe.As<char, int>(ref spanRef) | LowerCaseMask32))
+                const int WsMask = 'w' | 's' << 16;
+                const long HttpMask = 'h' | 't' << 16 | (long)'t' << 32 | (long)'p' << 48;
+                const int HttpsMask2 = 's' | ':' << 16;
+                const long FileMask = 'f' | 'i' << 16 | (long)'l' << 32 | (long)'e' << 48;
+                const long WssMask = 'w' | 's' << 16 | (long)'s' << 32 | (long)':' << 48;
+                const long FtpMask = 'f' | 't' << 16 | (long)'p' << 32 | (long)':' << 48;
+                const long MailtoMask1 = 'm' | 'a' << 16 | (long)'i' << 32 | (long)'l' << 48;
+                const int MailtoMask2 = 't' | 'o' << 16;
+                const long UuidMask = 'u' | 'u' << 16 | (long)'i' << 32 | (long)'d' << 48;
+                const long NntpMask = 'n' | 'n' << 16 | (long)'t' << 32 | (long)'p' << 48;
+                const long LdapMask = 'l' | 'd' << 16 | (long)'a' << 32 | (long)'p' << 48;
+                const long NewsMask = 'n' | 'e' << 16 | (long)'w' << 32 | (long)'s' << 48;
+                const long TelnetMask1 = 't' | 'e' << 16 | (long)'l' << 32 | (long)'n' << 48;
+                const int TelnetMask2 = 'e' | 't' << 16;
+                const long GopherMask1 = 'g' | 'o' << 16 | (long)'p' << 32 | (long)'h' << 48;
+                const int GopherMask2 = 'e' | 'r' << 16;
+                const long NetDotMask1 = 'n' | 'e' << 16 | (long)'t' << 32 | (long)'.' << 48;
+                const long NetDotTcpMask2 = 't' | 'c' << 16 | (long)'p' << 32 | (long)':' << 48;
+                const long NetDotPipeMask2 = 'p' | 'i' << 16 | (long)'p' << 32 | (long)'e' << 48;
+
+                if (span.Length == 2)
+                {
+                    if ((Unsafe.As<char, int>(ref spanRef) | LowerCaseMask32) == WsMask)
                     {
                         syntax = UriParser.WsUri;
                         return ParsingError.None;
                     }
-                    break;
-                case 3:
-                    switch ((long)first << 32 | (long)Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 1)) | LowerCaseMask48)
-                    {
-                        case ftpMask:
-                            syntax = UriParser.FtpUri;
-                            return ParsingError.None;
-                        case wssMask:
-                            syntax = UriParser.WssUri;
-                            return ParsingError.None;
-                    }
-                    break;
-                case 4:
+                }
+                else
+                {
                     switch (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64)
                     {
-                        case httpMask:
-                            syntax = UriParser.HttpUri;
-                            return ParsingError.None;
-                        case fileMask:
-                            syntax = UriParser.FileUri;
-                            return ParsingError.None;
+                        case HttpMask:
+                            if (span.Length == 5)
+                            {
+                                if ((Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == HttpsMask2)
+                                {
+                                    syntax = UriParser.HttpsUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            else if (span.Length == 4)
+                            {
+                                syntax = UriParser.HttpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case FileMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.FileUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case WssMask:
+                            if (span.Length == 3)
+                            {
+                                syntax = UriParser.WssUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case FtpMask:
+                            if (span.Length == 3)
+                            {
+                                syntax = UriParser.FtpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case MailtoMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == MailtoMask2)
+                            {
+                                syntax = UriParser.MailToUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case UuidMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.UuidUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NntpMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.NntpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case LdapMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.LdapUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NewsMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.NewsUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case TelnetMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == TelnetMask2)
+                            {
+                                syntax = UriParser.TelnetUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case GopherMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == GopherMask2)
+                            {
+                                syntax = UriParser.GopherUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NetDotMask1:
+                            if (span.Length == 7)
+                            {
+                                if ((Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == NetDotTcpMask2)
+                                {
+                                    syntax = UriParser.NetTcpUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            else if (span.Length == 8)
+                            {
+                                if ((Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == NetDotPipeMask2)
+                                {
+                                    syntax = UriParser.NetPipeUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            break;
                     }
-                    break;
-                case 5:
-                    if (httpMask == (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64)
-                        && (span[4] | LowerCaseMask16) == 's')
+                }
+            }
+            else
+            {
+                const int WsMask = 'w' << 16 | 's';
+                const long HttpMask = (long)'h' << 48 | (long)'t' << 32 | 't' << 16 | 'p';
+                const int HttpsMask2 = 's' << 16 | ':';
+                const long FileMask = (long)'f' << 48 | (long)'i' << 32 | 'l' << 16 | 'e';
+                const long WssMask = (long)'w' << 48 | (long)'s' << 32 | 's' << 16 | ':';
+                const long FtpMask = (long)'f' << 48 | (long)'t' << 32 | 'p' << 16 | ':';
+                const long MailtoMask1 = (long)'m' << 48 | (long)'a' << 32 | 'i' << 16 | 'l';
+                const int MailtoMask2 = 't' << 16 | 'o';
+                const long UuidMask = (long)'u' << 48 | (long)'u' << 32 | 'i' << 16 | 'd';
+                const long NntpMask = (long)'n' << 48 | (long)'n' << 32 | 't' << 16 | 'p';
+                const long LdapMask = (long)'l' << 48 | (long)'d' << 32 | 'a' << 16 | 'p';
+                const long NewsMask = (long)'n' << 48 | (long)'e' << 32 | 'w' << 16 | 's';
+                const long TelnetMask1 = (long)'t' << 48 | (long)'e' << 32 | 'l' << 16 | 'n';
+                const int TelnetMask2 = 'e' << 16 | 't';
+                const long GopherMask1 = (long)'g' << 48 | (long)'o' << 32 | 'p' << 16 | 'h';
+                const int GopherMask2 = 'e' << 16 | 'r';
+                const long NetDotMask1 = (long)'n' << 48 | (long)'e' << 32 | 't' << 16 | '.';
+                const long NetDotTcpMask2 = (long)'t' << 48 | (long)'c' << 32 | 'p' << 16 | ':';
+                const long NetDotPipeMask2 = (long)'p' << 48 | (long)'i' << 32 | 'p' << 16 | 'e';
+
+                if (span.Length == 2)
+                {
+                    if ((Unsafe.As<char, int>(ref spanRef) | LowerCaseMask32) == WsMask)
                     {
-                        syntax = UriParser.HttpsUri;
+                        syntax = UriParser.WsUri;
                         return ParsingError.None;
                     }
-                    break;
-                case 6:
-                    if (mailMask == (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64) &&
-                        toMask == (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32))
+                }
+                else
+                {
+                    switch (Unsafe.As<char, long>(ref spanRef) | LowerCaseMask64)
                     {
-                        syntax = UriParser.MailToUri;
-                        return ParsingError.None;
+                        case HttpMask:
+                            if (span.Length == 5)
+                            {
+                                if ((Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == HttpsMask2)
+                                {
+                                    syntax = UriParser.HttpsUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            else if (span.Length == 4)
+                            {
+                                syntax = UriParser.HttpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case FileMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.FileUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case WssMask:
+                            if (span.Length == 3)
+                            {
+                                syntax = UriParser.WssUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case FtpMask:
+                            if (span.Length == 3)
+                            {
+                                syntax = UriParser.FtpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case MailtoMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == MailtoMask2)
+                            {
+                                syntax = UriParser.MailToUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case UuidMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.UuidUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NntpMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.NntpUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case LdapMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.LdapUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NewsMask:
+                            if (span.Length == 4)
+                            {
+                                syntax = UriParser.NewsUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case TelnetMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == TelnetMask2)
+                            {
+                                syntax = UriParser.TelnetUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case GopherMask1:
+                            if (span.Length == 6 && (Unsafe.As<char, int>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask32) == GopherMask2)
+                            {
+                                syntax = UriParser.GopherUri;
+                                return ParsingError.None;
+                            }
+                            break;
+
+                        case NetDotMask1:
+                            if (span.Length == 7)
+                            {
+                                if ((Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == NetDotTcpMask2)
+                                {
+                                    syntax = UriParser.NetTcpUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            else if (span.Length == 8)
+                            {
+                                if ((Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == NetDotPipeMask2)
+                                {
+                                    syntax = UriParser.NetPipeUri;
+                                    return ParsingError.None;
+                                }
+                            }
+                            break;
                     }
-                    break;
+                }
             }
 
             // The scheme is not known.  Validate all of the characters in the input.
