@@ -651,12 +651,16 @@ namespace System
         internal static Uri? ResolveHelper(Uri baseUri, Uri? relativeUri, ref string? newUriString, ref bool userEscaped,
             out UriFormatException? e)
         {
-            Debug.Assert(!baseUri.IsNotAbsoluteUri && !baseUri.UserDrivenParsing, "Uri::ResolveHelper()|baseUri is not Absolute or is controlled by User Parser.");
+            Debug.Assert(baseUri.IsAbsoluteUri && !baseUri.UserDrivenParsing, "Uri::ResolveHelper()|baseUri is not Absolute or is controlled by User Parser.");
 
             e = null;
             string relativeStr;
 
-            if (relativeUri is { })
+            if (relativeUri is null)
+            {
+                relativeStr = string.Empty;
+            }
+            else
             {
                 if (relativeUri.IsAbsoluteUri)
                     return relativeUri;
@@ -664,8 +668,6 @@ namespace System
                 relativeStr = relativeUri.OriginalString;
                 userEscaped = relativeUri.UserEscaped;
             }
-            else
-                relativeStr = string.Empty;
 
             // Here we can assert that passed "relativeUri" is indeed a relative one
 

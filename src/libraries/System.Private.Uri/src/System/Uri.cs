@@ -3858,6 +3858,8 @@ namespace System
                 const long NetDotMask1 = 'n' | 'e' << 16 | (long)'t' << 32 | (long)'.' << 48;
                 const long NetDotTcpMask2 = 't' | 'c' << 16 | (long)'p' << 32 | (long)':' << 48;
                 const long NetDotPipeMask2 = 'p' | 'i' << 16 | (long)'p' << 32 | (long)'e' << 48;
+                const long VsMacrosMask1 = 'v' | 's' << 16 | (long)'m' << 32 | (long)'a' << 48;
+                const long VsMacrosMask2 = 'c' | 'r' << 16 | (long)'o' << 32 | (long)'s' << 48;
 
                 if (span.Length == 2)
                 {
@@ -3983,6 +3985,14 @@ namespace System
                                     syntax = UriParser.NetPipeUri;
                                     return ParsingError.None;
                                 }
+                            }
+                            break;
+
+                        case VsMacrosMask1:
+                            if (span.Length == 8 && (Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == VsMacrosMask2)
+                            {
+                                syntax = UriParser.VsMacrosUri;
+                                return ParsingError.None;
                             }
                             break;
                     }
@@ -4009,6 +4019,8 @@ namespace System
                 const long NetDotMask1 = (long)'n' << 48 | (long)'e' << 32 | 't' << 16 | '.';
                 const long NetDotTcpMask2 = (long)'t' << 48 | (long)'c' << 32 | 'p' << 16 | ':';
                 const long NetDotPipeMask2 = (long)'p' << 48 | (long)'i' << 32 | 'p' << 16 | 'e';
+                const long VsMacrosMask1 = (long)'v' << 48 | (long)'s' << 32 | 'm' << 16 | 'a';
+                const long VsMacrosMask2 = (long)'c' << 48 | (long)'r' << 32 | 'o' << 16 | 's';
 
                 if (span.Length == 2)
                 {
@@ -4134,6 +4146,14 @@ namespace System
                                     syntax = UriParser.NetPipeUri;
                                     return ParsingError.None;
                                 }
+                            }
+                            break;
+
+                        case VsMacrosMask1:
+                            if (span.Length == 8 && (Unsafe.As<char, long>(ref Unsafe.Add(ref spanRef, 4)) | LowerCaseMask64) == VsMacrosMask2)
+                            {
+                                syntax = UriParser.VsMacrosUri;
+                                return ParsingError.None;
                             }
                             break;
                     }
