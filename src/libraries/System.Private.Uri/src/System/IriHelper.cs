@@ -89,14 +89,9 @@ namespace System
 
             int next = start;
             char ch;
-            bool escape = false;
-            bool surrogatePair = false;
 
             for (; next < end; ++next)
             {
-                escape = false;
-                surrogatePair = false;
-
                 if ((ch = pInput[next]) == '%')
                 {
                     if (next + 2 < end)
@@ -199,13 +194,13 @@ namespace System
                 }
                 else if (ch > '\x7f')
                 {
+                    bool escape;
+                    bool surrogatePair = false;
+
                     // unicode
-
-                    char ch2;
-
                     if ((char.IsHighSurrogate(ch)) && (next + 1 < end))
                     {
-                        ch2 = pInput[next + 1];
+                        char ch2 = pInput[next + 1];
                         escape = !CheckIriUnicodeRange(ch, ch2, out surrogatePair, component == UriComponents.Query);
                         if (!escape)
                         {
@@ -220,6 +215,7 @@ namespace System
                         {
                             // copy it
                             dest.Append(pInput[next]);
+                            escape = false;
                         }
                         else
                         {
@@ -227,20 +223,15 @@ namespace System
                             escape = true;
                         }
                     }
-                }
-                else
-                {
-                    // just copy the character
-                    dest.Append(pInput[next]);
-                }
 
-                if (escape)
-                {
-                    const int MaxNumberOfBytesEncoded = 4;
-
-                    byte[] encodedBytes = new byte[MaxNumberOfBytesEncoded];
-                    fixed (byte* pEncodedBytes = &encodedBytes[0])
+                    if (escape)
                     {
+                        const int MaxNumberOfBytesEncoded = 4;
+                        Debug.Assert(IntPtr.Size >= MaxNumberOfBytesEncoded);
+
+                        IntPtr encodedBytesBuffer;
+                        byte* pEncodedBytes = (byte*)&encodedBytesBuffer;
+
                         int encodedBytesCount = Encoding.UTF8.GetBytes(pInput + next, surrogatePair ? 2 : 1, pEncodedBytes, MaxNumberOfBytesEncoded);
                         Debug.Assert(encodedBytesCount <= MaxNumberOfBytesEncoded, "UTF8 encoder should not exceed specified byteCount");
 
@@ -248,9 +239,14 @@ namespace System
 
                         for (int count = 0; count < encodedBytesCount; ++count)
                         {
-                            UriHelper.EscapeAsciiChar((char)encodedBytes[count], ref dest);
+                            UriHelper.EscapeAsciiChar((char)*(pEncodedBytes + count), ref dest);
                         }
                     }
+                }
+                else
+                {
+                    // just copy the character
+                    dest.Append(pInput[next]);
                 }
             }
 
