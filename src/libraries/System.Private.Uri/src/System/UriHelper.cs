@@ -792,20 +792,115 @@ namespace System
         //
         // Strip Bidirectional control characters from this string
         //
-        internal static unsafe string StripBidiControlCharacter(char* strToClean, int start, int length)
+        internal static string StripBidiControlCharacter(string input)
         {
-            if (length <= 0) return "";
-
-            char[] cleanStr = new char[length];
-            int count = 0;
-            for (int i = 0; i < length; ++i)
+            if (input.Length == 0)
             {
-                char c = strToClean[start + i];
-                if (c < '\u200E' || c > '\u202E' || !IsBidiControlCharacter(c))
+                return input;
+            }
+
+            int i;
+            for (i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
+                {
+                    break;
+                }
+            }
+
+            if (i == input.Length)
+            {
+                return input;
+            }
+
+            char[] cleanStr = new char[input.Length];
+            input.AsSpan(0, i).CopyTo(cleanStr);
+            int count = i;
+
+            for (; i < input.Length; i++)
+            {
+                char c = input[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
                 {
                     cleanStr[count++] = c;
                 }
             }
+
+            return new string(cleanStr, 0, count);
+        }
+        internal static unsafe string StripBidiControlCharacter(char* chars, int length)
+        {
+            if (length <= 0)
+            {
+                return string.Empty;
+            }
+
+            int i;
+            for (i = 0; i < length; i++)
+            {
+                char c = chars[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
+                {
+                    break;
+                }
+            }
+
+            if (i == length)
+            {
+                return new string(chars, 0, length);
+            }
+
+            char[] cleanStr = new char[length];
+            new ReadOnlySpan<char>(chars, i).CopyTo(cleanStr);
+            int count = i;
+
+            for (; i < length; i++)
+            {
+                char c = chars[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
+                {
+                    cleanStr[count++] = c;
+                }
+            }
+
+            return new string(cleanStr, 0, count);
+        }
+        internal static unsafe string? TryStripBidiControlCharacter(char* chars, int length)
+        {
+            if (length <= 0)
+            {
+                return null;
+            }
+
+            int i;
+            for (i = 0; i < length; i++)
+            {
+                char c = chars[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
+                {
+                    break;
+                }
+            }
+
+            if (i == length)
+            {
+                return null;
+            }
+
+            char[] cleanStr = new char[length];
+            new ReadOnlySpan<char>(chars, i).CopyTo(cleanStr);
+            int count = i;
+
+            for (; i < length; i++)
+            {
+                char c = chars[i];
+                if ((uint)(c - '\u200E') < ('\u202E' - '\u200E') && IsBidiControlCharacter(c))
+                {
+                    cleanStr[count++] = c;
+                }
+            }
+
             return new string(cleanStr, 0, count);
         }
     }
