@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Tests;
 using System.Text;
@@ -662,6 +663,7 @@ namespace System.PrivateUri.Tests
         [Fact]
         public void UriUnescapeInvalid_IncompleteUtf8BetweenValidUtf8IriOn_InvalidUtf8LeftAlone()
         {
+            Debugger.Launch();
             string input = "http://host/%E6%9C%88%E5%9B%E6%9C%88";
 
             string output = Uri.UnescapeDataString(input);
