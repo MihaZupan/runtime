@@ -12,12 +12,12 @@ namespace System
     {
         // methods
         // Parse and canonicalize
-        internal static string ParseCanonicalName(string str, int start, int end, ref bool isLoopback)
+        internal static string ParseCanonicalName(ReadOnlySpan<char> str, ref bool isLoopback)
         {
             unsafe
             {
                 byte* numbers = stackalloc byte[NumberOfLabels];
-                isLoopback = Parse(str, numbers, start, end);
+                isLoopback = Parse(str, numbers);
 
                 Span<char> stackSpace = stackalloc char[NumberOfLabels * 3 + 3];
                 int totalChars = 0, charsWritten;
@@ -38,14 +38,14 @@ namespace System
         //
         //  Convert this IPv4 address into a sequence of 4 8-bit numbers
         //
-        private static unsafe bool Parse(string name, byte* numbers, int start, int end)
+        private static unsafe bool Parse(ReadOnlySpan<char> name, byte* numbers)
         {
             fixed (char* ipString = name)
             {
-                int changedEnd = end;
-                long result = IPv4AddressHelper.ParseNonCanonical(ipString, start, ref changedEnd, true);
+                int changedEnd = name.Length;
+                long result = IPv4AddressHelper.ParseNonCanonical(ipString, 0, ref changedEnd, true);
                 // end includes ports, so changedEnd may be different from end
-                Debug.Assert(result != Invalid, "Failed to parse after already validated: " + name);
+                Debug.Assert(result != Invalid, "Failed to parse after already validated: " + name.ToString());
 
                 unchecked
                 {

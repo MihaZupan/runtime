@@ -275,9 +275,6 @@ namespace System
         //  <member>    numbers
         //      Array filled in with the numbers in the IPv6 groups
         //
-        //  <member>    PrefixLength
-        //      Set to the number after the prefix separator (/) if found
-        //
         // Assumes:
         //  <Name> has been validated and contains only hex digits in groups of
         //  16-bit numbers, the characters ':' and '/', and a possible IPv4
@@ -287,113 +284,107 @@ namespace System
         //  Nothing
         //
 
-        internal static void Parse(ReadOnlySpan<char> address, Span<ushort> numbers, int start, ref string? scopeId)
+        internal static void Parse(ReadOnlySpan<char> address, Span<ushort> numbers, ref string? scopeId)
         {
             int number = 0;
             int index = 0;
             int compressorIndex = -1;
             bool numberIsValid = true;
 
-            //This used to be a class instance member but have not been used so far
-            int PrefixLength = 0;
-            if (address[start] == '[')
+            int i = address[0] == '[' ? 1 : 0;
+            while (i < address.Length)
             {
-                ++start;
-            }
+                char c = address[i];
 
-            for (int i = start; i < address.Length && address[i] != ']';)
-            {
-                switch (address[i])
+                if (c == ']')
                 {
-                    case '%':
-                        if (numberIsValid)
-                        {
-                            numbers[index++] = (ushort)number;
-                            numberIsValid = false;
-                        }
-
-                        start = i;
-                        for (++i; i < address.Length && address[i] != ']' && address[i] != '/'; ++i)
-                        {
-                        }
-                        scopeId = new string(address.Slice(start, i - start));
-                        // ignore prefix if any
-                        for (; i < address.Length && address[i] != ']'; ++i)
-                        {
-                        }
-                        break;
-
-                    case ':':
+                    break;
+                }
+                else if (c == '%')
+                {
+                    if (numberIsValid)
+                    {
                         numbers[index++] = (ushort)number;
-                        number = 0;
+                        numberIsValid = false;
+                    }
+
+                    int start = i;
+
+                    while (++i < address.Length && address[i] != ']' && address[i] != '/')
+                    { }
+
+                    scopeId = new string(address.Slice(start, i - start));
+
+                    // ignore prefix if any
+                    break;
+                }
+                else if (c == ':')
+                {
+                    numbers[index++] = (ushort)number;
+                    number = 0;
+                    ++i;
+                    if (address[i] == ':')
+                    {
+                        compressorIndex = index;
                         ++i;
-                        if (address[i] == ':')
+                    }
+                    else if ((compressorIndex < 0) && (index < 6))
+                    {
+                        // no point checking for IPv4 address if we don't
+                        // have a compressor or we haven't seen 6 16-bit
+                        // numbers yet
+                        continue;
+                    }
+
+                    // check to see if the upcoming number is really an IPv4
+                    // address. If it is, convert it to 2 ushort numbers
+                    for (int j = i; j < address.Length; j++)
+                    {
+                        c = address[j];
+
+                        if (c == ']' || c == ':' || c == '%' || c == '/' || j >= i + 4)
+                            break;
+
+                        if (c == '.')
                         {
-                            compressorIndex = index;
-                            ++i;
-                        }
-                        else if ((compressorIndex < 0) && (index < 6))
-                        {
-                            // no point checking for IPv4 address if we don't
-                            // have a compressor or we haven't seen 6 16-bit
-                            // numbers yet
+                            // we have an IPv4 address. Find the end of it:
+                            // we know that since we have a valid IPv6
+                            // address, the only things that will terminate
+                            // the IPv4 address are the prefix delimiter '/'
+                            // or the end-of-string (which we conveniently
+                            // delimited with ']')
+                            for (; j < address.Length; j++)
+                            {
+                                c = address[j];
+                                if (c == ']' || c == '/' || c == '%')
+                                    break;
+                            }
+
+                            number = IPv4AddressHelper.ParseHostNumber(address.Slice(i, j - i));
+                            numbers[index++] = (ushort)(number >> 16);
+                            numbers[index++] = (ushort)number;
+                            i = j;
+
+                            // set this to avoid adding another number to
+                            // the array if there's a prefix
+                            number = 0;
+                            numberIsValid = false;
                             break;
                         }
-
-                        // check to see if the upcoming number is really an IPv4
-                        // address. If it is, convert it to 2 ushort numbers
-                        for (int j = i; j < address.Length &&
-                                        (address[j] != ']') &&
-                                        (address[j] != ':') &&
-                                        (address[j] != '%') &&
-                                        (address[j] != '/') &&
-                                        (j < i + 4); ++j)
-                        {
-
-                            if (address[j] == '.')
-                            {
-                                // we have an IPv4 address. Find the end of it:
-                                // we know that since we have a valid IPv6
-                                // address, the only things that will terminate
-                                // the IPv4 address are the prefix delimiter '/'
-                                // or the end-of-string (which we conveniently
-                                // delimited with ']')
-                                while (j < address.Length && (address[j] != ']') && (address[j] != '/') && (address[j] != '%'))
-                                {
-                                    ++j;
-                                }
-                                number = IPv4AddressHelper.ParseHostNumber(address, i, j);
-                                numbers[index++] = (ushort)(number >> 16);
-                                numbers[index++] = (ushort)number;
-                                i = j;
-
-                                // set this to avoid adding another number to
-                                // the array if there's a prefix
-                                number = 0;
-                                numberIsValid = false;
-                                break;
-                            }
-                        }
-                        break;
-
-                    case '/':
-                        if (numberIsValid)
-                        {
-                            numbers[index++] = (ushort)number;
-                            numberIsValid = false;
-                        }
-
-                        // since we have a valid IPv6 address string, the prefix
-                        // length is the last token in the string
-                        for (++i; address[i] != ']'; ++i)
-                        {
-                            PrefixLength = PrefixLength * 10 + (address[i] - '0');
-                        }
-                        break;
-
-                    default:
-                        number = number * 16 + Uri.FromHex(address[i++]);
-                        break;
+                    }
+                }
+                else if (c == '/')
+                {
+                    if (numberIsValid)
+                    {
+                        numbers[index++] = (ushort)number;
+                        numberIsValid = false;
+                    }
+                    break;
+                }
+                else
+                {
+                    number = number * 16 + Uri.FromHex(address[i++]);
                 }
             }
 
@@ -415,7 +406,7 @@ namespace System
                 // it happens for leading and trailing compression
                 if (fromIndex != toIndex)
                 {
-                    for (int i = index - compressorIndex; i > 0; --i)
+                    for (int j = index - compressorIndex; j > 0; --j)
                     {
                         numbers[toIndex--] = numbers[fromIndex];
                         numbers[fromIndex--] = 0;

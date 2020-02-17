@@ -2421,7 +2421,9 @@ namespace System
                 }
             }
             Flags flags = _flags;
-            string host = CreateHostStringHelper(_string, _info.Offset.Host, _info.Offset.Path, ref flags, ref _info.ScopeId);
+
+            ref Offset offset = ref _info.Offset;
+            string host = CreateHostStringHelper(_string.AsSpan(offset.Host, offset.Path - offset.Host), ref flags, ref _info.ScopeId);
 
             // now check on canonical host representation
             if (host.Length != 0)
@@ -2476,14 +2478,9 @@ namespace System
                     }
                     else
                     {
-                        for (int i = 0; i < host.Length; ++i)
+                        if (!_string.AsSpan(offset.Host, offset.End - offset.Host).SequenceEqual(host))
                         {
-                            if ((_info.Offset.Host + i) >= _info.Offset.End ||
-                                host[i] != _string[_info.Offset.Host + i])
-                            {
-                                flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
-                                break;
-                            }
+                            flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
                         }
                     }
                 }
@@ -2496,27 +2493,24 @@ namespace System
             }
         }
 
-        private static string CreateHostStringHelper(string str, ushort idx, ushort end, ref Flags flags, ref string? scopeId)
+        private static string CreateHostStringHelper(ReadOnlySpan<char> str, ref Flags flags, ref string? scopeId)
         {
             bool loopback = false;
             string host;
             switch (flags & Flags.HostTypeMask)
             {
                 case Flags.DnsHostType:
-                    host = DomainNameHelper.ParseCanonicalName(str, idx, end, ref loopback);
+                case Flags.UncHostType:
+                    host = DomainNameHelper.ParseCanonicalName(str, ref loopback);
                     break;
 
                 case Flags.IPv6HostType:
                     // The helper will return [...] string that is not suited for Dns.Resolve()
-                    host = IPv6AddressHelper.ParseCanonicalName(str, idx, ref loopback, ref scopeId);
+                    host = IPv6AddressHelper.ParseCanonicalName(str, ref loopback, ref scopeId);
                     break;
 
                 case Flags.IPv4HostType:
-                    host = IPv4AddressHelper.ParseCanonicalName(str, idx, end, ref loopback);
-                    break;
-
-                case Flags.UncHostType:
-                    host = UncNameHelper.ParseCanonicalName(str, idx, end, ref loopback);
+                    host = IPv4AddressHelper.ParseCanonicalName(str, ref loopback);
                     break;
 
                 case Flags.BasicHostType:
@@ -2527,7 +2521,7 @@ namespace System
                     else
                     {
                         // This is for a registry-based authority, not relevant for known schemes
-                        host = str.Substring(idx, end - idx);
+                        host = str.ToString();
                     }
                     // A empty host would count for a loopback
                     if (host.Length == 0)
@@ -2592,14 +2586,12 @@ namespace System
                 }
                 else
                 {
-                    host = CreateHostStringHelper(host, 0, (ushort)host.Length, ref flags, ref _info.ScopeId);
-                    for (int i = 0; i < host.Length; ++i)
+                    host = CreateHostStringHelper(host, ref flags, ref _info.ScopeId);
+
+                    ref Offset offset = ref _info.Offset;
+                    if (!_string.AsSpan(offset.Host, offset.End - offset.Host).SequenceEqual(host))
                     {
-                        if ((_info.Offset.Host + i) >= _info.Offset.End || host[i] != _string[_info.Offset.Host + i])
-                        {
-                            _flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
-                            break;
-                        }
+                        flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
                     }
                     _flags = (_flags & ~Flags.HostTypeMask) | (flags & Flags.HostTypeMask);
                 }

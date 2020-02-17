@@ -12,6 +12,6 @@ namespace System
             ReadOnlySpan<ushort> numbers) => (-1, -1);
         internal static unsafe bool ShouldHaveIpv4Embedded(ReadOnlySpan<ushort> numbers) => false;
         internal static unsafe bool IsValidStrict(char* name, int start, ref int end) => false;
-        internal static unsafe bool Parse(ReadOnlySpan<char> ipSpan, Span<ushort> numbers, int start, ref string scopeId) => false;
+        internal static unsafe bool Parse(ReadOnlySpan<char> ipSpan, Span<ushort> numbers, ref string scopeId) => false;
     }
 }

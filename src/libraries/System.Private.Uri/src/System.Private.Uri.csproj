@@ -12,6 +12,7 @@
     <Compile Include="$(CommonPath)System\HexConverter.cs">
       <Link>Common\System\HexConverter.cs</Link>
     </Compile>
+    <Compile Include="System\CharHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="System\DomainNameHelper.cs" />

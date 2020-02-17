@@ -15,10 +15,10 @@ namespace System
         private const int NumberOfLabels = 4;
 
         // Only called from the IPv6Helper, only parse the canonical format
-        internal static unsafe int ParseHostNumber(ReadOnlySpan<char> str, int start, int end)
+        internal static unsafe int ParseHostNumber(ReadOnlySpan<char> str)
         {
             byte* numbers = stackalloc byte[NumberOfLabels];
-            ParseCanonical(str, numbers, start, end);
+            ParseCanonical(str, numbers);
             return (numbers[0] << 24) + (numbers[1] << 16) + (numbers[2] << 8) + numbers[3];
         }
 
@@ -82,19 +82,22 @@ namespace System
         //  of 8-bit numbers and the characters '.'
         //  Address may terminate with ':' or with the end of the string
         //
-        private static unsafe bool ParseCanonical(ReadOnlySpan<char> name, byte* numbers, int start, int end)
+        private static unsafe bool ParseCanonical(ReadOnlySpan<char> name, byte* numbers)
         {
+            int nameIndex = 0;
             for (int i = 0; i < NumberOfLabels; ++i)
             {
-
-                byte b = 0;
-                char ch;
-                for (; (start < end) && (ch = name[start]) != '.' && ch != ':'; ++start)
+                int b = 0;
+                for (; nameIndex < name.Length; nameIndex++)
                 {
-                    b = (byte)(b * 10 + (byte)(ch - '0'));
+                    char c = name[nameIndex];
+                    if (c == '.' || c == ':')
+                        break;
+
+                    b = b * 10 + (c - '0');
                 }
-                numbers[i] = b;
-                ++start;
+                numbers[i] = (byte)b;
+                nameIndex++;
             }
             return numbers[0] == 127;
         }

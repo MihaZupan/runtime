@@ -210,7 +210,7 @@ namespace System.Net
             if (isValid || (end != ipSpan.Length))
             {
                 string scopeId = null;
-                IPv6AddressHelper.Parse(ipSpan, numbers, 0, ref scopeId);
+                IPv6AddressHelper.Parse(ipSpan, numbers, ref scopeId);
 
                 if (scopeId?.Length > 1)
                 {

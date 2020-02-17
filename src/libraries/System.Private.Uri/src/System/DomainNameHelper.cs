@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
@@ -17,32 +17,56 @@ namespace System
         internal const string Localhost = "localhost";
         internal const string Loopback = "loopback";
 
-        internal static string ParseCanonicalName(string str, int start, int end, ref bool loopback)
+        internal static string ParseCanonicalName(ReadOnlySpan<char> span, ref bool loopback)
         {
-            string? res = null;
+            Debug.Assert(span.Length > 0);
 
-            for (int i = end - 1; i >= start; --i)
+            if (!CharHelper.IsAsciiLetter(span[^1]))
             {
-                if (str[i] >= 'A' && str[i] <= 'Z')
+                for (int i = span.Length - 1; i >= 0; i--)
                 {
-                    res = str.Substring(start, end - start).ToLowerInvariant();
-                    break;
+                    char c = span[i];
+                    if (c == ':')
+                    {
+                        span = span.Slice(0, i);
+                        break;
+                    }
+                    else if (!CharHelper.IsAsciiDigit(c))
+                    {
+                        break;
+                    }
                 }
-                if (str[i] == ':')
-                    end = i;
             }
 
-            if (res == null)
-            {
-                res = str.Substring(start, end - start);
-            }
+            Debug.Assert(!span.Contains(':'));
 
-            if (res == Localhost || res == Loopback)
+            if (span.Length == 9
+                ? span.Equals(Localhost, StringComparison.OrdinalIgnoreCase)
+                : (span.Length == 8 && span.Equals(Loopback, StringComparison.OrdinalIgnoreCase)))
             {
                 loopback = true;
                 return Localhost;
             }
-            return res;
+
+            for (int i = 0; i < span.Length; i++)
+            {
+                if (CharHelper.IsAsciiUppercaseLetter(span[i]))
+                {
+                    unsafe
+                    {
+                        fixed (char* pSpan = span)
+                        {
+                            return string.Create(span.Length, (ip: (IntPtr)pSpan, length: span.Length), (buffer, state) =>
+                            {
+                                int charsWritten = new ReadOnlySpan<char>((char*)state.ip, state.length).ToLowerInvariant(buffer);
+                                Debug.Assert(charsWritten == buffer.Length);
+                            });
+                        }
+                    }
+                }
+            }
+
+            return span.ToString();
         }
 
         //

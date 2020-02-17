@@ -22,10 +22,6 @@ namespace System
         // properties
 
         // methods
-        internal static string ParseCanonicalName(string str, int start, int end, ref bool loopback)
-        {
-            return DomainNameHelper.ParseCanonicalName(str, start, end, ref loopback);
-        }
 
         //
         // IsValid

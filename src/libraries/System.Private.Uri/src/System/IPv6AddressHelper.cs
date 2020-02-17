@@ -13,11 +13,11 @@ namespace System
     {
         // methods
 
-        internal static unsafe string ParseCanonicalName(string str, int start, ref bool isLoopback, ref string? scopeId)
+        internal static unsafe string ParseCanonicalName(ReadOnlySpan<char> str, ref bool isLoopback, ref string? scopeId)
         {
             Span<ushort> numbers = stackalloc ushort[NumberOfLabels];
             numbers.Clear();
-            Parse(str, numbers, start, ref scopeId);
+            Parse(str, numbers, ref scopeId);
             isLoopback = IsLoopback(numbers);
 
             // RFC 5952 Sections 4 & 5 - Compressed, lower case, with possible embedded IPv4 addresses.
