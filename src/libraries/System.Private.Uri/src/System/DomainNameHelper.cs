@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -207,10 +208,7 @@ namespace System
         /// <summary>Converts a host name into its idn equivalent.</summary>
         internal static string IdnEquivalent(string hostname)
         {
-            if (hostname.Length == 0)
-            {
-                return hostname;
-            }
+            Debug.Assert(hostname.Length > 0);
 
             // check if only ascii chars
             // special case since idnmapping will not lowercase if only ascii present
@@ -230,14 +228,7 @@ namespace System
                 return hostname.ToLowerInvariant();
             }
 
-            string bidiStrippedHost;
-            unsafe
-            {
-                fixed (char* hostnamePtr = hostname)
-                {
-                    bidiStrippedHost = UriHelper.StripBidiControlCharacter(hostnamePtr, 0, hostname.Length);
-                }
-            }
+            string bidiStrippedHost = UriHelper.StripBidiControlCharacter(hostname);
 
             try
             {
