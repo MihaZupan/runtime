@@ -1570,15 +1570,9 @@ namespace System
         //
         public static bool operator ==(Uri? uri1, Uri? uri2)
         {
-            if ((object?)uri1 == (object?)uri2)
-            {
-                return true;
-            }
-            if ((object?)uri1 == null || (object?)uri2 == null)
-            {
-                return false;
-            }
-            return uri2.Equals(uri1);
+            return uri1 is null
+                ? uri2 is null
+                : uri1.Equals(uri2);
         }
 
         //
@@ -1586,243 +1580,156 @@ namespace System
         //
         public static bool operator !=(Uri? uri1, Uri? uri2)
         {
-            if ((object?)uri1 == (object?)uri2)
-            {
-                return false;
-            }
-
-            if ((object?)uri1 == null || (object?)uri2 == null)
-            {
-                return true;
-            }
-
-            return !uri2.Equals(uri1);
+            return uri1 is null
+                ? uri2 is { }
+                : !uri1.Equals(uri2);
         }
 
-        //
-        // Equals
-        //
-        //  Overrides default function (in Object class)
-        //
-        // Assumes:
-        //  <comparand> is an object of class Uri
-        //
-        // Returns:
-        //  true if objects have the same value, else false
-        //
-        // Throws:
-        //  Nothing
-        //
         public override bool Equals(object? comparand)
         {
-            if ((object?)comparand == null)
+            if (comparand is null)
             {
                 return false;
             }
 
-            if ((object?)this == (object?)comparand)
+            if (ReferenceEquals(this, comparand))
             {
                 return true;
             }
 
-            Uri? obj = comparand as Uri;
+            Uri? otherUri = comparand as Uri;
 
-            //
             // we allow comparisons of Uri and String objects only. If a string
             // is passed, convert to Uri. This is inefficient, but allows us to
             // canonicalize the comparand, making comparison possible
-            //
-            if ((object?)obj == null)
+            if (otherUri is null)
             {
-                string? s = comparand as string;
-
-                if ((object?)s == null)
+                if (!(comparand is string comparandString))
                     return false;
 
-                if (!TryCreate(s, UriKind.RelativeOrAbsolute, out obj))
+                if (ReferenceEquals(_string, comparandString))
+                    return true;
+
+                if (!TryCreate(comparandString, IsAbsoluteUri ? UriKind.Absolute : UriKind.Relative, out otherUri))
                     return false;
+            }
+            else if (ReferenceEquals(_string, otherUri._string))
+            {
+                return true;
             }
 
             // Since v1.0 two Uris are equal if everything but fragment and UserInfo does match
 
-            // This check is for a case where we already fixed up the equal references
-            if ((object)_string == (object)obj._string)
-            {
-                return true;
-            }
-
-            if (IsAbsoluteUri != obj.IsAbsoluteUri)
+            if (IsAbsoluteUri != otherUri.IsAbsoluteUri)
                 return false;
 
             if (IsNotAbsoluteUri)
-                return OriginalString.Equals(obj.OriginalString);
+                return OriginalString.Equals(otherUri.OriginalString);
 
-            if (NotAny(Flags.AllUriInfoSet) || obj.NotAny(Flags.AllUriInfoSet))
+            if (!ReferenceEquals(Syntax, otherUri.Syntax))
+                return false;
+
+            if (_string.Length == otherUri._string.Length && (_flags & otherUri._flags & Flags.AllUriInfoSet) == 0)
             {
-                // Try raw compare for m_Strings as the last chance to keep the working set small
-                if (!IsUncOrDosPath)
+                // if IsUncOrDosPath is true then we ignore case in the path comparison
+                if (IsUncOrDosPath)
                 {
-                    if (_string.Length == obj._string.Length)
-                    {
-                        unsafe
-                        {
-                            // Try case sensitive compare on m_Strings
-                            fixed (char* selfPtr = _string)
-                            {
-                                fixed (char* otherPtr = obj._string)
-                                {
-                                    // This will never go negative since m_String is checked to be a valid URI
-                                    int i = (_string.Length - 1);
-                                    for (; i >= 0; --i)
-                                    {
-                                        if (*(selfPtr + i) != *(otherPtr + i))
-                                        {
-                                            break;
-                                        }
-                                    }
-                                    if (i == -1)
-                                    {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    if (_string.Equals(otherUri._string, StringComparison.OrdinalIgnoreCase))
+                        return true;
                 }
-                else if (string.Equals(_string, obj._string, StringComparison.OrdinalIgnoreCase))
+                else
                 {
-                    return true;
+                    if (_string.AsSpan().SequenceEqual(otherUri._string))
+                        return true;
                 }
             }
 
             // Note that equality test will bring the working set of both
             // objects up to creation of m_Info.MoreInfo member
             EnsureUriInfo();
-            obj.EnsureUriInfo();
+            otherUri.EnsureUriInfo();
 
-            if (!UserDrivenParsing && !obj.UserDrivenParsing && Syntax!.IsSimple && obj.Syntax!.IsSimple)
+            // Flags that must be equal if we consider Uris equal
+            const Flags EqualityFlagsMask = Flags.HostTypeMask | Flags.AuthorityFound | Flags.DosPath | Flags.UncPath | Flags.UnixPath | Flags.ImplicitFile | Flags.UserDrivenParsing;
+            if ((_flags & EqualityFlagsMask) != (otherUri._flags & EqualityFlagsMask))
+                return false;
+
+            if (Port != otherUri.Port)
+            {
+                Debug.Assert(Port != Syntax.DefaultPort || otherUri.Port != Syntax.DefaultPort);
+                return false;
+            }
+
+            if (Syntax.IsSimple && !UserDrivenParsing)
             {
                 // Optimization of canonical DNS names by avoiding host string creation.
                 // Note there could be explicit ports specified that would invalidate path offsets
-                if (InFact(Flags.CanonicalDnsHost) && obj.InFact(Flags.CanonicalDnsHost))
+                if ((_flags & otherUri._flags & Flags.CanonicalDnsHost) != 0)
                 {
-                    ushort i1 = _info.Offset.Host;
-                    ushort end1 = _info.Offset.Path;
+                    ref Offset offset = ref _info.Offset;
+                    ReadOnlySpan<char> host = _string.AsSpan(offset.Host, offset.Path - offset.Host);
 
-                    ushort i2 = obj._info.Offset.Host;
-                    ushort end2 = obj._info.Offset.Path;
-                    string str = obj._string;
-                    //Taking the shortest part
-                    if (end1 - i1 > end2 - i2)
+                    ref Offset otherOffset = ref otherUri._info.Offset;
+                    ReadOnlySpan<char> otherHost = otherUri._string.AsSpan(otherOffset.Host, otherOffset.Path - otherOffset.Host);
+
+                    // Handle cases of a colon with no port specified (PortNotCanonical)
+                    if (host.Length != otherHost.Length)
                     {
-                        end1 = (ushort)(i1 + end2 - i2);
-                    }
-                    // compare and break on ':' if found
-                    while (i1 < end1)
-                    {
-                        if (_string[i1] != str[i2])
+                        Debug.Assert(host.Length > 0 && otherHost.Length > 0);
+                        if (host[^1] == ':')
+                        {
+                            Debug.Assert(InFact(Flags.PortNotCanonical));
+                            if (host.Length != otherHost.Length + 1)
+                                return false;
+
+                            host = host.Slice(0, host.Length - 1);
+                        }
+                        else if (otherHost[^1] == ':')
+                        {
+                            Debug.Assert(otherUri.InFact(Flags.PortNotCanonical));
+                            if (otherHost.Length != host.Length + 1)
+                                return false;
+
+                            otherHost = otherHost.Slice(0, otherHost.Length - 1);
+                        }
+                        else
                         {
                             return false;
                         }
-                        if (str[i2] == ':')
-                        {
-                            // The other must have ':' too to have equal host
-                            break;
-                        }
-                        ++i1; ++i2;
                     }
 
-                    // The longest host must have ':' or be of the same size
-                    if (i1 < _info.Offset.Path && _string[i1] != ':')
-                    {
+                    if (!host.SequenceEqual(otherHost))
                         return false;
-                    }
-                    if (i2 < end2 && str[i2] != ':')
-                    {
-                        return false;
-                    }
-                    //hosts are equal!
                 }
                 else
                 {
                     EnsureHostString(false);
-                    obj.EnsureHostString(false);
-                    if (!_info.Host!.Equals(obj._info.Host))
-                    {
+                    otherUri.EnsureHostString(false);
+
+                    if (!_info.Host.AsSpan().SequenceEqual(otherUri._info.Host))
                         return false;
-                    }
-                }
-
-                if (Port != obj.Port)
-                {
-                    return false;
                 }
             }
 
-            // We want to cache RemoteUrl to improve perf for Uri as a key.
-            // We should consider reducing the overall working set by not caching some other properties mentioned in MoreInfo
+            MoreInfo selfInfo = _info.MoreInfo ??= new MoreInfo();
+            MoreInfo otherInfo = otherUri._info.MoreInfo ??= new MoreInfo();
 
-            UriInfo selfInfo = _info;
-            UriInfo otherInfo = obj._info;
-            if ((object?)selfInfo.MoreInfo == null)
-            {
-                selfInfo.MoreInfo = new MoreInfo();
-            }
-            if ((object?)otherInfo.MoreInfo == null)
-            {
-                otherInfo.MoreInfo = new MoreInfo();
-            }
-
-            // NB: To avoid a race condition when creating MoreInfo field
-            // "selfInfo" and "otherInfo" shall remain as local copies.
-            string? selfUrl = selfInfo.MoreInfo.RemoteUrl;
-            if ((object?)selfUrl == null)
-            {
-                selfUrl = GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
-                selfInfo.MoreInfo.RemoteUrl = selfUrl;
-            }
-            string? otherUrl = otherInfo.MoreInfo.RemoteUrl;
-            if ((object?)otherUrl == null)
-            {
-                otherUrl = obj.GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
-                otherInfo.MoreInfo.RemoteUrl = otherUrl;
-            }
-
-            if (!IsUncOrDosPath)
-            {
-                if (selfUrl.Length != otherUrl.Length)
-                {
-                    return false;
-                }
-                unsafe
-                {
-                    // Try case sensitive compare on m_Strings
-                    fixed (char* seltPtr = selfUrl)
-                    {
-                        fixed (char* otherPtr = otherUrl)
-                        {
-                            char* endSelf = seltPtr + selfUrl.Length;
-                            char* endOther = otherPtr + selfUrl.Length;
-                            while (endSelf != seltPtr)
-                            {
-                                if (*--endSelf != *--endOther)
-                                {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            // if IsUncOrDosPath is true then we ignore case in the path comparison
             // Get Unescaped form as most safe for the comparison
             // Fragment AND UserInfo are ignored
-            //
-            return (string.Compare(selfInfo.MoreInfo.RemoteUrl,
-                                   otherInfo.MoreInfo.RemoteUrl,
-                                   IsUncOrDosPath ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) == 0);
+            string selfUrl = selfInfo.RemoteUrl ??= GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
+            string otherUrl = otherInfo.RemoteUrl ??= otherUri.GetParts(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
+
+            if (selfUrl.Length != otherUrl.Length)
+                return false;
+
+            if (IsUncOrDosPath)
+            {
+                return selfUrl.Equals(otherUrl, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                return selfUrl.AsSpan().SequenceEqual(otherUrl);
+            }
         }
 
         public Uri MakeRelativeUri(Uri uri)
