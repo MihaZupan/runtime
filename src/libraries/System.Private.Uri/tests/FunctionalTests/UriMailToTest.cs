@@ -207,6 +207,16 @@ namespace System.PrivateUri.Tests
             Assert.Equal("\u30AF@\u30AF", uri.GetComponents(UriComponents.UserInfo | UriComponents.Host, UriFormat.SafeUnescaped));
         }
 
+        [Theory]
+        [InlineData("mailto:foo@bar")]
+        [InlineData("mailto:foo@bar,foo@bar")]
+        [InlineData("mailto:foo@bar,bar@foo")]
+        [InlineData("mailto:foo@bar,bar@foo,foobar@foo")]
+        public void UriMailTo_MultipleToAddresses_Success(string mailToUri)
+        {
+            Uri uri = new Uri(mailToUri);
+        }
+
 
         #region Helper methods
 
