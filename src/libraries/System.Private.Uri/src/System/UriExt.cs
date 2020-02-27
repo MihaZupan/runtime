@@ -28,8 +28,17 @@ namespace System
             if (dontEscape)
                 _flags |= Flags.UserEscaped;
 
-            ParsingError err = ParseScheme(_string, ref _flags, ref _syntax!);
+            Flags flags = _flags;
+            Debug.Assert(flags == (Flags)0 || flags == Flags.UserEscaped);
+            ParsingError err = ParseScheme(_string, ref flags, ref _syntax!);
             UriFormatException? e;
+
+            ulong valueBefore = (ulong)flags;
+            _flags = flags;
+            ulong valueAfter = (ulong)_flags;
+
+            if (valueBefore != valueAfter)
+                throw new Exception("Wtf");
 
             InitializeUri(err, uriKind, out e);
             if (e != null)

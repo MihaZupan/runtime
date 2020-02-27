@@ -262,7 +262,7 @@ namespace System
                 // as we're using an enumerator, but luckily it's a ref struct-based enumerator: we can
                 // make a copy and iterate through the copy without impacting the original, and then only
                 // push the original ahead if we find what we're looking for in the copy.
-                if (checkExistingEscaped && value == '%')
+                if (value == '%')
                 {
                     // If the next two characters are valid escaped ASCII, then just output them as-is.
                     SpanRuneEnumerator tmpEnumerator = e;
@@ -274,11 +274,14 @@ namespace System
                             Rune r2 = tmpEnumerator.Current;
                             if (r2.IsAscii && IsHexDigit((char)r2.Value))
                             {
-                                vsb.Append('%');
-                                vsb.Append((char)r1.Value);
-                                vsb.Append((char)r2.Value);
-                                e = tmpEnumerator;
-                                continue;
+                                if (checkExistingEscaped || (r1.Value == '2' && r2.Value == '5'))
+                                {
+                                    vsb.Append('%');
+                                    vsb.Append((char)r1.Value);
+                                    vsb.Append((char)r2.Value);
+                                    e = tmpEnumerator;
+                                    continue;
+                                }
                             }
                         }
                     }

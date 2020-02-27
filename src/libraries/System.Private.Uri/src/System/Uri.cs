@@ -650,6 +650,10 @@ namespace System
         {
             get
             {
+                if (OriginalString == "e:/%25")
+                {
+                    Debugger.Launch();
+                }
                 if (_syntax == null)
                 {
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
@@ -4568,6 +4572,11 @@ namespace System
 
             if (_info.Offset.Path == _info.Offset.Query)
                 return dest;
+
+            if (OriginalString == "e:/%25")
+            {
+                Debugger.Launch();
+            }
 
             int end = pos;
 

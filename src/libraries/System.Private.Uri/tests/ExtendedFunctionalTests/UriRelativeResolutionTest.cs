@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Diagnostics;
 using Xunit;
 
 namespace System.PrivateUri.Tests
@@ -15,6 +16,17 @@ namespace System.PrivateUri.Tests
         // See RFC 3986 Section 5.2.2 and 5.4 http://www.ietf.org/rfc/rfc3986.txt
 
         private readonly Uri _fullBaseUri = new Uri("http://user:psw@host:9090/path1/path2/path3/fileA?query#fragment");
+
+
+
+        [Fact]
+        public static void Regression_30818()
+        {
+            Uri uri = new Uri("e:/%25");
+            Debugger.Launch();
+            Assert.Equal("file:///e:/%25", uri.AbsoluteUri);
+            Assert.Equal(@"e:\%25", uri.LocalPath);
+        }
 
         [Fact]
         public void Uri_Relative_BaseVsAbsolute_ReturnsFullAbsolute()
