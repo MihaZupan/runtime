@@ -184,15 +184,12 @@ namespace System
 
         private UriParser Syntax
         {
-            get
-            {
-                return _syntax;
-            }
+            get => _syntax;
         }
 
         private bool IsNotAbsoluteUri
         {
-            get { return (object)_syntax == null; }
+            get => _syntax is null;
         }
 
         //
@@ -628,18 +625,8 @@ namespace System
         {
             get
             {
-                UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
-                {
-                    info.MoreInfo = new MoreInfo();
-                }
-                string? result = info.MoreInfo.Path;
-                if ((object?)result == null)
-                {
-                    result = GetParts(UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-                    info.MoreInfo.Path = result;
-                }
-                return result;
+                MoreInfo info = EnsureUriInfo().MoreInfo ??= new MoreInfo();
+                return info.Path ??= GetParts(UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
             }
         }
 
@@ -652,18 +639,8 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
-                {
-                    info.MoreInfo = new MoreInfo();
-                }
-                string? result = info.MoreInfo.AbsoluteUri;
-                if ((object?)result == null)
-                {
-                    result = GetParts(UriComponents.AbsoluteUri, UriFormat.UriEscaped);
-                    info.MoreInfo.AbsoluteUri = result;
-                }
-                return result;
+                MoreInfo info = EnsureUriInfo().MoreInfo ??= new MoreInfo();
+                return info.AbsoluteUri ??= GetParts(UriComponents.AbsoluteUri, UriFormat.UriEscaped);
             }
         }
 
@@ -798,16 +775,7 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                string result = GetParts(UriComponents.PathAndQuery, UriFormat.UriEscaped);
-                //
-                // Compatibility:
-                // Remove the first slash from a Dos Path if it's present
-                //
-                if (IsDosPath && result[0] == '/')
-                {
-                    result = result.Substring(1);
-                }
-                return result;
+                return AbsolutePath + Query;
             }
         }
 
@@ -873,7 +841,8 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                return GetParts(UriComponents.Host, UriFormat.UriEscaped);
+                EnsureHostString(false);
+                return _info.Host!;
             }
         }
 
@@ -1029,18 +998,8 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
-                {
-                    info.MoreInfo = new MoreInfo();
-                }
-                string? result = info.MoreInfo.Query;
-                if ((object?)result == null)
-                {
-                    result = GetParts(UriComponents.Query | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-                    info.MoreInfo.Query = result;
-                }
-                return result;
+                MoreInfo info = EnsureUriInfo().MoreInfo ??= new MoreInfo();
+                return info.Query ??= GetParts(UriComponents.Query | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
             }
         }
 
@@ -1055,18 +1014,8 @@ namespace System
                     throw new InvalidOperationException(SR.net_uri_NotAbsolute);
                 }
 
-                UriInfo info = EnsureUriInfo();
-                if ((object?)info.MoreInfo == null)
-                {
-                    info.MoreInfo = new MoreInfo();
-                }
-                string? result = info.MoreInfo.Fragment;
-                if ((object?)result == null)
-                {
-                    result = GetParts(UriComponents.Fragment | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-                    info.MoreInfo.Fragment = result;
-                }
-                return result;
+                MoreInfo info = EnsureUriInfo().MoreInfo ??= new MoreInfo();
+                return info.Fragment ??= GetParts(UriComponents.Fragment | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
             }
         }
 
