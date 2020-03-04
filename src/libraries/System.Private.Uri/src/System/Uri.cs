@@ -3989,7 +3989,6 @@ namespace System
         {
             int end = length;
             char ch;
-            int startInput = idx;
             ushort start = idx;
             newHost = null;
             bool justNormalized = false;
@@ -4023,7 +4022,7 @@ namespace System
             // need to build new Iri'zed string
             if (hasUnicode && iriParsing && hostNotUnicodeNormalized)
             {
-                newHost = _originalUnicodeString.Substring(0, startInput);
+                newHost = _originalUnicodeString.Substring(0, idx);
             }
 
             string? userInfoString = null;
@@ -4049,7 +4048,7 @@ namespace System
                             if (iriParsing && hasUnicode && hostNotUnicodeNormalized)
                             {
                                 // Normalize user info
-                                userInfoString = IriHelper.EscapeUnescapeIri(pString, startInput, start + 1, UriComponents.UserInfo);
+                                userInfoString = IriHelper.EscapeUnescapeIri(pString, idx, start + 1, UriComponents.UserInfo);
                                 newHost += userInfoString;
 
                                 if (newHost.Length > ushort.MaxValue)
@@ -4060,7 +4059,7 @@ namespace System
                             }
                             else
                             {
-                                userInfoString = new string(pString, startInput, start - startInput + 1);
+                                userInfoString = new string(pString, idx, start - idx + 1);
                             }
                         }
                         ++start;
@@ -4139,6 +4138,8 @@ namespace System
                     }
                 }
             }
+
+            //Debug.Assert(end <= length && (newHost is null || end <= newHost.Length));
 
             // The deal here is that we won't allow '\' host terminator except for the File scheme
             // If we see '\' we try to make it a part of a Basic host
@@ -4233,7 +4234,7 @@ namespace System
                             break;
                         }
                     }
-                    CheckAuthorityHelperHandleAnyHostIri(pString, startInput, end, iriParsing, hasUnicode,
+                    CheckAuthorityHelperHandleAnyHostIri(pString, idx, end, iriParsing, hasUnicode,
                                                             ref flags, ref newHost, ref err);
                 }
                 else
@@ -4294,7 +4295,13 @@ namespace System
                     }
                 }
             }
-            return (ushort)end;
+
+            if (hasUnicode && iriParsing && hostNotUnicodeNormalized)
+            {
+                return (ushort)newHost!.Length;
+            }
+
+            return (ushort)(newHost?.Length + idx ?? end);
         }
 
         private unsafe void CheckAuthorityHelperHandleDnsIri(char* pString, ushort start, int end,
@@ -4310,7 +4317,7 @@ namespace System
                 string temp = UriHelper.StripBidiControlCharacter(pString, start, end - start);
                 try
                 {
-                    newHost += ((temp != null) ? temp.Normalize(NormalizationForm.FormC) : null);
+                    newHost += temp.Normalize(NormalizationForm.FormC);
                 }
                 catch (ArgumentException)
                 {

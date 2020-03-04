@@ -118,6 +118,12 @@ namespace System
                         e = null;
                     // will return from here
 
+                    if ((int)(_flags & Flags.IndexMask) > _string.Length)
+                    {
+                        Debugger.Break();
+                    }
+                    //Debug.Assert((int)(_flags & Flags.IndexMask) <= _string.Length);
+
                     if (_iriParsing && hasUnicode)
                     {
                         // In this scenario we need to parse the whole string
