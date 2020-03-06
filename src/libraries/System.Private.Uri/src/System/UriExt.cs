@@ -83,8 +83,7 @@ namespace System
 
             _iriParsing = IriParsingStatic(_syntax);
 
-            if (_iriParsing &&
-                (CheckForUnicode(_string) || CheckForEscapedUnreserved(_string)))
+            if (_iriParsing && CheckForUnicodeOrEscapedUnreserved(_string))
             {
                 _flags |= Flags.HasUnicode;
                 hasUnicode = true;
@@ -212,48 +211,50 @@ namespace System
         }
 
         //
-        // Unescapes entire string and checks if it has unicode chars
+        // Checks if the string has any non-ascii characters
+        // Checks if any percent-encoded sequences are invalid/represent non-ascii
+        // Checks if there are any escaped sequences that are 3986 Unreserved characters, as those should be un-escaped.
         //
-        private bool CheckForUnicode(string data)
+        private bool CheckForUnicodeOrEscapedUnreserved(string data)
         {
             for (int i = 0; i < data.Length; i++)
             {
                 char c = data[i];
                 if (c == '%')
                 {
-                    if (i + 2 < data.Length)
+                    if ((uint)(i + 2) < (uint)data.Length)
                     {
-                        if (UriHelper.EscapedAscii(data[i + 1], data[i + 2]) > 0x7F)
+                        uint value = (uint)(data[i + 1] - '0');
+                        if (value > 7)
+                        {
+                            // First character is not valid hex/represents non-ascii
+                            return true;
+                        }
+
+                        uint second = data[i + 2];
+                        if ((second - '0') <= 9)
+                        {
+                            value = ((value << 4) + second) - '0';
+                        }
+                        else if ((uint)((second - 'A') & ~0x20) <= ('F' - 'A'))
+                        {
+                            value = ((value << 4) + (second | 0x20)) - 'a' + 10;
+                        }
+                        else return true; // Second character is not valid hex
+
+                        Debug.Assert(value < UriHelper.UnreservedTable.Length);
+
+                        if (UriHelper.UnreservedTable[(int)value])
                         {
                             return true;
                         }
+
                         i += 2;
                     }
                 }
                 else if (c > 0x7F)
                 {
                     return true;
-                }
-            }
-            return false;
-        }
-
-        // Does this string have any %6A sequences that are 3986 Unreserved characters?  These should be un-escaped.
-        private unsafe bool CheckForEscapedUnreserved(string data)
-        {
-            fixed (char* tempPtr = data)
-            {
-                for (int i = 0; i < data.Length - 2; ++i)
-                {
-                    if (tempPtr[i] == '%' && IsHexDigit(tempPtr[i + 1]) && IsHexDigit(tempPtr[i + 2])
-                        && tempPtr[i + 1] >= '0' && tempPtr[i + 1] <= '7') // max 0x7F
-                    {
-                        char ch = UriHelper.EscapedAscii(tempPtr[i + 1], tempPtr[i + 2]);
-                        if (ch != c_DummyChar && UriHelper.IsUnreserved(ch))
-                        {
-                            return true;
-                        }
-                    }
                 }
             }
             return false;
