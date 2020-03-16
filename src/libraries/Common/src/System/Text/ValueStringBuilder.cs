@@ -267,7 +267,7 @@ namespace System.Text
         private void GrowAndAppend(char c)
         {
             Grow(1);
-            Append(c);
+            Append  (c);
         }
 
         /// <summary>

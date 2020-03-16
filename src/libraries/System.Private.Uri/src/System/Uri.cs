@@ -4837,7 +4837,8 @@ namespace System
         //
         // The passed syntax controls whether to use aggressive compression or the one specified in RFC 2396
         //
-        private static int Compress(Span<char> span, UriParser syntax)
+        private static int Compress(Span<char> span, UriParser syntax) => Compress(span, syntax.InFact(UriSyntaxFlags.ConvertPathSlashes));
+        private static int Compress2(Span<char> span, UriParser syntax)
         {
             int slashCount = 0;
             int lastSlash = 0;
@@ -4953,6 +4954,125 @@ namespace System
             }
 
             return span.Length;
+        }
+
+        private readonly struct PathSegment
+        {
+            public readonly int Index;
+            public readonly int Length;
+
+            public PathSegment(int index, int length)
+            {
+                Index = index;
+                Length = length;
+            }
+
+            public static Span<PathSegment> MergeAdjacentInPlace(Span<PathSegment> segments)
+            {
+                Debug.Assert(segments.Length != 0);
+
+                int count = 0;
+                int start = segments[0].Index;
+                int end = start + segments[0].Length;
+
+                foreach (PathSegment segment in segments.Slice(1))
+                {
+                    if (segment.Index == end)
+                    {
+                        end += segment.Length;
+                    }
+                    else
+                    {
+                        Debug.Assert(segment.Index > end);
+                        segments[count++] = new PathSegment(start, end - start);
+                        start = segment.Index;
+                        end = start + segment.Length;
+                    }
+                }
+
+                segments[count++] = new PathSegment(start, end - start);
+
+                return segments.Slice(0, count);
+            }
+        }
+
+        private static int Compress(Span<char> span, bool convertBackslashes)
+        {
+            var segmentStack = new ValueStack<PathSegment>(stackalloc PathSegment[32]);
+
+            int dotCount = 0;
+            int segmentStart = 0;
+
+            for (int i = 0; i < span.Length; i++)
+            {
+                char ch = span[i];
+
+                if (ch == '\\' && convertBackslashes)
+                {
+                    span[i] = ch = '/';
+                }
+
+                if (ch == '/')
+                {
+                    if ((uint)(dotCount - 1) <= 1 && (segmentStart == i - dotCount || segmentStart == i - dotCount - 1))
+                    {
+                        if (dotCount == 2)
+                        {
+                            // Remove previous segment
+                            segmentStack.TryPop();
+                        }
+                        segmentStart = i;
+                    }
+                    else if (segmentStart != i)
+                    {
+                        segmentStack.Push(new PathSegment(segmentStart, i - segmentStart + 1));
+                        segmentStart = i + 1;
+                    }
+
+                    dotCount = 0;
+                }
+                else if (ch == '.')
+                {
+                    ++dotCount;
+                }
+            }
+
+            if ((uint)(dotCount - 1) <= 1 && segmentStart == span.Length - dotCount)
+            {
+                if (dotCount == 2)
+                {
+                    // Remove previous segment
+                    segmentStack.TryPop();
+                }
+
+                if (segmentStack.Count == 0)
+                {
+                    segmentStack.Push(new PathSegment(0, 0));
+                }
+            }
+            else
+            {
+                segmentStack.Push(new PathSegment(segmentStart, span.Length - segmentStart));
+            }
+
+            Span<PathSegment> segments = PathSegment.MergeAdjacentInPlace(segmentStack.AsSpan());
+
+            int index = 0;
+            if (segments[0].Length == 0)
+            {
+                // Don't copy the first segment if it wasn't changed, as that would be a nop
+                index = segments[0].Length;
+                segments = segments.Slice(1);
+            }
+
+            foreach (PathSegment segment in segments)
+            {
+                span.Slice(segment.Index, segment.Length).CopyTo(span.Slice(index));
+                index += segment.Length;
+            }
+
+            segmentStack.Dispose();
+            return index;
         }
 
         internal static int CalculateCaseInsensitiveHashCode(string text)
