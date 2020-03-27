@@ -2707,6 +2707,26 @@ namespace System
 
         private string ReCreateParts(UriComponents parts, ushort nonCanonical, UriFormat formatAs)
         {
+            // we reserve more space than required because a canonical Ipv6 Host
+            // may take more characters than in original m_String
+            // Also +3 is for :// and +1 is for absent first slash
+            // Also we may escape every character, hence multiplying by 12
+            // UTF-8 can use up to 4 bytes per char * 3 chars per byte (%A4) = 12 encoded chars
+            int count = (_info.Offset.End - _info.Offset.User) * (formatAs == UriFormat.UriEscaped ? 12 : 1);
+            count += _syntax.SchemeName.Length + 3 + 1;
+            count += (parts & UriComponents.Host) == 0 ? 0 : _info.Host!.Length;
+
+            ValueStringBuilder dest = count <= 256
+                ? new ValueStringBuilder(stackalloc char[count])
+                : new ValueStringBuilder(count);
+
+            RecreateParts(parts, nonCanonical, formatAs, ref dest);
+
+            return dest.ToString();
+        }
+
+        private void RecreateParts(UriComponents parts, ushort nonCanonical, UriFormat formatAs, ref ValueStringBuilder dest)
+        {
             EnsureHostString(false);
             string stemp = (parts & UriComponents.Host) == 0 ? string.Empty : _info.Host!;
             // we reserve more space than required because a canonical Ipv6 Host
@@ -4722,8 +4742,180 @@ namespace System
 
             return dest;
         }
+        private unsafe void GetCanonicalPath(ref ValueStringBuilder dest, UriFormat formatAs)
+        {
+            if (InFact(Flags.FirstSlashAbsent))
+                dest.Append('/');
+
+            if (_info.Offset.Path == _info.Offset.Query)
+                return;
+
+            int start = dest.Length;
+            int end = pos;
+
+            int dosPathIdx = SecuredPathIndex;
+
+            // Note that unescaping and then escaping back is not transitive hence not safe.
+            // We are vulnerable due to the way the UserEscaped flag is processed.
+            // Try to unescape only needed chars.
+            if (formatAs == UriFormat.UriEscaped)
+            {
+                if (InFact(Flags.ShouldBeCompressed))
+                {
+                    int length = _info.Offset.Query - _info.Offset.Path;
+                    dest.Append(_string.AsSpan(_info.Offset.Path, length));
+
+                    // If the path was found as needed compression and contains escaped characters, unescape only
+                    // interesting characters (safe)
+
+                    if (_syntax.InFact(UriSyntaxFlags.UnEscapeDotsAndSlashes) && InFact(Flags.PathNotCanonical)
+                        && !IsImplicitFile)
+                    {
+                        Span<char> destSpan = dest.RawChars.Slice(start, length);
+
+                        int newLength = UnescapeOnly(destSpan, '.', '/',
+                            _syntax.InFact(UriSyntaxFlags.ConvertPathSlashes) ? '\\' : c_DummyChar);
+
+                        dest.Length = start + newLength;
+                    }
+                }
+                else
+                {
+                    //Note: we may produce non escaped Uri characters on the wire
+                    if (InFact(Flags.E_PathNotCanonical) && NotAny(Flags.UserEscaped))
+                    {
+                        string str = _string;
+
+                        // Check on not canonical disk designation like C|\, should be rare, rare case
+                        if (dosPathIdx != 0 && str[dosPathIdx + _info.Offset.Path - 1] == '|')
+                        {
+                            str = str.Remove(dosPathIdx + _info.Offset.Path - 1, 1);
+                            str = str.Insert(dosPathIdx + _info.Offset.Path - 1, ":");
+                        }
+
+                        UriHelper.EscapeString(
+                            str.AsSpan(_info.Offset.Path, _info.Offset.Query - _info.Offset.Path),
+                            ref dest,
+                            checkExistingEscaped: !IsImplicitFile, '?', '#');
+                    }
+                    else
+                    {
+                        dest.Append(_string.AsSpan(_info.Offset.Path, _info.Offset.Query - _info.Offset.Path));
+                    }
+                }
+
+                // On Unix, escape '\\' in path of file uris to '%5C' canonical form.
+                if (!IsWindowsSystem && InFact(Flags.BackslashInPath) && _syntax.NotAny(UriSyntaxFlags.ConvertPathSlashes) && _syntax.InFact(UriSyntaxFlags.FileLikeUri) && !IsImplicitFile)
+                {
+                    // ToDo
+                    char[] toEscape = dest.AsSpan(start).ToArray();
+                    dest.Length = start;
+                    UriHelper.EscapeString(toEscape, ref dest, checkExistingEscaped: true, '\\');
+                }
+            }
+            else
+            {
+                dest.Append(_string.AsSpan(_info.Offset.Path, _info.Offset.Query - _info.Offset.Path));
+
+                if (InFact(Flags.ShouldBeCompressed))
+                {
+                    // If the path was found as needed compression and contains escaped characters,
+                    // unescape only interesting characters (safe)
+
+                    if (_syntax.InFact(UriSyntaxFlags.UnEscapeDotsAndSlashes) && InFact(Flags.PathNotCanonical)
+                        && !IsImplicitFile)
+                    {
+                        Span<char> destSpan = dest.RawChars.Slice(start, dest.Length - start);
+
+                        int newLength = UnescapeOnly(destSpan, '.', '/',
+                            _syntax.InFact(UriSyntaxFlags.ConvertPathSlashes) ? '\\' : c_DummyChar);
+
+                        dest.Length = start + newLength;
+                    }
+                }
+            }
+
+            // Here we already got output data as copied into dest array
+            // We just may need more processing of that data
+
+            //
+            // if this URI is using 'non-proprietary' disk drive designation, convert to MS-style
+            //
+            // (path is already  >= 3 chars if recognized as a DOS-like)
+            //
+            if (dosPathIdx != 0 && dest[dosPathIdx + start - 1] == '|')
+                dest[dosPathIdx + start - 1] = ':';
+
+            if (InFact(Flags.ShouldBeCompressed))
+            {
+                // It will also convert back slashes if needed
+                Compress(dest, pos + dosPathIdx, ref end, _syntax);
+
+                if (dest[start] == '\\')
+                    dest[start] = '/';
+
+                // Escape path if requested and found as not fully escaped
+                if (formatAs == UriFormat.UriEscaped && NotAny(Flags.UserEscaped) && InFact(Flags.E_PathNotCanonical))
+                {
+                    //Note: Flags.UserEscaped check is solely based on trusting the user
+                    UriHelper.EscapeStringInPlace(ref dest, start, checkExistingEscaped: !IsImplicitFile, '?', '#');
+                }
+            }
+            else if (_syntax.InFact(UriSyntaxFlags.ConvertPathSlashes) && InFact(Flags.BackslashInPath))
+            {
+                dest.Replace(start, '\\', '/');
+            }
+
+            if (formatAs != UriFormat.UriEscaped && InFact(Flags.PathNotCanonical))
+            {
+                UnescapeMode mode;
+                switch (formatAs)
+                {
+                    case V1ToStringUnescape:
+
+                        mode = (InFact(Flags.UserEscaped) ? UnescapeMode.Unescape : UnescapeMode.EscapeUnescape)
+                            | UnescapeMode.V1ToStringFlag;
+                        if (IsImplicitFile)
+                            mode &= ~UnescapeMode.Unescape;
+                        break;
+
+                    case UriFormat.Unescaped:
+                        mode = IsImplicitFile ? UnescapeMode.CopyOnly
+                            : UnescapeMode.Unescape | UnescapeMode.UnescapeAll;
+                        break;
+
+                    default: // UriFormat.SafeUnescaped
+
+                        mode = InFact(Flags.UserEscaped) ? UnescapeMode.Unescape : UnescapeMode.EscapeUnescape;
+                        if (IsImplicitFile)
+                            mode &= ~UnescapeMode.Unescape;
+                        break;
+                }
+
+                char[] dest1 = new char[dest.Length];
+                Buffer.BlockCopy(dest, 0, dest1, 0, end * sizeof(char));
+                fixed (char* pdest = dest1)
+                {
+                    dest = UriHelper.UnescapeString(pdest, pos, end, dest, ref pos, '?', '#', c_DummyChar, mode,
+                        _syntax, false);
+                }
+            }
+            else
+            {
+                pos = end;
+            }
+        }
 
         // works only with ASCII characters, used to partially unescape path before compressing
+        private static unsafe int UnescapeOnly(Span<char> chars, char ch1, char ch2, char ch3)
+        {
+            fixed (char* pch = chars)
+            {
+                int end = chars.Length;
+                UnescapeOnly(pch, 0, ref end, ch1, ch2, ch3);
+                return end;
+            }
+        }
         private static unsafe void UnescapeOnly(char* pch, int start, ref int end, char ch1, char ch2, char ch3)
         {
             if (end - start < 3)

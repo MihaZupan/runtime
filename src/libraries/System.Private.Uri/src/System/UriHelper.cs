@@ -5,6 +5,7 @@
 using System.Text;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Buffers;
 
 namespace System
 {
@@ -224,6 +225,105 @@ namespace System
             }
         }
 
+        internal static void EscapeString(
+            ReadOnlySpan<char> stringToEscape,
+            ref ValueStringBuilder dest,
+            bool checkExistingEscaped, char forceEscape1 = '\0', char forceEscape2 = '\0')
+        {
+            // Get the table of characters that do not need to be escaped.
+            ReadOnlySpan<bool> noEscape = stackalloc bool[0];
+            if ((forceEscape1 | forceEscape2) == 0)
+            {
+                noEscape = UnreservedReservedTable;
+            }
+            else
+            {
+                Span<bool> tmp = stackalloc bool[0x80];
+                UnreservedReservedTable.CopyTo(tmp);
+                tmp[forceEscape1] = false;
+                tmp[forceEscape2] = false;
+                noEscape = tmp;
+            }
+
+            // If the whole string is made up of ASCII unreserved chars, take a fast pasth.  Per the contract, if
+            // dest is null, just return it.  If it's not null, copy everything to it and update destPos accordingly;
+            // if that requires resizing it, do so.
+            Debug.Assert(!noEscape['%'], "Need to treat % specially in case checkExistingEscaped is true");
+            int i = 0;
+            char c;
+            for (; i < stringToEscape.Length && (c = stringToEscape[i]) <= 0x7F && noEscape[c]; i++) ;
+
+            if (i == stringToEscape.Length)
+            {
+                dest.Append(stringToEscape);
+            }
+            else
+            {
+                dest.Append(stringToEscape.Slice(0, i));
+
+                // Allocate enough stack space to hold any Rune's UTF8 encoding.
+                Span<byte> utf8Bytes = stackalloc byte[4];
+
+                // Then enumerate every rune in the input.
+                SpanRuneEnumerator e = stringToEscape.EnumerateRunes();
+                while (e.MoveNext())
+                {
+                    Rune r = e.Current;
+
+                    if (!r.IsAscii)
+                    {
+                        // The rune is non-ASCII, so encode it as UTF8, and escape each UTF8 byte.
+                        r.TryEncodeToUtf8(utf8Bytes, out int bytesWritten);
+                        foreach (byte b in utf8Bytes.Slice(0, bytesWritten))
+                        {
+                            dest.Append('%');
+                            HexConverter.ToCharsBuffer(b, dest.AppendSpan(2), 0, HexConverter.Casing.Upper);
+                        }
+                        continue;
+                    }
+
+                    // If the value doesn't need to be escaped, append it and continue.
+                    byte value = (byte)r.Value;
+                    if (noEscape[value])
+                    {
+                        dest.Append((char)value);
+                        continue;
+                    }
+
+                    // If we're checking for existing escape sequences, then if this is the beginning of
+                    // one, check the next two characters in the sequence.  This is a little tricky to do
+                    // as we're using an enumerator, but luckily it's a ref struct-based enumerator: we can
+                    // make a copy and iterate through the copy without impacting the original, and then only
+                    // push the original ahead if we find what we're looking for in the copy.
+                    if (checkExistingEscaped && value == '%')
+                    {
+                        // If the next two characters are valid escaped ASCII, then just output them as-is.
+                        SpanRuneEnumerator tmpEnumerator = e;
+                        if (tmpEnumerator.MoveNext())
+                        {
+                            Rune r1 = tmpEnumerator.Current;
+                            if (r1.IsAscii && IsHexDigit((char)r1.Value) && tmpEnumerator.MoveNext())
+                            {
+                                Rune r2 = tmpEnumerator.Current;
+                                if (r2.IsAscii && IsHexDigit((char)r2.Value))
+                                {
+                                    dest.Append('%');
+                                    dest.Append((char)r1.Value);
+                                    dest.Append((char)r2.Value);
+                                    e = tmpEnumerator;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    // Otherwise, append the escaped character.
+                    dest.Append('%');
+                    HexConverter.ToCharsBuffer(value, dest.AppendSpan(2), 0, HexConverter.Casing.Upper);
+                }
+            }
+        }
+
         private static void EscapeStringToBuilder(
             ReadOnlySpan<char> stringToEscape, ref ValueStringBuilder vsb,
             ReadOnlySpan<bool> noEscape, bool checkExistingEscaped)
@@ -287,6 +387,29 @@ namespace System
                 // Otherwise, append the escaped character.
                 vsb.Append('%');
                 HexConverter.ToCharsBuffer(value, vsb.AppendSpan(2), 0, HexConverter.Casing.Upper);
+            }
+        }
+
+        internal static void EscapeStringInPlace(
+            ref ValueStringBuilder vsb,
+            int startOffset,
+            bool checkExistingEscaped, char forceEscape1 = '\0', char forceEscape2 = '\0')
+        {
+            int length = vsb.Length - startOffset;
+            Debug.Assert(length >= 0);
+
+            char[] copy = ArrayPool<char>.Shared.Rent(length);
+            vsb.AsSpan(startOffset).CopyTo(copy);
+
+            vsb.Length = startOffset;
+
+            try
+            {
+                EscapeString(copy.AsSpan(0, length), ref vsb, checkExistingEscaped, forceEscape1, forceEscape2);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(copy);
             }
         }
 
