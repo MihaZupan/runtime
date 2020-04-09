@@ -24,6 +24,7 @@
 //  RFC 3491 - Nameprep: A Stringprep Profile for Internationalized Domain Names (IDN)
 //  RFC 3492 - Punycode: A Bootstring encoding of Unicode for Internationalized Domain Names in Applications (IDNA)
 
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -88,13 +89,7 @@ namespace System.Globalization
                 return GetAsciiInvariant(unicode, index, count);
             }
 
-            unsafe
-            {
-                fixed (char* pUnicode = unicode)
-                {
-                    return GetAsciiCore(unicode, pUnicode + index, count);
-                }
-            }
+            return GetAsciiCore(unicode, unicode.AsSpan(index, count));
         }
 
         // Gets Unicode version of the string.  Normalized and limited to IDNA characters.
@@ -130,13 +125,7 @@ namespace System.Globalization
                 return GetUnicodeInvariant(ascii, index, count);
             }
 
-            unsafe
-            {
-                fixed (char* pAscii = ascii)
-                {
-                    return GetUnicodeCore(ascii, pAscii + index, count);
-                }
-            }
+            return GetUnicodeCore(ascii, ascii.AsSpan(index, count));
         }
 
         public override bool Equals(object? obj) =>
@@ -148,10 +137,8 @@ namespace System.Globalization
             (_allowUnassigned ? 100 : 200) + (_useStd3AsciiRules ? 1000 : 2000);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe string GetStringForOutput(string originalString, char* input, int inputLength, char* output, int outputLength) =>
-            originalString.Length == inputLength && new ReadOnlySpan<char>(input, inputLength).SequenceEqual(new ReadOnlySpan<char>(output, outputLength)) ?
-                originalString :
-                new string(output, 0, outputLength);
+        private static unsafe string GetStringForOutput(string originalString, ReadOnlySpan<char> input, ReadOnlySpan<char> output) =>
+            input.SequenceEqual(output) ? originalString : new string(output);
 
         //
         // Invariant implementation

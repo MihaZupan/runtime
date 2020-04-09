@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -973,6 +973,31 @@ namespace System.PrivateUri.Tests
 
             Assert.Equal($"http://www.contoso.com/", u.AbsoluteUri);
             Assert.Equal(80, u.Port);
+        }
+
+        [Fact]
+        public static void Uri_Allocation()
+        {
+            Assert.Equal(-1, MeasureAllocations(() =>
+            {
+                _ = new Uri("http://lőcalhost/").IdnHost;
+            }, 10_000));
+        }
+
+        static int MeasureAllocations(Action action, long iterations)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (long i = 0; i < iterations; i++)
+                action();
+
+            long after = GC.GetAllocatedBytesForCurrentThread();
+
+            return (int)Math.Round((after - before) / (double)iterations);
         }
     }
 }
