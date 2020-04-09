@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 
@@ -41,26 +43,43 @@ namespace System.Globalization
 
             ValidateArguments(strInput, normalizationForm);
 
-            char[] buf = new char[strInput.Length];
-
-            for (int attempts = 2; attempts > 0; attempts--)
+            char[] arrayToReturnToPool = null;
+            try
             {
-                int realLen = Interop.Globalization.NormalizeString(normalizationForm, strInput, strInput.Length, buf, buf.Length);
+                Span<char> buf = strInput.Length <= 256
+                    ? stackalloc char[256]
+                    : (arrayToReturnToPool = ArrayPool<char>.Shared.Rent(strInput.Length));
 
-                if (realLen == -1)
+                for (int attempts = 2; attempts > 0; attempts--)
                 {
-                    throw new ArgumentException(SR.Argument_InvalidCharSequenceNoIndex, nameof(strInput));
+                    int realLen = Interop.Globalization.NormalizeString(normalizationForm, strInput, buf);
+
+                    if (realLen == -1)
+                    {
+                        throw new ArgumentException(SR.Argument_InvalidCharSequenceNoIndex, nameof(strInput));
+                    }
+
+                    if (realLen <= buf.Length)
+                    {
+                        return new string(buf.Slice(0, realLen));
+                    }
+
+                    if (arrayToReturnToPool != null)
+                    {
+                        ArrayPool<char>.Shared.Return(arrayToReturnToPool);
+                    }
+                    buf = arrayToReturnToPool = ArrayPool<char>.Shared.Rent(realLen);
                 }
 
-                if (realLen <= buf.Length)
-                {
-                    return new string(buf, 0, realLen);
-                }
-
-                buf = new char[realLen];
+                throw new ArgumentException(SR.Argument_InvalidCharSequenceNoIndex, nameof(strInput));
             }
-
-            throw new ArgumentException(SR.Argument_InvalidCharSequenceNoIndex, nameof(strInput));
+            finally
+            {
+                if (arrayToReturnToPool != null)
+                {
+                    ArrayPool<char>.Shared.Return(arrayToReturnToPool);
+                }
+            }
         }
 
         // -----------------------------
