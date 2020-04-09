@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
@@ -10,94 +11,96 @@ namespace System.Globalization
 {
     public sealed partial class IdnMapping
     {
-        private unsafe string GetAsciiCore(string unicodeString, char* unicode, int count)
+        private string GetAsciiCore(string unicodeString, ReadOnlySpan<char> unicode)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(unicodeString != null && unicodeString.Length >= count);
+            Debug.Assert(unicodeString != null && unicodeString.Length >= unicode.Length);
 
             uint flags = Flags;
 
             // Determine the required length
-            int length = Interop.Normaliz.IdnToAscii(flags, unicode, count, null, 0);
+            int length = Interop.Normaliz.IdnToAscii(flags, unicode, Span<char>.Empty);
             if (length == 0)
             {
                 ThrowForZeroLength(unicode: true);
             }
 
             // Do the conversion
-            const int StackAllocThreshold = 512; // arbitrary limit to switch from stack to heap allocation
-            if (length < StackAllocThreshold)
+            if (length <= StackAllocThreshold)
             {
-                char* output = stackalloc char[length];
-                return GetAsciiCore(unicodeString, unicode, count, flags, output, length);
+                return GetAsciiCore(unicodeString, unicode, flags, stackalloc char[StackAllocThreshold]);
             }
             else
             {
-                char[] output = new char[length];
-                fixed (char* pOutput = &output[0])
+                char[] outputBuffer = ArrayPool<char>.Shared.Rent(length);
+                try
                 {
-                    return GetAsciiCore(unicodeString, unicode, count, flags, pOutput, length);
+                    return GetAsciiCore(unicodeString, unicode, flags, outputBuffer);
+                }
+                finally
+                {
+                    ArrayPool<char>.Shared.Return(outputBuffer);
                 }
             }
         }
 
-        private unsafe string GetAsciiCore(string unicodeString, char* unicode, int count, uint flags, char* output, int outputLength)
+        private string GetAsciiCore(string unicodeString, ReadOnlySpan<char> unicode, uint flags, Span<char> output)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(unicodeString != null && unicodeString.Length >= count);
+            Debug.Assert(unicodeString != null && unicodeString.Length >= unicode.Length);
 
-            int length = Interop.Normaliz.IdnToAscii(flags, unicode, count, output, outputLength);
+            int length = Interop.Normaliz.IdnToAscii(flags, unicode, output);
             if (length == 0)
             {
                 ThrowForZeroLength(unicode: true);
             }
-            Debug.Assert(length == outputLength);
-            return GetStringForOutput(unicodeString, unicode, count, output, length);
+            return GetStringForOutput(unicodeString, unicode, output.Slice(0, length));
         }
 
-        private unsafe string GetUnicodeCore(string asciiString, char* ascii, int count)
+        private string GetUnicodeCore(string asciiString, ReadOnlySpan<char> ascii)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(asciiString != null && asciiString.Length >= count);
+            Debug.Assert(asciiString != null && asciiString.Length >= ascii.Length);
 
             uint flags = Flags;
 
             // Determine the required length
-            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, count, null, 0);
+            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, Span<char>.Empty);
             if (length == 0)
             {
                 ThrowForZeroLength(unicode: false);
             }
 
             // Do the conversion
-            const int StackAllocThreshold = 512; // arbitrary limit to switch from stack to heap allocation
-            if (length < StackAllocThreshold)
+            if (length <= StackAllocThreshold)
             {
-                char* output = stackalloc char[length];
-                return GetUnicodeCore(asciiString, ascii, count, flags, output, length);
+                return GetUnicodeCore(asciiString, ascii, flags, stackalloc char[StackAllocThreshold]);
             }
             else
             {
-                char[] output = new char[length];
-                fixed (char* pOutput = &output[0])
+                char[] outputBuffer = ArrayPool<char>.Shared.Rent(length);
+                try
                 {
-                    return GetUnicodeCore(asciiString, ascii, count, flags, pOutput, length);
+                    return GetUnicodeCore(asciiString, ascii, flags, outputBuffer);
+                }
+                finally
+                {
+                    ArrayPool<char>.Shared.Return(outputBuffer);
                 }
             }
         }
 
-        private unsafe string GetUnicodeCore(string asciiString, char* ascii, int count, uint flags, char* output, int outputLength)
+        private string GetUnicodeCore(string asciiString, ReadOnlySpan<char> ascii, uint flags, Span<char> output)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(asciiString != null && asciiString.Length >= count);
+            Debug.Assert(asciiString != null && asciiString.Length >= ascii.Length);
 
-            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, count, output, outputLength);
+            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, output);
             if (length == 0)
             {
                 ThrowForZeroLength(unicode: false);
             }
-            Debug.Assert(length == outputLength);
-            return GetStringForOutput(asciiString, ascii, count, output, length);
+            return GetStringForOutput(asciiString, ascii, output.Slice(0, length));
         }
 
         // -----------------------------

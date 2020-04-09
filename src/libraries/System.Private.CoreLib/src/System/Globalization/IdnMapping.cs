@@ -33,6 +33,8 @@ namespace System.Globalization
     // IdnMapping class used to map names to Punycode
     public sealed partial class IdnMapping
     {
+        private const int StackAllocThreshold = 512;
+
         private bool _allowUnassigned;
         private bool _useStd3AsciiRules;
 
@@ -88,13 +90,7 @@ namespace System.Globalization
                 return GetAsciiInvariant(unicode, index, count);
             }
 
-            unsafe
-            {
-                fixed (char* pUnicode = unicode)
-                {
-                    return GetAsciiCore(unicode, pUnicode + index, count);
-                }
-            }
+            return GetAsciiCore(unicode, unicode.AsSpan(index, count));
         }
 
         // Gets Unicode version of the string.  Normalized and limited to IDNA characters.
@@ -130,13 +126,7 @@ namespace System.Globalization
                 return GetUnicodeInvariant(ascii, index, count);
             }
 
-            unsafe
-            {
-                fixed (char* pAscii = ascii)
-                {
-                    return GetUnicodeCore(ascii, pAscii + index, count);
-                }
-            }
+            return GetUnicodeCore(ascii, ascii.AsSpan(index, count));
         }
 
         public override bool Equals(object? obj) =>
@@ -148,10 +138,17 @@ namespace System.Globalization
             (_allowUnassigned ? 100 : 200) + (_useStd3AsciiRules ? 1000 : 2000);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe string GetStringForOutput(string originalString, char* input, int inputLength, char* output, int outputLength) =>
-            originalString.Length == inputLength && new ReadOnlySpan<char>(input, inputLength).SequenceEqual(new ReadOnlySpan<char>(output, outputLength)) ?
-                originalString :
-                new string(output, 0, outputLength);
+        private static string GetStringForOutput(string originalString, ReadOnlySpan<char> input, ReadOnlySpan<char> output)
+        {
+            if (originalString.Length == input.Length && input.SequenceEqual(output))
+            {
+                return originalString;
+            }
+            else
+            {
+                return new string(output);
+            }
+        }
 
         //
         // Invariant implementation

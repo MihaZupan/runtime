@@ -8,46 +8,49 @@ namespace System.Globalization
 {
     public sealed partial class IdnMapping
     {
-        private unsafe string GetAsciiCore(string unicodeString, char* unicode, int count)
+        private unsafe string GetAsciiCore(string unicodeString, ReadOnlySpan<char> unicode)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(unicodeString != null && unicodeString.Length >= count);
+            Debug.Assert(unicodeString != null && unicodeString.Length >= unicode.Length);
 
             uint flags = Flags;
-            CheckInvalidIdnCharacters(unicode, count, flags, nameof(unicode));
+            CheckInvalidIdnCharacters(unicode, flags, nameof(unicode));
 
-            const int StackallocThreshold = 512;
             // Each unicode character is represented by up to 3 ASCII chars
             // and the whole string is prefixed by "xn--" (length 4)
-            int estimatedLength = (int)Math.Min(count * 3L + 4, StackallocThreshold);
             int actualLength;
-            if (estimatedLength < StackallocThreshold)
+            if (count * 3L + 4 <= StackallocThreshold)
             {
-                char* outputStack = stackalloc char[estimatedLength];
-                actualLength = Interop.Globalization.ToAscii(flags, unicode, count, outputStack, estimatedLength);
-                if (actualLength > 0 && actualLength <= estimatedLength)
+                Span<char> outputStack = stackalloc char[StackallocThreshold];
+                actualLength = Interop.Globalization.ToAscii(flags, unicode, outputStack);
+                if (actualLength > 0 && actualLength <= StackallocThreshold)
                 {
-                    return GetStringForOutput(unicodeString, unicode, count, outputStack, actualLength);
+                    return GetStringForOutput(unicodeString, unicode, outputStack.Slice(0, actualLength));
                 }
             }
             else
             {
-                actualLength = Interop.Globalization.ToAscii(flags, unicode, count, null, 0);
+                actualLength = Interop.Globalization.ToAscii(flags, unicode, Span<char>.Empty);
             }
+
             if (actualLength == 0)
             {
                 throw new ArgumentException(SR.Argument_IdnIllegalName, nameof(unicode));
             }
 
-            char[] outputHeap = new char[actualLength];
-            fixed (char* pOutputHeap = &outputHeap[0])
+            char[] outputBuffer = ArrayPool<char>.Shared.Rent(actualLength);
+            try
             {
-                actualLength = Interop.Globalization.ToAscii(flags, unicode, count, pOutputHeap, actualLength);
-                if (actualLength == 0 || actualLength > outputHeap.Length)
+                actualLength = Interop.Globalization.ToAscii(flags, unicode, outputBuffer);
+                if (actualLength == 0 || actualLength > outputBuffer.Length)
                 {
                     throw new ArgumentException(SR.Argument_IdnIllegalName, nameof(unicode));
                 }
-                return GetStringForOutput(unicodeString, unicode, count, pOutputHeap, actualLength);
+                return GetStringForOutput(unicodeString, unicode, outputBuffer.AsSpan(0, actualLength));
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(outputBuffer);
             }
         }
 
@@ -124,14 +127,12 @@ namespace System.Globalization
         /// To match Windows behavior, we walk the string ourselves looking for these
         /// bad characters so we can continue to throw ArgumentException in these cases.
         /// </summary>
-        private static unsafe void CheckInvalidIdnCharacters(char* s, int count, uint flags, string paramName)
+        private static void CheckInvalidIdnCharacters(ReadOnlySpan<char> source, uint flags, string paramName)
         {
             if ((flags & Interop.Globalization.UseStd3AsciiRules) == 0)
             {
-                for (int i = 0; i < count; i++)
+                foreach (char c in source)
                 {
-                    char c = s[i];
-
                     // These characters are prohibited regardless of the UseStd3AsciiRules property.
                     // See https://msdn.microsoft.com/en-us/library/system.globalization.idnmapping.usestd3asciirules(v=vs.110).aspx
                     if (c <= 0x1F || c == 0x7F)
