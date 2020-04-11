@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -530,7 +531,7 @@ namespace System
                     }
 
                     UriParser? syntax = null;
-                    if (CheckSchemeSyntax(relativeStr.AsSpan(0, i), ref syntax) == ParsingError.None)
+                    if (CheckSchemeSyntax(ref Unsafe.AsRef(in relativeStr.GetPinnableReference()), i, ref syntax) == ParsingError.None)
                     {
                         if (baseUri.Syntax == syntax)
                         {
@@ -1894,24 +1895,20 @@ namespace System
         //
         private static unsafe ParsingError ParseScheme(string uriString, ref Flags flags, ref UriParser? syntax)
         {
-            int length = uriString.Length;
-            if (length == 0)
+            if (uriString.Length == 0)
                 return ParsingError.EmptyUriString;
 
-            if (length >= c_MaxUriBufferSize)
+            if (uriString.Length >= c_MaxUriBufferSize)
                 return ParsingError.SizeLimit;
 
             //STEP1: parse scheme, lookup this Uri Syntax or create one using UnknownV1SyntaxFlags uri syntax template
-            fixed (char* pUriString = uriString)
-            {
-                ParsingError err = ParsingError.None;
-                int idx = ParseSchemeCheckImplicitFile(pUriString, length, ref err, ref flags, ref syntax);
+            ParsingError err = ParsingError.None;
+            int idx = ParseSchemeCheckImplicitFile(uriString, ref err, ref flags, ref syntax);
 
-                if (err != ParsingError.None)
-                    return err;
+            if (err != ParsingError.None)
+                return err;
 
-                flags |= (Flags)idx;
-            }
+            flags |= (Flags)idx;
             return ParsingError.None;
         }
 
@@ -3626,19 +3623,29 @@ namespace System
         // returns the start of the next component  position
         // throws UriFormatException if invalid scheme
         //
-        private static unsafe int ParseSchemeCheckImplicitFile(char* uriString, int length,
-            ref ParsingError err, ref Flags flags, ref UriParser? syntax)
+        private static unsafe int ParseSchemeCheckImplicitFile(string uriString, ref ParsingError err, ref Flags flags, ref UriParser? syntax)
         {
+            // Check common cases (http: or https:) without leading whitespace
+            if (uriString.Length > 5)
+            {
+                // At least 6 chars available ("https:")
+                syntax = CheckCommonSchemes(uriString);
+                if (syntax != null)
+                {
+                    return syntax.SchemeName.Length + 1;
+                }
+            }
+
             int idx = 0;
 
             //skip whitespace
-            while (idx < length && UriHelper.IsLWS(uriString[idx]))
+            while (idx < uriString.Length && UriHelper.IsLWS(uriString[idx]))
             {
                 ++idx;
             }
 
             // Unix: Unix path?
-            if (!IsWindowsSystem && idx < length && uriString[idx] == '/')
+            if (!IsWindowsSystem && idx < uriString.Length && uriString[idx] == '/')
             {
                 flags |= (Flags.UnixPath | Flags.ImplicitFile | Flags.AuthorityFound);
                 syntax = UriParser.UnixFileUri;
@@ -3650,25 +3657,13 @@ namespace System
             // Note that we don't support one-letter schemes that will be put into a DOS path bucket
 
             int end = idx;
-            while (end < length && uriString[end] != ':')
+            while (end < uriString.Length && uriString[end] != ':')
             {
                 ++end;
             }
 
-            // NB: On 64-bits we will use less optimized code from CheckSchemeSyntax()
-            //
-            if (IntPtr.Size == 4)
-            {
-                // long = 4chars: The minimal size of a known scheme is 2 + ':'
-                if (end != length && end >= idx + 2 &&
-                    CheckKnownSchemes((long*)(uriString + idx), end - idx, ref syntax))
-                {
-                    return end + 1;
-                }
-            }
-
             //NB: A string must have at least 3 characters and at least 1 before ':'
-            if (idx + 2 >= length || end == idx)
+            if ((uint)(idx + 2) >= (uint)uriString.Length || end == idx)
             {
                 err = ParsingError.BadFormat;
                 return 0;
@@ -3707,7 +3702,7 @@ namespace System
                         syntax = UriParser.FileUri;
                         idx += 2;
                         // V1.1 compat this will simply eat any slashes prepended to a UNC path
-                        while (idx < length && ((c = uriString[idx]) == '/' || c == '\\'))
+                        while ((uint)idx < (uint)uriString.Length && ((c = uriString[idx]) == '/' || c == '\\'))
                             ++idx;
 
                         return idx;
@@ -3717,7 +3712,7 @@ namespace System
                 }
             }
 
-            if (end == length)
+            if (end == uriString.Length)
             {
                 err = ParsingError.BadFormat;
                 return 0;
@@ -3725,7 +3720,7 @@ namespace System
 
             // This is a potentially valid scheme, but we have not identified it yet.
             // Check for illegal characters, canonicalize, and check the length.
-            err = CheckSchemeSyntax(new ReadOnlySpan<char>(uriString + idx, end - idx), ref syntax!);
+            err = CheckSchemeSyntax(ref Unsafe.Add(ref Unsafe.AsRef(in uriString.GetPinnableReference()), idx), end - idx, ref syntax!);
             if (err != ParsingError.None)
             {
                 return 0;
@@ -3733,181 +3728,68 @@ namespace System
             return end + 1;
         }
 
-        //
-        // Quickly parses well known schemes.
-        // nChars does not include the last ':'. Assuming there is one at the end of passed buffer
-        private static unsafe bool CheckKnownSchemes(long* lptr, int nChars, ref UriParser? syntax)
+        private static UriParser? CheckCommonSchemes(string uriString)
         {
-            //NOTE beware of too short input buffers!
+            Debug.Assert(uriString.Length >= 6);
+            ref char sourceRef = ref Unsafe.AsRef(in uriString.GetPinnableReference());
 
-            const long _HTTP_Mask0 = 'h' | ('t' << 16) | ((long)'t' << 32) | ((long)'p' << 48);
-            const char _HTTPS_Mask1 = 's';
-            const int _WS_Mask = 'w' | ('s' << 16);
-            const long _WSS_Mask = 'w' | ('s' << 16) | ((long)'s' << 32) | ((long)':' << 48);
-            const long _FTP_Mask = 'f' | ('t' << 16) | ((long)'p' << 32) | ((long)':' << 48);
-            const long _FILE_Mask0 = 'f' | ('i' << 16) | ((long)'l' << 32) | ((long)'e' << 48);
-            const long _GOPHER_Mask0 = 'g' | ('o' << 16) | ((long)'p' << 32) | ((long)'h' << 48);
-            const int _GOPHER_Mask1 = 'e' | ('r' << 16);
-            const long _MAILTO_Mask0 = 'm' | ('a' << 16) | ((long)'i' << 32) | ((long)'l' << 48);
-            const int _MAILTO_Mask1 = 't' | ('o' << 16);
-            const long _NEWS_Mask0 = 'n' | ('e' << 16) | ((long)'w' << 32) | ((long)'s' << 48);
-            const long _NNTP_Mask0 = 'n' | ('n' << 16) | ((long)'t' << 32) | ((long)'p' << 48);
-            const long _UUID_Mask0 = 'u' | ('u' << 16) | ((long)'i' << 32) | ((long)'d' << 48);
+            static uint LoadUInt(ref char source) => Unsafe.ReadUnaligned<uint>(ref Unsafe.As<char, byte>(ref source));
+            static ulong LoadULong(ref char source) => Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref source));
 
-            const long _TELNET_Mask0 = 't' | ('e' << 16) | ((long)'l' << 32) | ((long)'n' << 48);
-            const int _TELNET_Mask1 = 'e' | ('t' << 16);
+            const ulong LowerCaseMask32 = 0x200020;
+            const ulong LowerCaseMask64 = 0x20002000200020;
 
-            const long _NETXXX_Mask0 = 'n' | ('e' << 16) | ((long)'t' << 32) | ((long)'.' << 48);
-            const long _NETTCP_Mask1 = 't' | ('c' << 16) | ((long)'p' << 32) | ((long)':' << 48);
-            const long _NETPIPE_Mask1 = 'p' | ('i' << 16) | ((long)'p' << 32) | ((long)'e' << 48);
-
-            const long _LDAP_Mask0 = 'l' | ('d' << 16) | ((long)'a' << 32) | ((long)'p' << 48);
-
-
-            const long _LOWERCASE_Mask = 0x0020002000200020L;
-            const int _INT_LOWERCASE_Mask = 0x00200020;
-
-            if (nChars == 2)
+            if (BitConverter.IsLittleEndian)
             {
-                // This is the only known scheme of length 2
-                if ((unchecked((int)*lptr) | _INT_LOWERCASE_Mask) == _WS_Mask)
+                const ulong HttpMask = 'h' | ('t' << 16) | ((ulong)'t' << 32) | ((ulong)'p' << 48);
+                const uint HttpsMask2 = 's' | (':' << 16);
+
+                if ((LoadULong(ref sourceRef) | LowerCaseMask64) == HttpMask)
                 {
-                    syntax = UriParser.WsUri;
-                    return true;
+                    if ((LoadUInt(ref Unsafe.Add(ref sourceRef, 4)) | LowerCaseMask32) == HttpsMask2)
+                    {
+                        return UriParser.HttpsUri;
+                    }
+                    else if (Unsafe.Add(ref sourceRef, 4) == ':')
+                    {
+                        return UriParser.HttpUri;
+                    }
                 }
-                return false;
             }
-
-            //Map to a known scheme if possible
-            //upgrade 4 letters to ASCII lower case, keep a false case to stay false
-            switch (*lptr | _LOWERCASE_Mask)
+            else
             {
-                case _HTTP_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.HttpUri;
-                        return true;
-                    }
-                    if (nChars == 5 && ((*(char*)(lptr + 1)) | 0x20) == _HTTPS_Mask1)
-                    {
-                        syntax = UriParser.HttpsUri;
-                        return true;
-                    }
-                    break;
-                case _WSS_Mask:
-                    if (nChars == 3)
-                    {
-                        syntax = UriParser.WssUri;
-                        return true;
-                    }
-                    break;
-                case _FILE_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.FileUri;
-                        return true;
-                    }
-                    break;
-                case _FTP_Mask:
-                    if (nChars == 3)
-                    {
-                        syntax = UriParser.FtpUri;
-                        return true;
-                    }
-                    break;
+                const ulong HttpMask = ((ulong)'h' << 48) | ((ulong)'t' << 32) | ('t' << 16) | 'p';
+                const uint HttpsMask2 = ('s' << 16) | ':';
 
-                case _NEWS_Mask0:
-                    if (nChars == 4)
+                if ((LoadULong(ref sourceRef) | LowerCaseMask64) == HttpMask)
+                {
+                    if ((LoadUInt(ref Unsafe.Add(ref sourceRef, 4)) | LowerCaseMask32) == HttpsMask2)
                     {
-                        syntax = UriParser.NewsUri;
-                        return true;
+                        return UriParser.HttpsUri;
                     }
-                    break;
-
-                case _NNTP_Mask0:
-                    if (nChars == 4)
+                    else if (Unsafe.Add(ref sourceRef, 4) == ':')
                     {
-                        syntax = UriParser.NntpUri;
-                        return true;
+                        return UriParser.HttpUri;
                     }
-                    break;
-
-                case _UUID_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.UuidUri;
-                        return true;
-                    }
-                    break;
-
-                case _GOPHER_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _GOPHER_Mask1)
-                    {
-                        syntax = UriParser.GopherUri;
-                        return true;
-                    }
-                    break;
-                case _MAILTO_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _MAILTO_Mask1)
-                    {
-                        syntax = UriParser.MailToUri;
-                        return true;
-                    }
-                    break;
-
-                case _TELNET_Mask0:
-                    if (nChars == 6 && (*(int*)(lptr + 1) | _INT_LOWERCASE_Mask) == _TELNET_Mask1)
-                    {
-                        syntax = UriParser.TelnetUri;
-                        return true;
-                    }
-                    break;
-
-                case _NETXXX_Mask0:
-                    if (nChars == 8 && (*(lptr + 1) | _LOWERCASE_Mask) == _NETPIPE_Mask1)
-                    {
-                        syntax = UriParser.NetPipeUri;
-                        return true;
-                    }
-                    else if (nChars == 7 && (*(lptr + 1) | _LOWERCASE_Mask) == _NETTCP_Mask1)
-                    {
-                        syntax = UriParser.NetTcpUri;
-                        return true;
-                    }
-                    break;
-
-                case _LDAP_Mask0:
-                    if (nChars == 4)
-                    {
-                        syntax = UriParser.LdapUri;
-                        return true;
-                    }
-                    break;
-                default: break;
+                }
             }
-            return false;
+
+            return null;
         }
 
         //
         // This will check whether a scheme string follows the rules
         //
-        private static unsafe ParsingError CheckSchemeSyntax(ReadOnlySpan<char> span, ref UriParser? syntax)
+        private static unsafe ParsingError CheckSchemeSyntax(ref char source, int length, ref UriParser? syntax)
         {
-            static char ToLowerCaseAscii(char c) => (uint)(c - 'A') <= 'Z' - 'A' ? (char)(c | 0x20) : c;
-
-            if (span.Length == 0)
+            if (0u < (uint)length)
             {
                 return ParsingError.BadScheme;
             }
 
             // The first character must be an alpha.  Validate that and store it as lower-case, as
             // all of the fast-path checks need that value.
-            char firstLower = span[0];
-            if ((uint)(firstLower - 'A') <= 'Z' - 'A')
-            {
-                firstLower = (char)(firstLower | 0x20);
-            }
-            else if ((uint)(firstLower - 'a') > 'z' - 'a')
+            if ((uint)((source - 'A') & ~0x20) > ('Z' - 'A'))
             {
                 return ParsingError.BadScheme;
             }
@@ -3919,17 +3801,26 @@ namespace System
             const int fileMask = 'f' << 24 | 'i' << 16 | 'l' << 8 | 'e';
             const int httpMask = 'h' << 24 | 't' << 16 | 't' << 8 | 'p';
             const int mailMask = 'm' << 24 | 'a' << 16 | 'i' << 8 | 'l';
-            switch (span.Length)
+            const int toMask = 't' << 8 | 'o';
+
+            const int LowerCaseMask1 = 0x20;
+            const int LowerCaseMask2 = 0x2020;
+            const int LowerCaseMask3 = 0x202020;
+            const int LowerCaseMask4 = 0x20202020;
+
+            static char Add(ref char source, int offset) => Unsafe.Add(ref source, offset);
+
+            switch (length)
             {
                 case 2:
-                    if (wsMask == (firstLower << 8 | ToLowerCaseAscii(span[1])))
+                    if (wsMask == ((source << 8 | Add(ref source, 1)) | LowerCaseMask2))
                     {
                         syntax = UriParser.WsUri;
                         return ParsingError.None;
                     }
                     break;
                 case 3:
-                    switch (firstLower << 16 | ToLowerCaseAscii(span[1]) << 8 | ToLowerCaseAscii(span[2]))
+                    switch ((source << 16 | Add(ref source, 1) << 8 | Add(ref source, 2)) | LowerCaseMask3)
                     {
                         case ftpMask:
                             syntax = UriParser.FtpUri;
@@ -3940,7 +3831,7 @@ namespace System
                     }
                     break;
                 case 4:
-                    switch (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3]))
+                    switch ((source << 24 | Add(ref source, 1) << 16 | Add(ref source, 2) << 8 | Add(ref source, 3)) | LowerCaseMask4)
                     {
                         case httpMask:
                             syntax = UriParser.HttpUri;
@@ -3951,16 +3842,16 @@ namespace System
                     }
                     break;
                 case 5:
-                    if (httpMask == (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3])) &&
-                        ToLowerCaseAscii(span[4]) == 's')
+                    if (httpMask == ((source << 24 | Add(ref source, 1) << 16 | Add(ref source, 2) << 8 | Add(ref source, 3)) | LowerCaseMask4) &&
+                        (Add(ref source, 4) | LowerCaseMask1) == 's')
                     {
                         syntax = UriParser.HttpsUri;
                         return ParsingError.None;
                     }
                     break;
                 case 6:
-                    if (mailMask == (firstLower << 24 | ToLowerCaseAscii(span[1]) << 16 | ToLowerCaseAscii(span[2]) << 8 | ToLowerCaseAscii(span[3])) &&
-                        ToLowerCaseAscii(span[4]) == 't' && ToLowerCaseAscii(span[5]) == 'o')
+                    if (mailMask == ((source << 24 | Add(ref source, 1) << 16 | Add(ref source, 2) << 8 | Add(ref source, 3)) | LowerCaseMask4) &&
+                        ((Add(ref source, 4) << 8 | Add(ref source, 5)) | LowerCaseMask2) == toMask)
                     {
                         syntax = UriParser.MailToUri;
                         return ParsingError.None;
@@ -3969,11 +3860,10 @@ namespace System
             }
 
             // The scheme is not known.  Validate all of the characters in the input.
-            for (int i = 1; i < span.Length; i++)
+            for (int i = 1; i < length; i++)
             {
-                char c = span[i];
-                if ((uint)(c - 'a') > 'z' - 'a' &&
-                    (uint)(c - 'A') > 'Z' - 'A' &&
+                char c = Add(ref source, i);
+                if (((uint)((c - 'A') & ~0x20) > ('Z' - 'A')) &&
                     (uint)(c - '0') > '9' - '0' &&
                     c != '+' && c != '-' && c != '.')
                 {
@@ -3981,16 +3871,16 @@ namespace System
                 }
             }
 
-            if (span.Length > c_MaxUriSchemeName)
+            if (length > c_MaxUriSchemeName)
             {
                 return ParsingError.SchemeLimit;
             }
 
             // Then look up the syntax in a string-based table.
             string str;
-            fixed (char* pSpan = span)
+            fixed (char* pSource = &source)
             {
-                str = string.Create(span.Length, (ip: (IntPtr)pSpan, length: span.Length), (buffer, state) =>
+                str = string.Create(length, (ip: (IntPtr)pSource, length), (buffer, state) =>
                 {
                     int charsWritten = new ReadOnlySpan<char>((char*)state.ip, state.length).ToLowerInvariant(buffer);
                     Debug.Assert(charsWritten == buffer.Length);
