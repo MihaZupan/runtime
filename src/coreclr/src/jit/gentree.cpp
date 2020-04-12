@@ -2755,6 +2755,13 @@ bool Compiler::gtIsLikelyRegVar(GenTree* tree)
         return false;
     }
 
+    // If this is an EH-live var, return false if it is a def,
+    // as it will have to go to memory.
+    if (varDsc->lvLiveInOutOfHndlr && ((tree->gtFlags & GTF_VAR_DEF) != 0))
+    {
+        return false;
+    }
+
     // Be pessimistic if ref counts are not yet set up.
     //
     // Perhaps we should be optimistic though.
@@ -5398,11 +5405,16 @@ bool GenTree::OperIsImplicitIndir() const
         case GT_ARR_ELEM:
         case GT_ARR_OFFSET:
             return true;
+#ifdef FEATURE_SIMD
+        case GT_SIMD:
+        {
+            return AsSIMD()->OperIsMemoryLoad();
+        }
+#endif // FEATURE_SIMD
 #ifdef FEATURE_HW_INTRINSICS
         case GT_HWINTRINSIC:
         {
-            GenTreeHWIntrinsic* hwIntrinsicNode = (const_cast<GenTree*>(this))->AsHWIntrinsic();
-            return hwIntrinsicNode->OperIsMemoryLoadOrStore();
+            return AsHWIntrinsic()->OperIsMemoryLoadOrStore();
         }
 #endif // FEATURE_HW_INTRINSICS
         default:
@@ -6567,7 +6579,19 @@ GenTree* Compiler::gtNewCpObjNode(GenTree* dstAddr, GenTree* srcAddr, CORINFO_CL
 
     if (lhs->OperIs(GT_OBJ))
     {
-        gtSetObjGcInfo(lhs->AsObj());
+        GenTreeObj* lhsObj = lhs->AsObj();
+#if DEBUG
+        // Codegen for CpObj assumes that we cannot have a struct with GC pointers whose size is not a multiple
+        // of the register size. The EE currently does not allow this to ensure that GC pointers are aligned
+        // if the struct is stored in an array. Note that this restriction doesn't apply to stack-allocated objects:
+        // they are never stored in arrays. We should never get to this method with stack-allocated objects since they
+        // are never copied so we don't need to exclude them from the assert below.
+        // Let's assert it just to be safe.
+        ClassLayout* layout = lhsObj->GetLayout();
+        unsigned     size   = layout->GetSize();
+        assert((layout->GetGCPtrCount() == 0) || (roundUp(size, REGSIZE_BYTES) == size));
+#endif
+        gtSetObjGcInfo(lhsObj);
     }
 
     if (srcAddr->OperGet() == GT_ADDR)
@@ -9766,18 +9790,6 @@ void Compiler::gtDispNode(GenTree* tree, IndentStack* indentStack, __in __in_z _
 
             case GT_INDEX:
             case GT_INDEX_ADDR:
-
-                if ((tree->gtFlags & (GTF_IND_VOLATILE | GTF_IND_UNALIGNED)) == 0) // We prefer printing V or U over R
-                {
-                    if (tree->gtFlags & GTF_INX_REFARR_LAYOUT)
-                    {
-                        printf("R");
-                        --msgLength;
-                        break;
-                    } // R means RefArray
-                }
-                __fallthrough;
-
             case GT_FIELD:
             case GT_CLS_VAR:
                 if (tree->gtFlags & GTF_IND_VOLATILE)
@@ -10035,18 +10047,7 @@ void Compiler::gtDispNode(GenTree* tree, IndentStack* indentStack, __in __in_z _
 
                 if (layout != nullptr)
                 {
-                    if (layout->IsBlockLayout())
-                    {
-                        printf("<%u>", layout->GetSize());
-                    }
-                    else if (varTypeIsSIMD(tree->TypeGet()))
-                    {
-                        printf("<%s>", layout->GetClassName());
-                    }
-                    else
-                    {
-                        printf("<%s, %u>", layout->GetClassName(), layout->GetSize());
-                    }
+                    gtDispClassLayout(layout, tree->TypeGet());
                 }
             }
 
@@ -10401,6 +10402,69 @@ void Compiler::gtDispLclVar(unsigned lclNum, bool padForBiggestDisp)
     if (padForBiggestDisp && (charsPrinted < LONGEST_COMMON_LCL_VAR_DISPLAY_LENGTH))
     {
         printf("%*c", LONGEST_COMMON_LCL_VAR_DISPLAY_LENGTH - charsPrinted, ' ');
+    }
+}
+
+//------------------------------------------------------------------------
+// gtDispLclVarStructType: Print size and type information about a struct or lclBlk local variable.
+//
+// Arguments:
+//   lclNum - The local var id.
+//
+void Compiler::gtDispLclVarStructType(unsigned lclNum)
+{
+    LclVarDsc* varDsc = lvaGetDesc(lclNum);
+    var_types  type   = varDsc->TypeGet();
+    if (type == TYP_STRUCT)
+    {
+        ClassLayout* layout = varDsc->GetLayout();
+        assert(layout != nullptr);
+        gtDispClassLayout(layout, type);
+    }
+    else if (type == TYP_LCLBLK)
+    {
+#if FEATURE_FIXED_OUT_ARGS
+        assert(lclNum == lvaOutgoingArgSpaceVar);
+        // Since lvaOutgoingArgSpaceSize is a PhasedVar we can't read it for Dumping until
+        // after we set it to something.
+        if (lvaOutgoingArgSpaceSize.HasFinalValue())
+        {
+            // A PhasedVar<T> can't be directly used as an arg to a variadic function
+            unsigned value = lvaOutgoingArgSpaceSize;
+            printf("<%u> ", value);
+        }
+        else
+        {
+            printf("<na> "); // The value hasn't yet been determined
+        }
+#else
+        assert(!"Unknown size");
+        NO_WAY("Target doesn't support TYP_LCLBLK");
+#endif // FEATURE_FIXED_OUT_ARGS
+    }
+}
+
+//------------------------------------------------------------------------
+// gtDispClassLayout: Print size and type information about a layout.
+//
+// Arguments:
+//   layout - the layout;
+//   type   - variable type, used to avoid printing size for SIMD nodes.
+//
+void Compiler::gtDispClassLayout(ClassLayout* layout, var_types type)
+{
+    assert(layout != nullptr);
+    if (layout->IsBlockLayout())
+    {
+        printf("<%u>", layout->GetSize());
+    }
+    else if (varTypeIsSIMD(type))
+    {
+        printf("<%s>", layout->GetClassName());
+    }
+    else
+    {
+        printf("<%s, %u>", layout->GetClassName(), layout->GetSize());
     }
 }
 
@@ -12491,6 +12555,39 @@ GenTree* Compiler::gtFoldTypeCompare(GenTree* tree)
         objOp = opOther->AsCall()->gtCallThisArg->GetNode();
     }
 
+    bool                 pIsExact   = false;
+    bool                 pIsNonNull = false;
+    CORINFO_CLASS_HANDLE objCls     = gtGetClassHandle(objOp, &pIsExact, &pIsNonNull);
+
+    // if both classes are "final" (e.g. System.String[]) we can replace the comparison
+    // with `true/false` + null check.
+    if ((objCls != NO_CLASS_HANDLE) && (pIsExact || impIsClassExact(objCls)))
+    {
+        TypeCompareState tcs = info.compCompHnd->compareTypesForEquality(objCls, clsHnd);
+        if (tcs != TypeCompareState::May)
+        {
+            const bool operatorIsEQ  = oper == GT_EQ;
+            const bool typesAreEqual = tcs == TypeCompareState::Must;
+            GenTree*   compareResult = gtNewIconNode((operatorIsEQ ^ typesAreEqual) ? 0 : 1);
+
+            if (!pIsNonNull)
+            {
+                // we still have to emit a null-check
+                // obj.GetType == typeof() -> (nullcheck) true/false
+                GenTree* nullcheck = gtNewNullCheck(objOp, compCurBB);
+                return gtNewOperNode(GT_COMMA, tree->TypeGet(), nullcheck, compareResult);
+            }
+            else if (objOp->gtFlags & GTF_ALL_EFFECT)
+            {
+                return gtNewOperNode(GT_COMMA, tree->TypeGet(), objOp, compareResult);
+            }
+            else
+            {
+                return compareResult;
+            }
+        }
+    }
+
     GenTree* const objMT = gtNewOperNode(GT_IND, TYP_I_IMPL, objOp);
 
     // Update various flags
@@ -12574,13 +12671,16 @@ CORINFO_CLASS_HANDLE Compiler::gtGetHelperArgClassHandle(GenTree*  tree,
     return result;
 }
 
-/*****************************************************************************
- *
- *  Some binary operators can be folded even if they have only one
- *  operand constant - e.g. boolean operators, add with 0
- *  multiply with 1, etc
- */
-
+//------------------------------------------------------------------------
+// gtFoldExprSpecial -- optimize binary ops with one constant operand
+//
+// Arguments:
+//   tree - tree to optimize
+//
+// Return value:
+//   Tree (possibly modified at root or below), or a new tree
+//   Any new tree is fully morphed, if necessary.
+//
 GenTree* Compiler::gtFoldExprSpecial(GenTree* tree)
 {
     GenTree*   op1  = tree->AsOp()->gtOp1;
@@ -12683,7 +12783,7 @@ GenTree* Compiler::gtFoldExprSpecial(GenTree* tree)
             // Optimize boxed value classes; these are always false.  This IL is
             // generated when a generic value is tested against null:
             //     <T> ... foo(T x) { ... if ((object)x == null) ...
-            if (val == 0 && op->IsBoxedValue())
+            if ((val == 0) && op->IsBoxedValue())
             {
                 JITDUMP("\nAttempting to optimize BOX(valueType) %s null [%06u]\n", GenTree::OpName(oper),
                         dspTreeID(tree));
@@ -12736,6 +12836,10 @@ GenTree* Compiler::gtFoldExprSpecial(GenTree* tree)
                         return NewMorphedIntConNode(compareResult);
                     }
                 }
+            }
+            else
+            {
+                return gtFoldBoxNullable(tree);
             }
 
             break;
@@ -12896,6 +13000,96 @@ DONE_FOLD:
     }
 
     return op;
+}
+
+//------------------------------------------------------------------------
+// gtFoldBoxNullable -- optimize a boxed nullable feeding a compare to zero
+//
+// Arguments:
+//   tree - binop tree to potentially optimize, must be
+//          GT_GT, GT_EQ, or GT_NE
+//
+// Return value:
+//   Tree (possibly modified below the root).
+//
+GenTree* Compiler::gtFoldBoxNullable(GenTree* tree)
+{
+    assert(tree->OperKind() & GTK_BINOP);
+    assert(tree->OperIs(GT_GT, GT_EQ, GT_NE));
+
+    genTreeOps const oper = tree->OperGet();
+
+    if ((oper == GT_GT) && !tree->IsUnsigned())
+    {
+        return tree;
+    }
+
+    GenTree* const op1 = tree->AsOp()->gtOp1;
+    GenTree* const op2 = tree->AsOp()->gtOp2;
+    GenTree*       op;
+    GenTree*       cons;
+
+    if (op1->IsCnsIntOrI())
+    {
+        op   = op2;
+        cons = op1;
+    }
+    else if (op2->IsCnsIntOrI())
+    {
+        op   = op1;
+        cons = op2;
+    }
+    else
+    {
+        return tree;
+    }
+
+    ssize_t const val = cons->AsIntConCommon()->IconValue();
+
+    if (val != 0)
+    {
+        return tree;
+    }
+
+    if (!op->IsCall())
+    {
+        return tree;
+    }
+
+    GenTreeCall* const call = op->AsCall();
+
+    if (!call->IsHelperCall(this, CORINFO_HELP_BOX_NULLABLE))
+    {
+        return tree;
+    }
+
+    JITDUMP("\nAttempting to optimize BOX_NULLABLE(&x) %s null [%06u]\n", GenTree::OpName(oper), dspTreeID(tree));
+
+    // Get the address of the struct being boxed
+    GenTree* const arg = call->gtCallArgs->GetNext()->GetNode();
+
+    if (arg->OperIs(GT_ADDR) && ((arg->gtFlags & GTF_LATE_ARG) == 0))
+    {
+        CORINFO_CLASS_HANDLE nullableHnd = gtGetStructHandle(arg->AsOp()->gtOp1);
+        CORINFO_FIELD_HANDLE fieldHnd    = info.compCompHnd->getFieldInClass(nullableHnd, 0);
+
+        // Replace the box with an access of the nullable 'hasValue' field.
+        JITDUMP("\nSuccess: replacing BOX_NULLABLE(&x) [%06u] with x.hasValue\n", dspTreeID(op));
+        GenTree* newOp = gtNewFieldRef(TYP_BOOL, fieldHnd, arg, 0);
+
+        if (op == op1)
+        {
+            tree->AsOp()->gtOp1 = newOp;
+        }
+        else
+        {
+            tree->AsOp()->gtOp2 = newOp;
+        }
+
+        cons->gtType = TYP_INT;
+    }
+
+    return tree;
 }
 
 //------------------------------------------------------------------------
@@ -13172,8 +13366,10 @@ GenTree* Compiler::gtTryRemoveBoxUpstreamEffects(GenTree* op, BoxRemovalOptions 
         if (options == BR_REMOVE_AND_NARROW || options == BR_REMOVE_AND_NARROW_WANT_TYPE_HANDLE)
         {
             JITDUMP(" to read first byte of struct via modified [%06u]\n", dspTreeID(copySrc));
-            copySrc->ChangeOper(GT_IND);
+            copySrc->ChangeOper(GT_NULLCHECK);
             copySrc->gtType = TYP_BYTE;
+            compCurBB->bbFlags |= BBF_HAS_NULLCHECK;
+            optMethodFlags |= OMF_HAS_NULLCHECK;
         }
         else
         {
@@ -16088,6 +16284,55 @@ bool GenTree::IsLocalAddrExpr(Compiler* comp, GenTreeLclVarCommon** pLclVarTree,
 }
 
 //------------------------------------------------------------------------
+// IsImplicitByrefParameterValue: determine if this tree is the entire
+//     value of a local implicit byref parameter
+//
+// Arguments:
+//    compiler -- compiler instance
+//
+// Return Value:
+//    GenTreeLclVar node for the local, or nullptr.
+//
+GenTreeLclVar* GenTree::IsImplicitByrefParameterValue(Compiler* compiler)
+{
+#if defined(TARGET_AMD64) || defined(TARGET_ARM64)
+
+    GenTreeLclVar* lcl = nullptr;
+
+    if (OperIs(GT_LCL_VAR))
+    {
+        lcl = AsLclVar();
+    }
+    else if (OperIs(GT_OBJ))
+    {
+        GenTree* addr = AsIndir()->Addr();
+
+        if (addr->OperIs(GT_LCL_VAR))
+        {
+            lcl = addr->AsLclVar();
+        }
+        else if (addr->OperIs(GT_ADDR))
+        {
+            GenTree* base = addr->AsOp()->gtOp1;
+
+            if (base->OperIs(GT_LCL_VAR))
+            {
+                lcl = base->AsLclVar();
+            }
+        }
+    }
+
+    if ((lcl != nullptr) && compiler->lvaIsImplicitByRefLocal(lcl->GetLclNum()))
+    {
+        return lcl;
+    }
+
+#endif // defined(TARGET_AMD64) || defined(TARGET_ARM64)
+
+    return nullptr;
+}
+
+//------------------------------------------------------------------------
 // IsLclVarUpdateTree: Determine whether this is an assignment tree of the
 //                     form Vn = Vn 'oper' 'otherTree' where Vn is a lclVar
 //
@@ -16821,7 +17066,7 @@ GenTree* Compiler::gtGetSIMDZero(var_types simdType, var_types baseType, CORINFO
         switch (simdType)
         {
             case TYP_SIMD16:
-                if (compSupports(InstructionSet_SSE))
+                if (compExactlyDependsOn(InstructionSet_SSE))
                 {
                     // We only return the HWIntrinsicNode if SSE is supported, since it is possible for
                     // the user to disable the SSE HWIntrinsic support via the COMPlus configuration knobs
@@ -16830,7 +17075,7 @@ GenTree* Compiler::gtGetSIMDZero(var_types simdType, var_types baseType, CORINFO
                 }
                 return nullptr;
             case TYP_SIMD32:
-                if (compSupports(InstructionSet_AVX))
+                if (compExactlyDependsOn(InstructionSet_AVX))
                 {
                     // We only return the HWIntrinsicNode if AVX is supported, since it is possible for
                     // the user to disable the AVX HWIntrinsic support via the COMPlus configuration knobs
@@ -18118,6 +18363,16 @@ bool GenTree::isCommutativeSIMDIntrinsic()
             return false;
     }
 }
+
+// Returns true for the SIMD Instrinsic instructions that have MemoryLoad semantics, false otherwise
+bool GenTreeSIMD::OperIsMemoryLoad() const
+{
+    if (gtSIMDIntrinsicID == SIMDIntrinsicInitArray)
+    {
+        return true;
+    }
+    return false;
+}
 #endif // FEATURE_SIMD
 
 #ifdef FEATURE_HW_INTRINSICS
@@ -18168,7 +18423,7 @@ bool GenTree::isRMWHWIntrinsic(Compiler* comp)
     assert(gtOper == GT_HWINTRINSIC);
     assert(comp != nullptr);
 
-#ifdef TARGET_XARCH
+#if defined(TARGET_XARCH)
     if (!comp->canUseVexEncoding())
     {
         return HWIntrinsicInfo::HasRMWSemantics(AsHWIntrinsic()->gtHWIntrinsicId);
@@ -18199,9 +18454,11 @@ bool GenTree::isRMWHWIntrinsic(Compiler* comp)
             return false;
         }
     }
+#elif defined(TARGET_ARM64)
+    return HWIntrinsicInfo::HasRMWSemantics(AsHWIntrinsic()->gtHWIntrinsicId);
 #else
     return false;
-#endif // TARGET_XARCH
+#endif
 }
 
 GenTreeHWIntrinsic* Compiler::gtNewSimdHWIntrinsicNode(var_types      type,
@@ -18327,7 +18584,7 @@ GenTree* Compiler::gtNewMustThrowException(unsigned helper, var_types type, CORI
 }
 
 // Returns true for the HW Instrinsic instructions that have MemoryLoad semantics, false otherwise
-bool GenTreeHWIntrinsic::OperIsMemoryLoad()
+bool GenTreeHWIntrinsic::OperIsMemoryLoad() const
 {
 #ifdef TARGET_XARCH
     // Some xarch instructions have MemoryLoad sematics
@@ -18369,7 +18626,7 @@ bool GenTreeHWIntrinsic::OperIsMemoryLoad()
 }
 
 // Returns true for the HW Instrinsic instructions that have MemoryStore semantics, false otherwise
-bool GenTreeHWIntrinsic::OperIsMemoryStore()
+bool GenTreeHWIntrinsic::OperIsMemoryStore() const
 {
 #ifdef TARGET_XARCH
     // Some xarch instructions have MemoryStore sematics
@@ -18404,7 +18661,7 @@ bool GenTreeHWIntrinsic::OperIsMemoryStore()
 }
 
 // Returns true for the HW Instrinsic instructions that have MemoryLoad semantics, false otherwise
-bool GenTreeHWIntrinsic::OperIsMemoryLoadOrStore()
+bool GenTreeHWIntrinsic::OperIsMemoryLoadOrStore() const
 {
 #ifdef TARGET_XARCH
     return OperIsMemoryLoad() || OperIsMemoryStore();

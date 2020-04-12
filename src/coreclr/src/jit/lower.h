@@ -28,7 +28,7 @@ public:
         m_lsra = (LinearScan*)lsra;
         assert(m_lsra);
     }
-    virtual void DoPhase() override;
+    virtual PhaseStatus DoPhase() override;
 
     // This variant of LowerRange is called from outside of the main Lowering pass,
     // so it creates its own instance of Lowering to do so.
@@ -118,8 +118,6 @@ private:
 
     void LowerBlock(BasicBlock* block);
     GenTree* LowerNode(GenTree* node);
-
-    void CheckVSQuirkStackPaddingNeeded(GenTreeCall* call);
 
     // ------------------------------
     // Call Lowering

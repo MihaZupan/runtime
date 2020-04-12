@@ -78,8 +78,9 @@ bool Lowering::IsContainableImmed(GenTree* parentNode, GenTree* childNode)
             case GT_CMPXCHG:
             case GT_LOCKADD:
             case GT_XADD:
-                return comp->compSupports(InstructionSet_Atomics) ? false
-                                                                  : emitter::emitIns_valid_imm_for_add(immVal, size);
+                return comp->compOpportunisticallyDependsOn(InstructionSet_Atomics)
+                           ? false
+                           : emitter::emitIns_valid_imm_for_add(immVal, size);
 #elif defined(TARGET_ARM)
                 return emitter::emitIns_valid_imm_for_add(immVal, flags);
 #endif
@@ -735,7 +736,9 @@ void Lowering::ContainCheckStoreLoc(GenTreeLclVarCommon* storeLoc)
     // If the source is a containable immediate, make it contained, unless it is
     // an int-size or larger store of zero to memory, because we can generate smaller code
     // by zeroing a register and then storing it.
-    if (IsContainableImmed(storeLoc, op1) && (!op1->IsIntegralConst(0) || varTypeIsSmall(storeLoc)))
+    const LclVarDsc* varDsc = comp->lvaGetDesc(storeLoc);
+    var_types        type   = varDsc->GetRegisterType(storeLoc);
+    if (IsContainableImmed(storeLoc, op1) && (!op1->IsIntegralConst(0) || varTypeIsSmall(type)))
     {
         MakeSrcContained(storeLoc, op1);
     }

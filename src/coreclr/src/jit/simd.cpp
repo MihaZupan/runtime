@@ -115,10 +115,13 @@ int Compiler::getSIMDTypeAlignment(var_types simdType)
 //    base type of SIMD vector.
 //    sizeBytes if non-null is set to size in bytes.
 //
+// Notes:
+//    If the size of the struct is already known call structSizeMightRepresentSIMDType
+//    to determine if this api needs to be called.
+//
 // TODO-Throughput: current implementation parses class name to find base type. Change
 //         this when we implement  SIMD intrinsic identification for the final
 //         product.
-//
 var_types Compiler::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE typeHnd, unsigned* sizeBytes /*= nullptr */)
 {
     assert(supportSIMDTypes());
@@ -765,6 +768,15 @@ var_types Compiler::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE typeHnd, u
             }
         }
 
+#if defined(TARGET_XARCH)
+        // Even though Vector256 is TYP_SIMD32, if AVX isn't supported, then it must
+        // be treated as a regular struct
+        if (size == YMM_REGSIZE_BYTES && (simdBaseType != TYP_UNKNOWN) && !compExactlyDependsOn(InstructionSet_AVX))
+        {
+            simdBaseType = TYP_UNKNOWN;
+        }
+#endif // TARGET_XARCH
+
         if (sizeBytes != nullptr)
         {
             *sizeBytes = size;
@@ -1049,6 +1061,46 @@ const SIMDIntrinsicInfo* Compiler::getSIMDIntrinsicInfo(CORINFO_CLASS_HANDLE* in
     }
 
     return nullptr;
+}
+
+/* static */ bool Compiler::vnEncodesResultTypeForSIMDIntrinsic(SIMDIntrinsicID intrinsicId)
+{
+    switch (intrinsicId)
+    {
+        case SIMDIntrinsicInit:
+        case SIMDIntrinsicGetItem:
+        case SIMDIntrinsicAdd:
+        case SIMDIntrinsicSub:
+        case SIMDIntrinsicMul:
+        case SIMDIntrinsicDiv:
+        case SIMDIntrinsicSqrt:
+        case SIMDIntrinsicMin:
+        case SIMDIntrinsicMax:
+        case SIMDIntrinsicAbs:
+        case SIMDIntrinsicEqual:
+        case SIMDIntrinsicLessThan:
+        case SIMDIntrinsicLessThanOrEqual:
+        case SIMDIntrinsicGreaterThan:
+        case SIMDIntrinsicGreaterThanOrEqual:
+        case SIMDIntrinsicBitwiseAnd:
+        case SIMDIntrinsicBitwiseAndNot:
+        case SIMDIntrinsicBitwiseOr:
+        case SIMDIntrinsicBitwiseXor:
+        case SIMDIntrinsicDotProduct:
+        case SIMDIntrinsicCast:
+        case SIMDIntrinsicConvertToSingle:
+        case SIMDIntrinsicConvertToDouble:
+        case SIMDIntrinsicConvertToInt32:
+        case SIMDIntrinsicConvertToInt64:
+        case SIMDIntrinsicNarrow:
+        case SIMDIntrinsicWidenHi:
+        case SIMDIntrinsicWidenLo:
+            return true;
+
+        default:
+            break;
+    }
+    return false;
 }
 
 // Pops and returns GenTree node from importer's type stack.
@@ -2432,13 +2484,11 @@ GenTree* Compiler::impSIMDIntrinsic(OPCODE                opcode,
         return nullptr;
     }
 
-#ifdef FEATURE_CORECLR
-    // For coreclr, we also exit early if the method is not a JIT Intrinsic (which requires the [Intrinsic] attribute).
+    // Exit early if the method is not a JIT Intrinsic (which requires the [Intrinsic] attribute).
     if ((methodFlags & CORINFO_FLG_JIT_INTRINSIC) == 0)
     {
         return nullptr;
     }
-#endif // FEATURE_CORECLR
 
     // Get base type and intrinsic Id
     var_types                baseType = TYP_UNKNOWN;
@@ -3084,6 +3134,19 @@ GenTree* Compiler::impSIMDIntrinsic(OPCODE                opcode,
             retVal = gtNewSIMDNode(genActualType(callType), op1, nullptr, simdIntrinsicID, baseType, size);
         }
         break;
+
+        case SIMDIntrinsicCeil:
+        case SIMDIntrinsicFloor:
+#if defined(TARGET_XARCH)
+            // Rounding instructions are only available from SSE4.1.
+            if (getSIMDSupportLevel() < SIMD_SSE4_Supported)
+            {
+                return nullptr;
+            }
+#endif // defined(TARGET_XARCH)
+            op1    = impSIMDPopStack(simdType);
+            retVal = gtNewSIMDNode(genActualType(callType), op1, simdIntrinsicID, baseType, size);
+            break;
 
         case SIMDIntrinsicAbs:
             op1    = impSIMDPopStack(simdType);

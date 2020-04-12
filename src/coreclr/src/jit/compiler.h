@@ -415,6 +415,8 @@ public:
     unsigned char lvDoNotEnregister : 1; // Do not enregister this variable.
     unsigned char lvFieldAccessed : 1;   // The var is a struct local, and a field of the variable is accessed.  Affects
                                          // struct promotion.
+    unsigned char lvLiveInOutOfHndlr : 1; // The variable is live in or out of an exception handler, and therefore must
+                                          // be on the stack (at least at those boundaries.)
 
     unsigned char lvInSsa : 1; // The variable is in SSA form (set by SsaBuilder)
 
@@ -424,9 +426,6 @@ public:
     // also, lvType == TYP_STRUCT prevents enregistration.  At least one of the reasons should be true.
     unsigned char lvVMNeedsStackAddr : 1; // The VM may have access to a stack-relative address of the variable, and
                                           // read/write its value.
-    unsigned char lvLiveInOutOfHndlr : 1; // The variable was live in or out of an exception handler, and this required
-                                          // the variable to be
-                                          // in the stack (at least at those boundaries.)
     unsigned char lvLclFieldExpr : 1;     // The variable is not a struct, but was accessed like one (e.g., reading a
                                           // particular byte from an int).
     unsigned char lvLclBlockOpAddr : 1;   // The variable was written to via a block operation that took its address.
@@ -884,7 +883,7 @@ public:
                (lvIsParam || lvAddrExposed || lvIsStructField);
     }
 
-    bool lvNormalizeOnStore()
+    bool lvNormalizeOnStore() const
     {
         return varTypeIsSmall(TypeGet()) &&
                // lvIsStructField is treated the same as the aliased local, see fgDoNormalizeOnStore.
@@ -926,7 +925,7 @@ public:
     }
 
     // Returns the layout of a struct variable.
-    ClassLayout* GetLayout()
+    ClassLayout* GetLayout() const
     {
         assert(varTypeIsStruct(lvType));
         return m_layout;
@@ -947,6 +946,35 @@ public:
     LclSsaVarDsc* GetPerSsaData(unsigned ssaNum)
     {
         return lvPerSsaData.GetSsaDef(ssaNum);
+    }
+
+    //------------------------------------------------------------------------
+    // GetRegisterType: Determine register type for that local var.
+    //
+    // Arguments:
+    //    tree - node that uses the local, its type is checked first.
+    //
+    // Return Value:
+    //    TYP_UNDEF if the layout is enregistrable, register type otherwise.
+    //
+    var_types GetRegisterType(const GenTreeLclVarCommon* tree) const
+    {
+        var_types targetType = tree->gtType;
+
+#ifdef DEBUG
+        // Ensure that lclVar nodes are typed correctly.
+        if (tree->OperIs(GT_STORE_LCL_VAR) && lvNormalizeOnStore())
+        {
+            // TODO: update that assert to work with TypeGet() == TYP_STRUCT case.
+            // assert(targetType == genActualType(TypeGet()));
+        }
+#endif
+
+        if (targetType != TYP_STRUCT)
+        {
+            return targetType;
+        }
+        return GetLayout()->GetRegisterType();
     }
 
 #ifdef DEBUG
@@ -1102,6 +1130,13 @@ enum class PhaseChecks
     CHECK_ALL
 };
 
+// Specify compiler data that a phase might modify
+enum class PhaseStatus : unsigned
+{
+    MODIFIED_NOTHING,
+    MODIFIED_EVERYTHING
+};
+
 // The following enum provides a simple 1:1 mapping to CLR API's
 enum API_ICorJitInfo_Names
 {
@@ -1212,8 +1247,7 @@ public:
 };
 
 // A JitTimer encapsulates a CompTimeInfo for a single compilation. It also tracks the start of compilation,
-// and when the current phase started.  This is intended to be part of a Compilation object.  This is
-// disabled (FEATURE_JIT_METHOD_PERF not defined) when FEATURE_CORECLR is set, or on non-windows platforms.
+// and when the current phase started.  This is intended to be part of a Compilation object.
 //
 class JitTimer
 {
@@ -2379,6 +2413,8 @@ public:
 
     EHblkDsc* ehInitTryBlockRange(BasicBlock* blk, BasicBlock** tryBeg, BasicBlock** tryLast);
 
+    void fgSetTryBeg(EHblkDsc* handlerTab, BasicBlock* newTryBeg);
+
     void fgSetTryEnd(EHblkDsc* handlerTab, BasicBlock* newTryLast);
 
     void fgSetHndEnd(EHblkDsc* handlerTab, BasicBlock* newHndLast);
@@ -2580,6 +2616,10 @@ public:
         var_types type, GenTree* op1, GenTree* op2, GenTree* op3, NamedIntrinsic hwIntrinsicID);
     GenTree* gtNewMustThrowException(unsigned helper, var_types type, CORINFO_CLASS_HANDLE clsHnd);
     CORINFO_CLASS_HANDLE gtGetStructHandleForHWSIMD(var_types simdType, var_types simdBaseType);
+    var_types getBaseTypeFromArgIfNeeded(NamedIntrinsic       intrinsic,
+                                         CORINFO_CLASS_HANDLE clsHnd,
+                                         CORINFO_SIG_INFO*    sig,
+                                         var_types            baseType);
 #endif // FEATURE_HW_INTRINSICS
 
     GenTreeLclFld* gtNewLclFldNode(unsigned lnum, var_types type, unsigned offset);
@@ -2592,6 +2632,8 @@ public:
     GenTreeArrLen* gtNewArrLen(var_types typ, GenTree* arrayOp, int lenOffset, BasicBlock* block);
 
     GenTree* gtNewIndir(var_types typ, GenTree* addr);
+
+    GenTree* gtNewNullCheck(GenTree* addr, BasicBlock* basicBlock);
 
     GenTreeArgList* gtNewArgList(GenTree* op);
     GenTreeArgList* gtNewArgList(GenTree* op1, GenTree* op2);
@@ -2774,6 +2816,7 @@ public:
 #endif // __clang__
         gtFoldExprConst(GenTree* tree);
     GenTree* gtFoldExprSpecial(GenTree* tree);
+    GenTree* gtFoldBoxNullable(GenTree* tree);
     GenTree* gtFoldExprCompare(GenTree* tree);
     GenTree* gtCreateHandleCompare(genTreeOps             oper,
                                    GenTree*               op1,
@@ -2854,7 +2897,9 @@ public:
     void gtGetLclVarNameInfo(unsigned lclNum, const char** ilKindOut, const char** ilNameOut, unsigned* ilNumOut);
     int gtGetLclVarName(unsigned lclNum, char* buf, unsigned buf_remaining);
     char* gtGetLclVarName(unsigned lclNum);
-    void gtDispLclVar(unsigned varNum, bool padForBiggestDisp = true);
+    void gtDispLclVar(unsigned lclNum, bool padForBiggestDisp = true);
+    void gtDispLclVarStructType(unsigned lclNum);
+    void gtDispClassLayout(ClassLayout* layout, var_types type);
     void gtDispStmt(Statement* stmt, const char* msg = nullptr);
     void gtDispBlockStmts(BasicBlock* block);
     void gtGetArgMsg(GenTreeCall* call, GenTree* arg, unsigned argNum, int listCount, char* bufp, unsigned bufLength);
@@ -3005,6 +3050,9 @@ public:
     void lvaSetVarAddrExposed(unsigned varNum);
     void lvaSetVarLiveInOutOfHandler(unsigned varNum);
     bool lvaVarDoNotEnregister(unsigned varNum);
+
+    bool lvaEnregEHVars;
+
 #ifdef DEBUG
     // Reasons why we can't enregister.  Some of these correspond to debug properties of local vars.
     enum DoNotEnregisterReason
@@ -3027,6 +3075,7 @@ public:
         DNER_PinningRef,
 #endif
     };
+
 #endif
     void lvaSetVarDoNotEnregister(unsigned varNum DEBUGARG(DoNotEnregisterReason reason));
 
@@ -3164,6 +3213,10 @@ public:
 
     int lvaToInitialSPRelativeOffset(unsigned offset, bool isFpBased);
     int lvaGetInitialSPRelativeOffset(unsigned varNum);
+
+    // True if this is an OSR compilation and this local is potentially
+    // located on the original method stack frame.
+    bool lvaIsOSRLocal(unsigned varNum);
 
     //------------------------ For splitting types ----------------------------
 
@@ -3428,7 +3481,6 @@ public:
         return lvaTable[lclNum].lvInSsa;
     }
 
-    unsigned lvaSecurityObject;  // variable representing the security object on the stack
     unsigned lvaStubArgumentVar; // variable representing the secret stub argument coming in EAX
 
 #if defined(FEATURE_EH_FUNCLETS)
@@ -3488,8 +3540,7 @@ public:
 
 public:
     void impInit();
-
-    void impImport(BasicBlock* method);
+    void impImport();
 
     CORINFO_CLASS_HANDLE impGetRefAnyClass();
     CORINFO_CLASS_HANDLE impGetRuntimeArgumentHandle();
@@ -3630,13 +3681,12 @@ protected:
                                        bool                  mustExpand);
 
 protected:
-    bool compSupportsHWIntrinsic(InstructionSet isa);
+    bool compSupportsHWIntrinsic(CORINFO_InstructionSet isa);
 
     GenTree* impSpecialIntrinsic(NamedIntrinsic        intrinsic,
                                  CORINFO_CLASS_HANDLE  clsHnd,
                                  CORINFO_METHOD_HANDLE method,
-                                 CORINFO_SIG_INFO*     sig,
-                                 bool                  mustExpand);
+                                 CORINFO_SIG_INFO*     sig);
 
     GenTree* getArgForHWIntrinsic(var_types argType, CORINFO_CLASS_HANDLE argClass);
     GenTree* impNonConstFallback(NamedIntrinsic intrinsic, var_types simdType, var_types baseType);
@@ -3646,48 +3696,12 @@ protected:
     GenTree* impBaseIntrinsic(NamedIntrinsic        intrinsic,
                               CORINFO_CLASS_HANDLE  clsHnd,
                               CORINFO_METHOD_HANDLE method,
-                              CORINFO_SIG_INFO*     sig,
-                              bool                  mustExpand);
-    GenTree* impSSEIntrinsic(NamedIntrinsic        intrinsic,
-                             CORINFO_METHOD_HANDLE method,
-                             CORINFO_SIG_INFO*     sig,
-                             bool                  mustExpand);
-    GenTree* impSSE2Intrinsic(NamedIntrinsic        intrinsic,
-                              CORINFO_METHOD_HANDLE method,
-                              CORINFO_SIG_INFO*     sig,
-                              bool                  mustExpand);
-    GenTree* impSSE42Intrinsic(NamedIntrinsic        intrinsic,
-                               CORINFO_METHOD_HANDLE method,
-                               CORINFO_SIG_INFO*     sig,
-                               bool                  mustExpand);
-    GenTree* impAvxOrAvx2Intrinsic(NamedIntrinsic        intrinsic,
-                                   CORINFO_METHOD_HANDLE method,
-                                   CORINFO_SIG_INFO*     sig,
-                                   bool                  mustExpand);
-    GenTree* impAESIntrinsic(NamedIntrinsic        intrinsic,
-                             CORINFO_METHOD_HANDLE method,
-                             CORINFO_SIG_INFO*     sig,
-                             bool                  mustExpand);
-    GenTree* impBMI1OrBMI2Intrinsic(NamedIntrinsic        intrinsic,
-                                    CORINFO_METHOD_HANDLE method,
-                                    CORINFO_SIG_INFO*     sig,
-                                    bool                  mustExpand);
-    GenTree* impFMAIntrinsic(NamedIntrinsic        intrinsic,
-                             CORINFO_METHOD_HANDLE method,
-                             CORINFO_SIG_INFO*     sig,
-                             bool                  mustExpand);
-    GenTree* impLZCNTIntrinsic(NamedIntrinsic        intrinsic,
-                               CORINFO_METHOD_HANDLE method,
-                               CORINFO_SIG_INFO*     sig,
-                               bool                  mustExpand);
-    GenTree* impPCLMULQDQIntrinsic(NamedIntrinsic        intrinsic,
-                                   CORINFO_METHOD_HANDLE method,
-                                   CORINFO_SIG_INFO*     sig,
-                                   bool                  mustExpand);
-    GenTree* impPOPCNTIntrinsic(NamedIntrinsic        intrinsic,
-                                CORINFO_METHOD_HANDLE method,
-                                CORINFO_SIG_INFO*     sig,
-                                bool                  mustExpand);
+                              CORINFO_SIG_INFO*     sig);
+    GenTree* impSSEIntrinsic(NamedIntrinsic intrinsic, CORINFO_METHOD_HANDLE method, CORINFO_SIG_INFO* sig);
+    GenTree* impSSE2Intrinsic(NamedIntrinsic intrinsic, CORINFO_METHOD_HANDLE method, CORINFO_SIG_INFO* sig);
+    GenTree* impAvxOrAvx2Intrinsic(NamedIntrinsic intrinsic, CORINFO_METHOD_HANDLE method, CORINFO_SIG_INFO* sig);
+    GenTree* impBMI1OrBMI2Intrinsic(NamedIntrinsic intrinsic, CORINFO_METHOD_HANDLE method, CORINFO_SIG_INFO* sig);
+
 #endif // TARGET_XARCH
 #endif // FEATURE_HW_INTRINSICS
     GenTree* impArrayAccessIntrinsic(CORINFO_CLASS_HANDLE clsHnd,
@@ -4115,12 +4129,8 @@ private:
                                       var_types            calleeRetType,
                                       CORINFO_CLASS_HANDLE calleeRetTypeClass);
 
-    bool impIsTailCallILPattern(bool        tailPrefixed,
-                                OPCODE      curOpcode,
-                                const BYTE* codeAddrOfNextOpcode,
-                                const BYTE* codeEnd,
-                                bool        isRecursive,
-                                bool*       IsCallPopRet = nullptr);
+    bool impIsTailCallILPattern(
+        bool tailPrefixed, OPCODE curOpcode, const BYTE* codeAddrOfNextOpcode, const BYTE* codeEnd, bool isRecursive);
 
     bool impIsImplicitTailCallCandidate(
         OPCODE curOpcode, const BYTE* codeAddrOfNextOpcode, const BYTE* codeEnd, int prefixFlags, bool isRecursive);
@@ -4146,6 +4156,7 @@ public:
     BasicBlock* fgFirstBB;        // Beginning of the basic block list
     BasicBlock* fgLastBB;         // End of the basic block list
     BasicBlock* fgFirstColdBlock; // First block to be placed in the cold section
+    BasicBlock* fgEntryBB;        // For OSR, the original method's entry point
 #if defined(FEATURE_EH_FUNCLETS)
     BasicBlock* fgFirstFuncletBB; // First block of outlined funclets (to allow block insertion before the funclets)
 #endif
@@ -4355,29 +4366,35 @@ public:
 
     void fgInit();
 
-    void fgImport();
+    PhaseStatus fgImport();
 
-    void fgTransformIndirectCalls();
+    PhaseStatus fgTransformIndirectCalls();
 
-    void fgInline();
+    PhaseStatus fgTransformPatchpoints();
 
-    void fgRemoveEmptyTry();
+    PhaseStatus fgInline();
 
-    void fgRemoveEmptyFinally();
+    PhaseStatus fgRemoveEmptyTry();
 
-    void fgMergeFinallyChains();
+    PhaseStatus fgRemoveEmptyFinally();
 
-    void fgCloneFinally();
+    PhaseStatus fgMergeFinallyChains();
+
+    PhaseStatus fgCloneFinally();
 
     void fgCleanupContinuation(BasicBlock* continuation);
 
-    void fgUpdateFinallyTargetFlags();
+#if defined(FEATURE_EH_FUNCLETS) && defined(TARGET_ARM)
+
+    PhaseStatus fgUpdateFinallyTargetFlags();
 
     void fgClearAllFinallyTargetBits();
 
     void fgAddFinallyTargetFlags();
 
-    void fgTailMergeThrows();
+#endif // defined(FEATURE_EH_FUNCLETS) && defined(TARGET_ARM)
+
+    PhaseStatus fgTailMergeThrows();
     void fgTailMergeThrowsFallThroughHelper(BasicBlock* predBlock,
                                             BasicBlock* nonCanonicalBlock,
                                             BasicBlock* canonicalBlock,
@@ -4422,6 +4439,8 @@ public:
 
     void fgMorphStmts(BasicBlock* block, bool* lnot, bool* loadw);
     void fgMorphBlocks();
+
+    void fgMergeBlockReturn(BasicBlock* block);
 
     bool fgMorphBlockStmt(BasicBlock* block, Statement* stmt DEBUGARG(const char* msg));
 
@@ -4645,6 +4664,16 @@ public:
     // Does value-numbering for an intrinsic tree.
     void fgValueNumberIntrinsic(GenTree* tree);
 
+#ifdef FEATURE_SIMD
+    // Does value-numbering for a GT_SIMD tree
+    void fgValueNumberSimd(GenTree* tree);
+#endif // FEATURE_SIMD
+
+#ifdef FEATURE_HW_INTRINSICS
+    // Does value-numbering for a GT_HWINTRINSIC tree
+    void fgValueNumberHWIntrinsic(GenTree* tree);
+#endif // FEATURE_HW_INTRINSICS
+
     // Does value-numbering for a call.  We interpret some helper calls.
     void fgValueNumberCall(GenTreeCall* call);
 
@@ -4668,6 +4697,9 @@ public:
 
     // Adds the exception set for the current tree node which is performing a overflow checking operation
     void fgValueNumberAddExceptionSetForOverflow(GenTree* tree);
+
+    // Adds the exception set for the current tree node which is performing a bounds check operation
+    void fgValueNumberAddExceptionSetForBoundsCheck(GenTree* tree);
 
     // Adds the exception set for the current tree node which is performing a ckfinite operation
     void fgValueNumberAddExceptionSetForCkFinite(GenTree* tree);
@@ -5255,11 +5287,10 @@ public:
 public:
     void fgInsertStmtAtEnd(BasicBlock* block, Statement* stmt);
     Statement* fgNewStmtAtEnd(BasicBlock* block, GenTree* tree);
+    Statement* fgNewStmtNearEnd(BasicBlock* block, GenTree* tree);
 
 private:
     void fgInsertStmtNearEnd(BasicBlock* block, Statement* stmt);
-    Statement* fgNewStmtNearEnd(BasicBlock* block, GenTree* tree);
-
     void fgInsertStmtAtBeg(BasicBlock* block, Statement* stmt);
     Statement* fgNewStmtAtBeg(BasicBlock* block, GenTree* tree);
 
@@ -5392,7 +5423,6 @@ private:
 #endif // FEATURE_SIMD
     GenTree* fgMorphArrayIndex(GenTree* tree);
     GenTree* fgMorphCast(GenTree* tree);
-    GenTree* fgUnwrapProxy(GenTree* objRef);
     GenTreeFieldList* fgMorphLclArgToFieldlist(GenTreeLclVarCommon* lcl);
     void fgInitArgInfo(GenTreeCall* call);
     GenTreeCall* fgMorphArgs(GenTreeCall* call);
@@ -5447,7 +5477,6 @@ private:
     GenTree* fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac = nullptr);
     GenTree* fgMorphModToSubMulDiv(GenTreeOp* tree);
     GenTree* fgMorphSmpOpOptional(GenTreeOp* tree);
-    GenTree* fgMorphRecognizeBoxNullable(GenTree* compare);
 
     GenTree* fgMorphToEmulatedFP(GenTree* tree);
     GenTree* fgMorphConst(GenTree* tree);
@@ -6163,6 +6192,12 @@ protected:
         treeStmtLst* csdTreeList; // list of matching tree nodes: head
         treeStmtLst* csdTreeLast; // list of matching tree nodes: tail
 
+        // ToDo: This can be removed when gtGetStructHandleIfPresent stops guessing
+        // and GT_IND nodes always have valid struct handle.
+        //
+        CORINFO_CLASS_HANDLE csdStructHnd; // The class handle, currently needed to create a SIMD LclVar in PerformCSE
+        bool                 csdStructHndMismatch;
+
         ValueNum defExcSetPromise; // The exception set that is now required for all defs of this CSE.
                                    // This will be set to NoVN if we decide to abandon this CSE
 
@@ -6335,6 +6370,7 @@ public:
 #define OMF_HAS_OBJSTACKALLOC 0x00000040    // Method contains an object allocated on the stack.
 #define OMF_HAS_GUARDEDDEVIRT 0x00000080    // Method contains guarded devirtualization candidate
 #define OMF_HAS_EXPRUNTIMELOOKUP 0x00000100 // Method contains a runtime lookup to an expandable dictionary.
+#define OMF_HAS_PATCHPOINT 0x00000200       // Method contains patchpoints
 
     bool doesMethodHaveFatPointer()
     {
@@ -6390,6 +6426,16 @@ public:
     }
 
     void addExpRuntimeLookupCandidate(GenTreeCall* call);
+
+    bool doesMethodHavePatchpoints()
+    {
+        return (optMethodFlags & OMF_HAS_PATCHPOINT) != 0;
+    }
+
+    void setMethodHasPatchpoint()
+    {
+        optMethodFlags |= OMF_HAS_PATCHPOINT;
+    }
 
     unsigned optMethodFlags;
 
@@ -7602,12 +7648,12 @@ private:
     SIMDLevel getSIMDSupportLevel()
     {
 #if defined(TARGET_XARCH)
-        if (compSupports(InstructionSet_AVX2))
+        if (compOpportunisticallyDependsOn(InstructionSet_AVX2))
         {
             return SIMD_AVX2_Supported;
         }
 
-        if (compSupports(InstructionSet_SSE42))
+        if (compOpportunisticallyDependsOn(InstructionSet_SSE42))
         {
             return SIMD_SSE4_Supported;
         }
@@ -7753,7 +7799,7 @@ private:
                     unreached();
             }
         }
-        assert(emitTypeSize(simdType) <= maxSIMDStructBytes());
+        assert(emitTypeSize(simdType) <= largestEnregisterableStructSize());
         switch (simdBaseType)
         {
             case TYP_FLOAT:
@@ -7999,13 +8045,6 @@ private:
     // Whether SIMD vector occupies part of SIMD register.
     // SSE2: vector2f/3f are considered sub register SIMD types.
     // AVX: vector2f, 3f and 4f are all considered sub register SIMD types.
-    bool isSubRegisterSIMDType(CORINFO_CLASS_HANDLE typeHnd)
-    {
-        unsigned  sizeBytes = 0;
-        var_types baseType  = getBaseTypeAndSizeOfSIMDType(typeHnd, &sizeBytes);
-        return (baseType == TYP_FLOAT) && (sizeBytes < getSIMDVectorRegisterByteLength());
-    }
-
     bool isSubRegisterSIMDType(GenTreeSIMD* simdNode)
     {
         return (simdNode->gtSIMDSize < getSIMDVectorRegisterByteLength());
@@ -8022,6 +8061,8 @@ private:
         }
         else
         {
+            // Verify and record that AVX2 isn't supported
+            compVerifyInstructionSetUnuseable(InstructionSet_AVX2);
             assert(getSIMDSupportLevel() >= SIMD_SSE2_Supported);
             return TYP_SIMD16;
         }
@@ -8062,6 +8103,9 @@ private:
         else
         {
             assert(getSIMDSupportLevel() >= SIMD_SSE2_Supported);
+
+            // Verify and record that AVX2 isn't supported
+            compVerifyInstructionSetUnuseable(InstructionSet_AVX2);
             return XMM_REGSIZE_BYTES;
         }
 #elif defined(TARGET_ARM64)
@@ -8082,7 +8126,7 @@ private:
     unsigned int maxSIMDStructBytes()
     {
 #if defined(FEATURE_HW_INTRINSICS) && defined(TARGET_XARCH)
-        if (compSupports(InstructionSet_AVX))
+        if (compOpportunisticallyDependsOn(InstructionSet_AVX))
         {
             return YMM_REGSIZE_BYTES;
         }
@@ -8095,6 +8139,7 @@ private:
         return getSIMDVectorRegisterByteLength();
 #endif
     }
+
     unsigned int minSIMDStructBytes()
     {
         return emitTypeSize(TYP_SIMD8);
@@ -8154,13 +8199,46 @@ public:
     unsigned largestEnregisterableStructSize()
     {
 #ifdef FEATURE_SIMD
-        unsigned vectorRegSize = getSIMDVectorRegisterByteLength();
+#if defined(FEATURE_HW_INTRINSICS) && defined(TARGET_XARCH)
+        if (opts.IsReadyToRun())
+        {
+            // Return constant instead of maxSIMDStructBytes, as maxSIMDStructBytes performs
+            // checks that are effected by the current level of instruction set support would
+            // otherwise cause the highest level of instruction set support to be reported to crossgen2.
+            // and this api is only ever used as an optimization or assert, so no reporting should
+            // ever happen.
+            return YMM_REGSIZE_BYTES;
+        }
+#endif // defined(FEATURE_HW_INTRINSICS) && defined(TARGET_XARCH)
+        unsigned vectorRegSize = maxSIMDStructBytes();
         assert(vectorRegSize >= TARGET_POINTER_SIZE);
         return vectorRegSize;
 #else  // !FEATURE_SIMD
         return TARGET_POINTER_SIZE;
 #endif // !FEATURE_SIMD
     }
+
+    // Use to determine if a struct *might* be a SIMD type. As this function only takes a size, many
+    // structs will fit the criteria.
+    bool structSizeMightRepresentSIMDType(size_t structSize)
+    {
+#ifdef FEATURE_SIMD
+        // Do not use maxSIMDStructBytes as that api in R2R on X86 and X64 may notify the JIT
+        // about the size of a struct under the assumption that the struct size needs to be recorded.
+        // By using largestEnregisterableStructSize here, the detail of whether or not Vector256<T> is
+        // enregistered or not will not be messaged to the R2R compiler.
+        return (structSize >= minSIMDStructBytes()) && (structSize <= largestEnregisterableStructSize());
+#else
+        return false;
+#endif // FEATURE_SIMD
+    }
+
+#ifdef FEATURE_SIMD
+    static bool vnEncodesResultTypeForSIMDIntrinsic(SIMDIntrinsicID intrinsicId);
+#endif // !FEATURE_SIMD
+#ifdef FEATURE_HW_INTRINSICS
+    static bool vnEncodesResultTypeForHWIntrinsic(NamedIntrinsic hwIntrinsicID);
+#endif // FEATURE_HW_INTRINSICS
 
 private:
     // These routines need not be enclosed under FEATURE_SIMD since lvIsSIMDType()
@@ -8232,7 +8310,12 @@ private:
         return false;
     }
 
-    bool compSupports(InstructionSet isa) const
+#ifdef DEBUG
+    // Answer the question: Is a particular ISA supported?
+    // Use this api when asking the question so that future
+    // ISA questions can be asked correctly or when asserting
+    // support/nonsupport for an instruction set
+    bool compIsaSupportedDebugOnly(CORINFO_InstructionSet isa) const
     {
 #if defined(TARGET_XARCH) || defined(TARGET_ARM64)
         return (opts.compSupportsISA & (1ULL << isa)) != 0;
@@ -8240,11 +8323,61 @@ private:
         return false;
 #endif
     }
+#endif // DEBUG
+
+    void notifyInstructionSetUsage(CORINFO_InstructionSet isa, bool supported) const;
+
+    // Answer the question: Is a particular ISA supported?
+    // The result of this api call will exactly match the target machine
+    // on which the function is executed (except for CoreLib, where there are special rules)
+    bool compExactlyDependsOn(CORINFO_InstructionSet isa) const
+    {
+
+#if defined(TARGET_XARCH) || defined(TARGET_ARM64)
+        uint64_t isaBit       = (1ULL << isa);
+        bool     isaSupported = (opts.compSupportsISA & (1ULL << isa)) != 0;
+        if ((opts.compSupportsISAReported & isaBit) == 0)
+        {
+            notifyInstructionSetUsage(isa, isaSupported);
+            ((Compiler*)this)->opts.compSupportsISAReported |= isaBit;
+        }
+
+        return isaSupported;
+#else
+        return false;
+#endif
+    }
+
+    // Ensure that code will not execute if an instruction set is useable. Call only
+    // if the instruction set has previously reported as unuseable, but when
+    // that that status has not yet been recorded to the AOT compiler
+    void compVerifyInstructionSetUnuseable(CORINFO_InstructionSet isa)
+    {
+        // use compExactlyDependsOn to capture are record the use of the isa
+        bool isaUseable = compExactlyDependsOn(isa);
+        // Assert that the is unuseable. If true, this function should never be called.
+        assert(!isaUseable);
+    }
+
+    // Answer the question: Is a particular ISA supported?
+    // The result of this api call will match the target machine if the result is true
+    // If the result is false, then the target machine may have support for the instruction
+    bool compOpportunisticallyDependsOn(CORINFO_InstructionSet isa) const
+    {
+        if ((opts.compSupportsISA & (1ULL << isa)) != 0)
+        {
+            return compExactlyDependsOn(isa);
+        }
+        else
+        {
+            return false;
+        }
+    }
 
     bool canUseVexEncoding() const
     {
 #ifdef TARGET_XARCH
-        return compSupports(InstructionSet_AVX);
+        return compOpportunisticallyDependsOn(InstructionSet_AVX);
 #else
         return false;
 #endif
@@ -8339,13 +8472,12 @@ public:
     {
         JitFlags* jitFlags; // all flags passed from the EE
 
-#if defined(TARGET_XARCH) || defined(TARGET_ARM64)
         uint64_t compSupportsISA;
-        void setSupportedISA(InstructionSet isa)
+        uint64_t compSupportsISAReported;
+        void setSupportedISAs(CORINFO_InstructionSetFlags isas)
         {
-            compSupportsISA |= 1ULL << isa;
+            compSupportsISA = isas.GetFlagsRaw();
         }
-#endif
 
         unsigned compFlags; // method attributes
         unsigned instrCount;
@@ -8427,6 +8559,18 @@ public:
         }
 #endif
 
+#ifdef FEATURE_ON_STACK_REPLACEMENT
+        bool IsOSR() const
+        {
+            return jitFlags->IsSet(JitFlags::JIT_FLAG_OSR);
+        }
+#else
+        bool IsOSR() const
+        {
+            return false;
+        }
+#endif
+
         // true if we should use the PINVOKE_{BEGIN,END} helpers instead of generating
         // PInvoke transitions inline (e.g. when targeting CoreRT).
         bool ShouldUsePInvokeHelpers()
@@ -8439,28 +8583,6 @@ public:
         bool IsReversePInvoke()
         {
             return jitFlags->IsSet(JitFlags::JIT_FLAG_REVERSE_PINVOKE);
-        }
-
-        // true if we must generate code compatible with JIT32 quirks
-        bool IsJit32Compat()
-        {
-#if defined(TARGET_X86)
-            return jitFlags->IsSet(JitFlags::JIT_FLAG_DESKTOP_QUIRKS);
-#else
-            return false;
-#endif
-        }
-
-        // true if we must generate code compatible with Jit64 quirks
-        bool IsJit64Compat()
-        {
-#if defined(TARGET_AMD64)
-            return jitFlags->IsSet(JitFlags::JIT_FLAG_DESKTOP_QUIRKS);
-#elif !defined(FEATURE_CORECLR)
-            return true;
-#else
-            return false;
-#endif
         }
 
         bool compScopeInfo; // Generate the LocalVar info ?
@@ -8489,22 +8611,6 @@ public:
         bool compStackCheckOnCall; // Check stack pointer after call to ensure it is correct. Only for x86.
 
 #endif // defined(DEBUG) && defined(TARGET_X86)
-
-        bool compNeedSecurityCheck; // This flag really means where or not a security object needs
-                                    // to be allocated on the stack.
-                                    // It will be set to true in the following cases:
-                                    //   1. When the method being compiled has a declarative security
-                                    //        (i.e. when CORINFO_FLG_NOSECURITYWRAP is reset for the current method).
-                                    //        This is also the case when we inject a prolog and epilog in the method.
-                                    //   (or)
-                                    //   2. When the method being compiled has imperative security (i.e. the method
-                                    //        calls into another method that has CORINFO_FLG_SECURITYCHECK flag set).
-                                    //   (or)
-                                    //   3. When opts.compDbgEnC is true. (See also Compiler::compCompile).
-                                    //
-        // When this flag is set, jit will allocate a gc-reference local variable (lvaSecurityObject),
-        // which gets reported as a GC root to stackwalker.
-        // (See also ICodeManager::GetAddrOfSecurityObject.)
 
         bool compReloc; // Generate relocs for pointers in code, true for all ngen/prejit codegen
 
@@ -8801,20 +8907,20 @@ public:
         // The following holds the class attributes for the method we're compiling.
         unsigned compClassAttr;
 
-        const BYTE*    compCode;
-        IL_OFFSET      compILCodeSize;     // The IL code size
-        IL_OFFSET      compILImportSize;   // Estimated amount of IL actually imported
-        UNATIVE_OFFSET compNativeCodeSize; // The native code size, after instructions are issued. This
-                                           // is less than (compTotalHotCodeSize + compTotalColdCodeSize) only if:
+        const BYTE*     compCode;
+        IL_OFFSET       compILCodeSize;     // The IL code size
+        IL_OFFSET       compILImportSize;   // Estimated amount of IL actually imported
+        IL_OFFSET       compILEntry;        // The IL entry point (normally 0)
+        PatchpointInfo* compPatchpointInfo; // Patchpoint data for OSR (normally nullptr)
+        UNATIVE_OFFSET  compNativeCodeSize; // The native code size, after instructions are issued. This
+        // is less than (compTotalHotCodeSize + compTotalColdCodeSize) only if:
         // (1) the code is not hot/cold split, and we issued less code than we expected, or
         // (2) the code is hot/cold split, and we issued less code than we expected
         // in the cold section (the hot section will always be padded out to compTotalHotCodeSize).
 
         bool compIsStatic : 1;         // Is the method static (no 'this' pointer)?
         bool compIsVarArgs : 1;        // Does the method have varargs parameters?
-        bool compIsContextful : 1;     // contextful method
         bool compInitMem : 1;          // Is the CORINFO_OPT_INIT_LOCALS bit set in the method info options?
-        bool compUnwrapContextful : 1; // JIT should unwrap proxies when possible
         bool compProfilerCallback : 1; // JIT inserted a profiler Enter callback
         bool compPublishStubParam : 1; // EAX captured in prolog will be available through an instrinsic
         bool compRetBuffDefStack : 1;  // The ret buff argument definitely points into the stack.
@@ -8979,10 +9085,16 @@ public:
 //-------------------------- Global Compiler Data ------------------------------------
 
 #ifdef DEBUG
-    static unsigned s_compMethodsCount; // to produce unique label names
-    unsigned        compGenTreeID;
-    unsigned        compStatementID;
-    unsigned        compBasicBlockID;
+private:
+    static LONG s_compMethodsCount; // to produce unique label names
+#endif
+
+public:
+#ifdef DEBUG
+    LONG     compMethodID;
+    unsigned compGenTreeID;
+    unsigned compStatementID;
+    unsigned compBasicBlockID;
 #endif
 
     BasicBlock* compCurBB;   // the current basic block in process
@@ -9075,15 +9187,16 @@ public:
                     ULONG*                methodCodeSize,
                     JitFlags*             compileFlags);
     void compCompileFinish();
-    int compCompileHelper(CORINFO_MODULE_HANDLE            classPtr,
-                          COMP_HANDLE                      compHnd,
-                          CORINFO_METHOD_INFO*             methodInfo,
-                          void**                           methodCodePtr,
-                          ULONG*                           methodCodeSize,
-                          JitFlags*                        compileFlags,
-                          CorInfoInstantiationVerification instVerInfo);
+    int compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
+                          COMP_HANDLE           compHnd,
+                          CORINFO_METHOD_INFO*  methodInfo,
+                          void**                methodCodePtr,
+                          ULONG*                methodCodeSize,
+                          JitFlags*             compileFlag);
 
     ArenaAllocator* compGetArenaAllocator();
+
+    void generatePatchpointInfo();
 
 #if MEASURE_MEM_ALLOC
     static bool s_dspMemStats; // Display per-phase memory statistics for every function
@@ -9288,24 +9401,10 @@ public:
 
 public:
     // Set to TRUE if verification cannot be skipped for this method
-    // If we detect unverifiable code, we will lazily check
-    // canSkipMethodVerification() to see if verification is REALLY needed.
-    BOOL tiVerificationNeeded;
-
-    // It it initially TRUE, and it gets set to FALSE if we run into unverifiable code
-    // Note that this is valid only if tiVerificationNeeded was ever TRUE.
-    BOOL tiIsVerifiableCode;
-
-    // Set to TRUE if runtime callout is needed for this method
-    BOOL tiRuntimeCalloutNeeded;
-
-    // Set to TRUE if security prolog/epilog callout is needed for this method
-    // Note: This flag is different than compNeedSecurityCheck.
-    //     compNeedSecurityCheck means whether or not a security object needs
-    //         to be allocated on the stack, which is currently true for EnC as well.
-    //     tiSecurityCalloutNeeded means whether or not security callouts need
-    //         to be inserted in the jitted code.
-    BOOL tiSecurityCalloutNeeded;
+    // CoreCLR does not ever run IL verification. Compile out the verifier from the JIT by making this a constant.
+    // TODO: Delete the verifier from the JIT? (https://github.com/dotnet/runtime/issues/32648)
+    // BOOL tiVerificationNeeded;
+    static const BOOL tiVerificationNeeded = FALSE;
 
     // Returns TRUE if child is equal to or a subtype of parent for merge purposes
     // This support is necessary to suport attributes that are not described in
@@ -9379,7 +9478,6 @@ public:
     typeInfo verGetArrayElemType(const typeInfo& ti);
 
     typeInfo verParseArgSigToTypeInfo(CORINFO_SIG_INFO* sig, CORINFO_ARG_LIST_HANDLE args);
-    BOOL verNeedsVerification();
     BOOL verIsByRefLike(const typeInfo& ti);
     BOOL verIsSafeToReturnByRef(const typeInfo& ti);
 
@@ -9534,14 +9632,14 @@ public:
 private:
 #endif
 
-#if defined(DEBUG) || defined(INLINE_DATA) || defined(FEATURE_CLRSQM)
+#if defined(DEBUG) || defined(INLINE_DATA)
     // These variables are associated with maintaining SQM data about compile time.
     unsigned __int64 m_compCyclesAtEndOfInlining; // The thread-virtualized cycle count at the end of the inlining phase
                                                   // in the current compilation.
     unsigned __int64 m_compCycles;                // Net cycle count for current compilation
     DWORD m_compTickCountAtEndOfInlining; // The result of GetTickCount() (# ms since some epoch marker) at the end of
                                           // the inlining phase in the current compilation.
-#endif                                    // defined(DEBUG) || defined(INLINE_DATA) || defined(FEATURE_CLRSQM)
+#endif                                    // defined(DEBUG) || defined(INLINE_DATA)
 
     // Records the SQM-relevant (cycles and tick count).  Should be called after inlining is complete.
     // (We do this after inlining because this marks the last point at which the JIT is likely to cause
@@ -9549,11 +9647,6 @@ private:
     void RecordStateAtEndOfInlining();
     // Assumes being called at the end of compilation.  Update the SQM state.
     void RecordStateAtEndOfCompilation();
-
-#ifdef FEATURE_CLRSQM
-    // Does anything SQM related necessary at process shutdown time.
-    static void ProcessShutdownSQMWork(ICorStaticInfo* statInfo);
-#endif // FEATURE_CLRSQM
 
 public:
 #if FUNC_INFO_LOGGING
@@ -9563,9 +9656,6 @@ public:
 #endif                                      // FUNC_INFO_LOGGING
 
     Compiler* prevCompiler; // Previous compiler on stack for TLS Compiler* linked list for reentrant compilers.
-
-    // Is the compilation in a full trust context?
-    bool compIsFullTrust();
 
 #if MEASURE_NOWAY
     void RecordNowayAssert(const char* filename, unsigned line, const char* condStr);

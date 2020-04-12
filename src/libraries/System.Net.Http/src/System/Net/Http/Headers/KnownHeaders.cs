@@ -19,11 +19,11 @@ namespace System.Net.Http.Headers
         public static readonly KnownHeader AcceptLanguage = new KnownHeader("Accept-Language", HttpHeaderType.Request, GenericHeaderParser.MultipleValueStringWithQualityParser, null, H2StaticTable.AcceptLanguage, H3StaticTable.AcceptLanguage);
         public static readonly KnownHeader AcceptPatch = new KnownHeader("Accept-Patch");
         public static readonly KnownHeader AcceptRanges = new KnownHeader("Accept-Ranges", HttpHeaderType.Response, GenericHeaderParser.TokenListParser, null, H2StaticTable.AcceptRanges, H3StaticTable.AcceptRangesBytes);
-        public static readonly KnownHeader AccessControlAllowCredentials = new KnownHeader("Access-Control-Allow-Credentials", http3StaticTableIndex: H3StaticTable.AccessControlAllowCredentials);
-        public static readonly KnownHeader AccessControlAllowHeaders = new KnownHeader("Access-Control-Allow-Headers", http3StaticTableIndex: H3StaticTable.AccessControlAllowHeadersCacheControl);
-        public static readonly KnownHeader AccessControlAllowMethods = new KnownHeader("Access-Control-Allow-Methods", http3StaticTableIndex: H3StaticTable.AccessControlAllowMethodsGet);
-        public static readonly KnownHeader AccessControlAllowOrigin = new KnownHeader("Access-Control-Allow-Origin", H2StaticTable.AccessControlAllowOrigin, H3StaticTable.AccessControlAllowOriginAny);
-        public static readonly KnownHeader AccessControlExposeHeaders = new KnownHeader("Access-Control-Expose-Headers", H3StaticTable.AccessControlExposeHeadersContentLength);
+        public static readonly KnownHeader AccessControlAllowCredentials = new KnownHeader("Access-Control-Allow-Credentials", HttpHeaderType.Response, parser: null, new string[] { "true" }, http3StaticTableIndex: H3StaticTable.AccessControlAllowCredentials);
+        public static readonly KnownHeader AccessControlAllowHeaders = new KnownHeader("Access-Control-Allow-Headers", HttpHeaderType.Response, parser: null, new string[] { "*" }, http3StaticTableIndex: H3StaticTable.AccessControlAllowHeadersCacheControl);
+        public static readonly KnownHeader AccessControlAllowMethods = new KnownHeader("Access-Control-Allow-Methods", HttpHeaderType.Response, parser: null, new string[] { "*" }, http3StaticTableIndex: H3StaticTable.AccessControlAllowMethodsGet);
+        public static readonly KnownHeader AccessControlAllowOrigin = new KnownHeader("Access-Control-Allow-Origin", HttpHeaderType.Response, parser: null, new string[] { "*", "null" }, H2StaticTable.AccessControlAllowOrigin, H3StaticTable.AccessControlAllowOriginAny);
+        public static readonly KnownHeader AccessControlExposeHeaders = new KnownHeader("Access-Control-Expose-Headers", HttpHeaderType.Response, parser: null, new string[] { "*" }, H3StaticTable.AccessControlExposeHeadersContentLength);
         public static readonly KnownHeader AccessControlMaxAge = new KnownHeader("Access-Control-Max-Age");
         public static readonly KnownHeader Age = new KnownHeader("Age", HttpHeaderType.Response | HttpHeaderType.NonTrailing, TimeSpanHeaderParser.Parser, null, H2StaticTable.Age, H3StaticTable.Age0);
         public static readonly KnownHeader Allow = new KnownHeader("Allow", HttpHeaderType.Content, GenericHeaderParser.TokenListParser, null, H2StaticTable.Allow);
@@ -77,6 +77,7 @@ namespace System.Net.Http.Headers
         public static readonly KnownHeader SecWebSocketProtocol = new KnownHeader("Sec-WebSocket-Protocol");
         public static readonly KnownHeader SecWebSocketVersion = new KnownHeader("Sec-WebSocket-Version");
         public static readonly KnownHeader Server = new KnownHeader("Server", HttpHeaderType.Response, ProductInfoHeaderParser.MultipleValueParser, null, H2StaticTable.Server, H3StaticTable.Server);
+        public static readonly KnownHeader ServerTiming = new KnownHeader("Server-Timing");
         public static readonly KnownHeader SetCookie = new KnownHeader("Set-Cookie", HttpHeaderType.Custom | HttpHeaderType.NonTrailing, null, null, H2StaticTable.SetCookie, H3StaticTable.SetCookie);
         public static readonly KnownHeader SetCookie2 = new KnownHeader("Set-Cookie2", HttpHeaderType.Custom | HttpHeaderType.NonTrailing, null, null);
         public static readonly KnownHeader StrictTransportSecurity = new KnownHeader("Strict-Transport-Security", H2StaticTable.StrictTransportSecurity, H3StaticTable.StrictTransportSecurityMaxAge31536000);
@@ -140,7 +141,7 @@ namespace System.Net.Http.Headers
         // Matching is case-insenstive.
         // NOTE: Because of this, we do not preserve the case of the original header,
         // whether from the wire or from the user explicitly setting a known header using a header name string.
-        private static KnownHeader GetCandidate<T>(T key)
+        private static KnownHeader? GetCandidate<T>(T key)
             where T : struct, IHeaderNameAccessor     // Enforce struct for performance
         {
             int length = key.Length;
@@ -252,15 +253,16 @@ namespace System.Net.Http.Headers
                     break;
 
                 case 13:
-                    switch (key[6])
+                    switch (key[12])
                     {
-                        case '-': return AcceptRanges;            // Accept[-]Ranges
-                        case 'I': case 'i': return Authorization; // Author[i]zation
-                        case 'C': case 'c': return CacheControl;  // Cache-[C]ontrol
-                        case 'T': case 't': return ContentRange;  // Conten[t]-Range
-                        case 'E': case 'e': return IfNoneMatch;   // If-Non[e]-Match
-                        case 'O': case 'o': return LastModified;  // Last-M[o]dified
-                        case 'S': case 's': return ProxySupport;  // Proxy-[S]upport
+                        case 'S': case 's': return AcceptRanges;  // Accept-Range[s]
+                        case 'N': case 'n': return Authorization; // Authorizatio[n]
+                        case 'L': case 'l': return CacheControl;  // Cache-Contro[l]
+                        case 'E': case 'e': return ContentRange;  // Content-Rang[e]
+                        case 'H': case 'h': return IfNoneMatch;   // If-None-Matc[h]
+                        case 'D': case 'd': return LastModified;  // Last-Modifie[d]
+                        case 'T': case 't': return ProxySupport;  // Proxy-Suppor[t]
+                        case 'G': case 'g': return ServerTiming;  // Server-Timin[g]
                     }
                     break;
 
@@ -371,9 +373,9 @@ namespace System.Net.Http.Headers
             return null;
         }
 
-        internal static KnownHeader TryGetKnownHeader(string name)
+        internal static KnownHeader? TryGetKnownHeader(string name)
         {
-            KnownHeader candidate = GetCandidate(new StringAccessor(name));
+            KnownHeader? candidate = GetCandidate(new StringAccessor(name));
             if (candidate != null && StringComparer.OrdinalIgnoreCase.Equals(name, candidate.Name))
             {
                 return candidate;
@@ -382,11 +384,11 @@ namespace System.Net.Http.Headers
             return null;
         }
 
-        internal static unsafe KnownHeader TryGetKnownHeader(ReadOnlySpan<byte> name)
+        internal static unsafe KnownHeader? TryGetKnownHeader(ReadOnlySpan<byte> name)
         {
             fixed (byte* p = &MemoryMarshal.GetReference(name))
             {
-                KnownHeader candidate = GetCandidate(new BytePtrAccessor(p, name.Length));
+                KnownHeader? candidate = GetCandidate(new BytePtrAccessor(p, name.Length));
                 if (candidate != null && ByteArrayHelpers.EqualsOrdinalAsciiIgnoreCase(candidate.Name, name))
                 {
                     return candidate;
