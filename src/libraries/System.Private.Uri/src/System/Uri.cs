@@ -4599,7 +4599,8 @@ namespace System
             if (InFact(Flags.ShouldBeCompressed))
             {
                 // It will also convert back slashes if needed
-                dest.Length = start + Compress(dest.RawChars.Slice(start, dest.Length - start), _syntax);
+                int offset = start + dosPathIdx;
+                dest.Length = offset + Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
                 if (dest[start] == '\\')
                     dest[start] = '/';
 
