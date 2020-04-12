@@ -4790,7 +4790,7 @@ namespace System
                 else if (dotCount != 0)
                 {
                     bool skipSegment = syntax.NotAny(UriSyntaxFlags.CanonicalizeAsFilePath)
-                        && (dotCount > 2 || ch != '/' || i == 0);
+                        && (dotCount > 2 || ch != '/');
 
                     // Cases:
                     // /./                  = remove this segment
