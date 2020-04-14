@@ -206,7 +206,6 @@ namespace System.PrivateUri.Tests
 
             Uri oldUri = uriBuilder.Uri;
             uriBuilder.UserName = value;
-            Assert.NotSame(uriBuilder.Uri, oldUri); // Should generate new uri
             Assert.Equal(uriBuilder.UserName, uriBuilder.Uri.UserInfo);
         }
 
@@ -222,7 +221,7 @@ namespace System.PrivateUri.Tests
 
             Uri oldUri = uriBuilder.Uri;
             uriBuilder.Password = value;
-            Assert.NotSame(uriBuilder.Uri, oldUri);
+            Assert.Same(uriBuilder.Uri, oldUri);
         }
 
         [Theory]
@@ -285,7 +284,7 @@ namespace System.PrivateUri.Tests
 
             Uri oldUri = uriBuilder.Uri;
             uriBuilder.Query = value;
-            Assert.NotSame(uriBuilder.Uri, oldUri); // Should generate new uri
+            Assert.Same(uriBuilder.Uri, oldUri);
             Assert.Equal(uriBuilder.Query, uriBuilder.Uri.Query);
         }
 
@@ -300,7 +299,7 @@ namespace System.PrivateUri.Tests
 
             Uri oldUri = uriBuilder.Uri;
             uriBuilder.Fragment = value;
-            Assert.NotSame(uriBuilder.Uri, oldUri); // Should generate new uri
+            Assert.Same(uriBuilder.Uri, oldUri);
             Assert.Equal(uriBuilder.Fragment, uriBuilder.Uri.Fragment);
         }
 
@@ -316,7 +315,7 @@ namespace System.PrivateUri.Tests
 
             Uri oldUri = uriBuilder.Uri;
             uriBuilder.Fragment = value;
-            Assert.NotSame(uriBuilder.Uri, oldUri); // Should generate new uri
+            Assert.Same(uriBuilder.Uri, oldUri);
             Assert.Equal(uriBuilder.Fragment, uriBuilder.Uri.Fragment);
         }
 
@@ -397,6 +396,69 @@ namespace System.PrivateUri.Tests
             Assert.Equal(path, uriBuilder.Path);
             Assert.Equal(query, uriBuilder.Query);
             Assert.Equal(fragment, uriBuilder.Fragment);
+        }
+
+        static int MeasureAllocations(Action action, long iterations)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (long i = 0; i < iterations; i++)
+                action();
+
+            long after = GC.GetAllocatedBytesForCurrentThread();
+
+            return (int)Math.Round((after - before) / (double)iterations);
+        }
+
+        [Fact]
+        public static void Allocs()
+        {
+            int allocated = MeasureAllocations(() =>
+            {
+                UriBuilder builder = new UriBuilder("https://localhost:5000/someControllerName?foo=bar&version=123&authToken=abcdeabcdeabcdeabcde#top");
+                _ = builder.Uri;
+            }, 100_000);
+
+            Assert.False(true, "ALLOC: " + allocated);
+        }
+
+        private static string ReCreate(string value)
+        {
+            return string.Create(value.Length, value, (buffer, value) => value.AsSpan().CopyTo(buffer));
+        }
+
+        [Fact]
+        public static void UriBuilder_DoesNotChangeIfUnchanged()
+        {
+            var builder = new UriBuilder("http", "foo", 100, "bar/bar", "?one=two#three");
+            Uri uri = builder.Uri;
+
+            builder.Scheme = "http";
+            builder.Scheme = "hTTp";
+            builder.Host = "foo";
+            builder.Port = 100;
+            builder.Path = "bar/bar";
+            builder.Path = "bar\\bar";
+            builder.Query = "?one=two";
+            builder.Query = "one=two";
+            builder.Fragment = "#three";
+            builder.Fragment = "three";
+
+            builder.Scheme = builder.Scheme;
+            builder.UserName = builder.UserName;
+            builder.Password = builder.Password;
+            builder.Host = builder.Host;
+            builder.Port = builder.Port;
+            builder.Path = builder.Path;
+            builder.Query = builder.Query;
+            builder.Fragment = builder.Fragment;
+
+            Assert.Same(uri, builder.Uri);
+            Assert.Equal(uri.OriginalString, uri.ToString());
         }
     }
 }
