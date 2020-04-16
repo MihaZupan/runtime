@@ -4600,7 +4600,12 @@ namespace System
             {
                 // It will also convert back slashes if needed
                 int offset = start + dosPathIdx;
-                dest.Length = offset + Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
+                int compressed = Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
+                dest.Length = offset + compressed;
+                if (start >= dest.Length)
+                {
+                    throw new Exception($"OOR start {start}, destLen {dest.Length}, offset {offset}, compressed {compressed}, dosPathIdx {dosPathIdx}, uri {OriginalString}");
+                }
                 if (dest[start] == '\\')
                     dest[start] = '/';
 
