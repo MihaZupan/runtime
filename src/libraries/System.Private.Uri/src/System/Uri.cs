@@ -4593,21 +4593,14 @@ namespace System
             //
             // (path is already  >= 3 chars if recognized as a DOS-like)
             //
-            if (dosPathIdx != 0 && dest[dosPathIdx + start - 1] == '|')
-                dest[dosPathIdx + start - 1] = ':';
+            int offset = start + dosPathIdx;
+            if (dosPathIdx != 0 && dest[offset - 1] == '|')
+                dest[offset - 1] = ':';
 
-            if (InFact(Flags.ShouldBeCompressed))
+            if (InFact(Flags.ShouldBeCompressed) && dest.Length - offset > 0)
             {
                 // It will also convert back slashes if needed
-                int offset = start + dosPathIdx;
-                char[] compCopy = dest.RawChars.Slice(offset, dest.Length - offset).ToArray();
-                int compressed = Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
-                if (start >= dest.Length)
-                {
-                    throw new Exception($"OOR start {start}, destLen {dest.Length}, offset {offset}, compressed {compressed}, dosPathIdx {dosPathIdx}, uri {OriginalString}" +
-                        $"compCopyLen {compCopy.Length}: {string.Join(' ', compCopy)}");
-                }
-                dest.Length = offset + compressed;
+                dest.Length = offset + Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
                 if (dest[start] == '\\')
                     dest[start] = '/';
 
