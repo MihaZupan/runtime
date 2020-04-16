@@ -4600,10 +4600,12 @@ namespace System
             {
                 // It will also convert back slashes if needed
                 int offset = start + dosPathIdx;
+                char[] compCopy = dest.RawChars.Slice(offset, dest.Length - offset).ToArray();
                 int compressed = Compress(dest.RawChars.Slice(offset, dest.Length - offset), _syntax);
                 if (start >= dest.Length)
                 {
-                    throw new Exception($"OOR start {start}, destLen {dest.Length}, offset {offset}, compressed {compressed}, dosPathIdx {dosPathIdx}, uri {OriginalString}");
+                    throw new Exception($"OOR start {start}, destLen {dest.Length}, offset {offset}, compressed {compressed}, dosPathIdx {dosPathIdx}, uri {OriginalString}" +
+                        $"compCopyLen {compCopy.Length}: {string.Join(' ', compCopy)}");
                 }
                 dest.Length = offset + compressed;
                 if (dest[start] == '\\')
