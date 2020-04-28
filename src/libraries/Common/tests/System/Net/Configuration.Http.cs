@@ -31,11 +31,11 @@ namespace System.Net.Test.Common
             // Standalone server environment.
             public static string WindowsServerHttpHost => GetValue("DOTNET_TEST_WINDOWSSERVER_HTTPHOST");
 
-            public static string SSLv2RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_SSL2", "https://www.ssllabs.com:10200/");
-            public static string SSLv3RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_SSL3", "https://www.ssllabs.com:10300/");
-            public static string TLSv10RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS10", "https://www.ssllabs.com:10301/");
-            public static string TLSv11RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS11", "https://www.ssllabs.com:10302/");
-            public static string TLSv12RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS12", "https://www.ssllabs.com:10303/");
+            public static string SSLv2RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_SSL2", "https://localhost:10200/");
+            public static string SSLv3RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_SSL3", "https://localhost:10300/");
+            public static string TLSv10RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS10", "https://localhost:10301/");
+            public static string TLSv11RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS11", "https://localhost:10302/");
+            public static string TLSv12RemoteServer => GetValue("DOTNET_TEST_HTTPHOST_TLS12", "https://localhost:10303/");
 
             public static string ExpiredCertRemoteServer => GetValue("DOTNET_TEST_HTTPHOST_EXPIREDCERT", "https://expired.badssl.com/");
             public static string WrongHostNameCertRemoteServer => GetValue("DOTNET_TEST_HTTPHOST_WRONGHOSTNAME", "https://wrong.host.badssl.com/");
