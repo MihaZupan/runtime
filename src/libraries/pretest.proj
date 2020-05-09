@@ -1,7 +1,15 @@
 <Project Sdk="Microsoft.Build.Traversal">
+  <Import Project="Sdk.props" Sdk="Microsoft.DotNet.Build.Tasks.SharedFramework.Sdk" />
 
   <PropertyGroup>
     <TraversalGlobalProperties>BuildAllProjects=true</TraversalGlobalProperties>
+    <NETCoreAppFrameworkIdentifier>$(TargetFrameworkIdentifier)</NETCoreAppFrameworkIdentifier>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(ContinuousIntegrationBuild)' != 'true'">
+    <!-- Create an intermediate runsettings file to enable VSTest discovery. -->
+    <EnableRunSettingsSupport>true</EnableRunSettingsSupport>
+    <CreateIntermediateRunSettingsFile>true</CreateIntermediateRunSettingsFile>
   </PropertyGroup>
 
   <!-- Explicitly build the runtime.depproj project first to correctly set up the testhost. -->
@@ -16,6 +24,11 @@
              Projects="@(RuntimeProject)"
              Properties="$(TraversalGlobalProperties)" />
   </Target>
+
+  <Target Name="CreateIntermediateRunSettingsFile"
+          Condition="'$(CreateIntermediateRunSettingsFile)' == 'true'"
+          DependsOnTargets="GenerateRunSettingsFile"
+          BeforeTargets="Build" />
 
   <!-- Microsoft.XmlSerializer.Generator should not be marked as a platform item and be copy-local instead. -->
   <Target Name="CollectSharedFrameworkRuntimeFiles"
@@ -58,4 +71,38 @@
                                          RuntimeGraphFiles="$(RuntimeIdGraphDefinitionFile)"
                                          TargetRuntimeIdentifier="$(PackageRID)" />
   </Target>
+
+  <UsingTask TaskName="CreateFrameworkListFile" AssemblyFile="$(DotNetBuildTasksSharedFrameworkTaskFile)"/>
+  <Target Name="GenerateFrameworkListFile"
+          Condition="'$(BinPlaceTestRuntimePack)' == 'true'"
+          AfterTargets="RestoreTestHost">
+    <PropertyGroup>
+      <FrameworkListFilename>RuntimeList.xml</FrameworkListFilename>
+      <FrameworkListFile>$(NETCoreAppRuntimePackPath)/data/$(FrameworkListFilename)</FrameworkListFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_runtimePackLibFiles Include="$(NETCoreAppRuntimePackLibPath)*.*">
+        <TargetPath>$(RuntimePackTargetFrameworkPath)/lib/$(NETCoreAppFramework)</TargetPath>
+        <IsSymbolFile Condition="$([System.String]::Copy('%(Identity)').EndsWith('pdb'))">true</IsSymbolFile>
+      </_runtimePackLibFiles>
+      <_runtimePackNativeFiles Include="$(NETCoreAppRuntimePackNativePath)*.*">
+        <TargetPath>$(RuntimePackTargetFrameworkPath)/native</TargetPath>
+        <IsNative>true</IsNative>
+      </_runtimePackNativeFiles>
+
+      <FrameworkListRootAttributes Include="Name" Value=".NET $(NETCoreAppFrameworkVersion)" />
+      <FrameworkListRootAttributes Include="TargetFrameworkIdentifier" Value="$(NETCoreAppFrameworkIdentifier)" />
+      <FrameworkListRootAttributes Include="TargetFrameworkVersion" Value="$(NETCoreAppFrameworkVersion)" />
+      <FrameworkListRootAttributes Include="FrameworkName" Value="$(SharedFrameworkName)" />
+    </ItemGroup>
+
+    <CreateFrameworkListFile
+      Files="@(_runtimePackLibFiles);@(_runtimePackNativeFiles)"
+      TargetFile="$(FrameworkListFile)"
+      TargetFilePrefixes="ref/;runtimes/"
+      RootAttributes="@(FrameworkListRootAttributes)" />
+  </Target>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.DotNet.Build.Tasks.SharedFramework.Sdk" />
 </Project>

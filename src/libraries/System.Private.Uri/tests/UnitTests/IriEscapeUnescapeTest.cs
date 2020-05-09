@@ -4,7 +4,6 @@
 
 using System.Text;
 using System.Tests;
-
 using Xunit;
 
 namespace System.Net.Test.Uri.IriTest
