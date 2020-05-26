@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Internal.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace System
 {
@@ -216,16 +218,18 @@ namespace System
         // Also checks for sequences that are 3986 Unreserved characters as these should be un-escaped
         private static bool CheckForUnicodeOrEscapedUnreserved(string data)
         {
+            ref char charRef = ref Unsafe.AsRef(in data.GetPinnableReference());
+
             for (int i = 0; i < data.Length; i++)
             {
-                char c = data[i];
+                char c = Unsafe.Add(ref charRef, i);
                 if (c == '%')
                 {
                     if ((uint)(i + 2) < (uint)data.Length)
                     {
-                        char value = UriHelper.DecodeHexChars(data[i + 1], data[i + 2]);
+                        char value = UriHelper.DecodeHexChars(Unsafe.Add(ref charRef, i + 1), Unsafe.Add(ref charRef, i + 2));
 
-                        if (value >= UriHelper.UnreservedTable.Length || UriHelper.UnreservedTable[value])
+                        if (value >= UriHelper.UnreservedTable.Length || Unsafe.Add(ref MemoryMarshal.GetReference(UriHelper.UnreservedTable), value))
                         {
                             return true;
                         }

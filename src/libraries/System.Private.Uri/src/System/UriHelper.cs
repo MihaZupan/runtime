@@ -746,8 +746,6 @@ namespace System
             true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, true,  false,
         };
 
-        internal static bool IsUnreserved(int c) => c < 0x80 && UnreservedTable[c];
-
         internal static ReadOnlySpan<bool> UnreservedTable => new bool[0x80]
         {
             // true for all ASCII letters and digits, as well as the RFC3986 unreserved marks '-', '_', '.', and '~'
