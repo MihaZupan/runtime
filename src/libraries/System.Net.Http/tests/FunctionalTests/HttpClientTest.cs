@@ -21,6 +21,98 @@ namespace System.Net.Http.Functional.Tests
         public HttpClientTest(ITestOutputHelper output) : base(output) { }
 
         [Fact]
+        [ActiveIssue("")]
+        public async Task SteadyStateTest()
+        {
+            Task[] workers = new Task[32];
+
+            for (int i = 0; i < workers.Length; i++)
+            {
+                workers[i] = Task.Run(async () =>
+                {
+                    var httpClient = new HttpClient();
+                    for (int j = 0; j < 100; j++)
+                    {
+                        try
+                        {
+                            await httpClient.GetStringAsync("https://httpbin.org/get");
+                        }
+                        catch
+                        {
+                            break;
+                        }
+                    }
+                });
+            }
+
+            await Task.WhenAll(workers);
+
+            await Task.Delay(5000);
+        }
+
+        [Fact]
+        public async Task DummyAsync()
+        {
+            Thread.Sleep(10000);
+
+            var client = new HttpClient();
+
+            Task[] tasks = new Task[50];
+            for (int i = 0; i < tasks.Length; i++)
+            {
+                tasks[i] = client.GetAsync("https://httpbin.org/delay/5");
+            }
+
+            await Task.WhenAll(tasks);
+
+            Thread.Sleep(5000);
+
+            client.Dispose();
+
+            Thread.Sleep(5000);
+
+            client = new HttpClient();
+
+            tasks = new Task[50];
+            for (int i = 0; i < tasks.Length; i++)
+            {
+                var req = new HttpRequestMessage(HttpMethod.Get, "https://httpbin.org/delay/5")
+                {
+                    Version = new Version(2, 0)
+                };
+
+                tasks[i] = client.SendAsync(req);
+            }
+
+            await Task.WhenAll(tasks);
+
+            Thread.Sleep(2000);
+
+            tasks = new Task[20];
+            for (int i = 0; i < tasks.Length; i++)
+            {
+                var req = new HttpRequestMessage(HttpMethod.Get, "https://httpbin.org/delay/5")
+                {
+                    Version = new Version(2, 0)
+                };
+
+                tasks[i] = client.SendAsync(req);
+            }
+
+            await Task.WhenAll(tasks);
+
+            Thread.Sleep(2000);
+
+            for (int i = 0; i < 10; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            Thread.Sleep(5000);
+        }
+
+        [Fact]
         public void Dispose_MultipleTimes_Success()
         {
             var client = new HttpClient(new CustomResponseHandler((r, c) => Task.FromResult(new HttpResponseMessage())));

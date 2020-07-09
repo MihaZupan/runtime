@@ -28,7 +28,6 @@ namespace System.Net.Http
         private HttpContent? _content;
         private bool _disposed;
         private IDictionary<string, object?>? _properties;
-        private HttpRequestMessageFinalizer? _finalizer;
 
         public Version Version
         {
@@ -205,15 +204,6 @@ namespace System.Net.Http
 
         internal void MarkAsTrackedByTelemetry()
         {
-            if (_finalizer is null)
-            {
-                _finalizer = new HttpRequestMessageFinalizer();
-            }
-            else
-            {
-                GC.ReRegisterForFinalize(_finalizer);
-            }
-
             Debug.Assert(_sendStatus != MessageShouldEmitTelemetry);
             _sendStatus = MessageShouldEmitTelemetry;
         }
@@ -230,9 +220,6 @@ namespace System.Net.Http
                 }
 
                 HttpTelemetry.Log.RequestStop();
-
-                Debug.Assert(_finalizer != null);
-                GC.SuppressFinalize(_finalizer);
             }
         }
 
@@ -268,17 +255,6 @@ namespace System.Net.Http
             {
                 throw new ObjectDisposedException(this.GetType().ToString());
             }
-        }
-
-        /// <summary>
-        /// This class will only be allocated if Telemetry is enabled.
-        /// We can't use HttpRequestMessage's own finalizer because it is not sealed.
-        /// The finalizer will run iff OnStopped/OnAborted/Dispose were never called.
-        /// This way we ensure that RequestStop is always called if we call RequestStart.
-        /// </summary>
-        private sealed class HttpRequestMessageFinalizer
-        {
-            ~HttpRequestMessageFinalizer() => HttpTelemetry.Log.RequestStop();
         }
     }
 }

@@ -1278,6 +1278,10 @@ namespace System.Net.Http
                         return;
                     }
 
+                    GC.SuppressFinalize(this);
+
+                    _responseMessage?.RequestMessage?.OnStopped(aborted: !disposing);
+
                     // Technically we shouldn't be doing the following work when disposing == false,
                     // as the following work relies on other finalizable objects.  But given the HTTP/2
                     // protocol, we have little choice: if someone drops the Http2ReadStream without

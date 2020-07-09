@@ -89,6 +89,8 @@ namespace System.Net.Http
             if (NetEventSource.IsEnabled) TraceConnection(_stream);
         }
 
+        ~HttpConnection() => Dispose(disposing: false);
+
         public void Dispose() => Dispose(disposing: true);
 
         protected void Dispose(bool disposing)
@@ -98,7 +100,13 @@ namespace System.Net.Http
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
             {
                 if (NetEventSource.IsEnabled) Trace("Connection closing.");
+
                 _pool.DecrementConnectionCount();
+
+                // Log Telemetry Abort instead of Stop to indicate to the user
+                // they are doing something wrong by not disposing of requests properly
+                _currentRequest?.OnAborted();
+
                 if (disposing)
                 {
                     GC.SuppressFinalize(this);
@@ -1888,14 +1896,5 @@ namespace System.Net.Http
                 _currentRequest?.GetHashCode() ?? 0, // request ID
                 memberName,                          // method name
                 message);                            // message
-    }
-
-    internal sealed class HttpConnectionWithFinalizer : HttpConnection
-    {
-        public HttpConnectionWithFinalizer(HttpConnectionPool pool, Socket? socket, Stream stream, TransportContext? transportContext) : base(pool, socket, stream, transportContext) { }
-
-        // This class is separated from HttpConnection so we only pay the price of having a finalizer
-        // when it's actually needed, e.g. when MaxConnectionsPerServer is enabled.
-        ~HttpConnectionWithFinalizer() => Dispose(disposing: false);
     }
 }
