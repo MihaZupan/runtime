@@ -34,12 +34,12 @@ namespace System
 
             if (tryUri.IsAbsoluteUri)
             {
-                Init(tryUri);
+                SetFieldsFromUri(tryUri);
             }
             else
             {
                 uri = Uri.UriSchemeHttp + Uri.SchemeDelimiter + uri;
-                Init(new Uri(uri));
+                SetFieldsFromUri(new Uri(uri));
             }
         }
 
@@ -48,35 +48,6 @@ namespace System
             if ((object?)uri == null)
                 throw new ArgumentNullException(nameof(uri));
 
-            Init(uri);
-        }
-
-        private void Init(Uri uri)
-        {
-            _fragment = uri.Fragment;
-            _query = uri.Query;
-            _host = uri.Host;
-            _path = uri.AbsolutePath;
-            _port = uri.Port;
-            _scheme = uri.Scheme;
-            _schemeDelimiter = uri.HasAuthority ? Uri.SchemeDelimiter : ":";
-
-            string userInfo = uri.UserInfo;
-
-            if (!string.IsNullOrEmpty(userInfo))
-            {
-                int index = userInfo.IndexOf(':');
-
-                if (index != -1)
-                {
-                    _password = userInfo.Substring(index + 1);
-                    _username = userInfo.Substring(0, index);
-                }
-                else
-                {
-                    _username = userInfo;
-                }
-            }
             SetFieldsFromUri(uri);
         }
 
