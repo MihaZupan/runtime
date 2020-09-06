@@ -65,7 +65,6 @@ namespace System.Net.Sockets
         [Event(5, Level = EventLevel.Informational)]
         public void AcceptStart(string? address)
         {
-            Interlocked.Increment(ref _incomingConnectionsEstablished);
             if (IsEnabled(EventLevel.Informational, EventKeywords.All))
             {
                 WriteEvent(eventId: 5, address ?? "");
@@ -73,7 +72,7 @@ namespace System.Net.Sockets
         }
 
         [Event(6, Level = EventLevel.Informational)]
-        public void AcceptStop()
+        private void AcceptStop()
         {
             if (IsEnabled(EventLevel.Informational, EventKeywords.All))
             {
@@ -126,6 +125,17 @@ namespace System.Net.Sockets
         public void AcceptStart(EndPoint address)
         {
             AcceptStart(address.ToString());
+        }
+
+        [NonEvent]
+        public void AcceptStop(bool successful = true)
+        {
+            if (successful)
+            {
+                Interlocked.Increment(ref _incomingConnectionsEstablished);
+            }
+
+            AcceptStop();
         }
 
         [NonEvent]
