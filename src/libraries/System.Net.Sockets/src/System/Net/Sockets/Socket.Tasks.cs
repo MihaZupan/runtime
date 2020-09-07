@@ -90,18 +90,61 @@ namespace System.Net.Sockets
 
             saea.RemoteEndPoint = remoteEP;
 
-            ValueTask connectTask = saea.ConnectAsync(this);
-            if (connectTask.IsCompleted || !cancellationToken.CanBeCanceled)
+            if (SocketsTelemetry.Log.IsEnabled())
             {
-                // Avoid async invocation overhead
-                return connectTask;
+                return ConnectWithTelemetryAsync(this, saea, cancellationToken);
             }
             else
             {
-                return WaitForConnectWithCancellation(saea, connectTask, cancellationToken);
+                ValueTask connectTask = saea.ConnectAsync(this);
+                if (connectTask.IsCompleted || !cancellationToken.CanBeCanceled)
+                {
+                    // Avoid async invocation overhead
+                    return connectTask;
+                }
+                else
+                {
+                    return WaitForConnectWithCancellation(saea, connectTask, cancellationToken);
+                }
             }
 
-            async ValueTask WaitForConnectWithCancellation(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+            static async ValueTask ConnectWithTelemetryAsync(Socket socket, AwaitableSocketAsyncEventArgs saea, CancellationToken cancellationToken)
+            {
+                SocketsTelemetry.Log.ConnectStart(saea.RemoteEndPoint!);
+                try
+                {
+                    ValueTask connectTask = saea.ConnectAsync(socket);
+                    if (!connectTask.IsCompleted && cancellationToken.CanBeCanceled)
+                    {
+                        connectTask = WaitForConnectWithCancellation(saea, connectTask, cancellationToken);
+                    }
+
+                    await connectTask.ConfigureAwait(false);
+
+                    SocketsTelemetry.Log.ConnectStop();
+                }
+                catch (Exception ex) when (LogFailure(ex, cancellationToken))
+                {
+                    // Unreachable as LogFailure will return false
+                    throw;
+                }
+
+                static bool LogFailure(Exception ex, CancellationToken cancellationToken)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        SocketsTelemetry.Log.ConnectCanceledAndStop();
+                    }
+                    else
+                    {
+                        SocketsTelemetry.Log.ConnectFailedAndStop((ex as SocketException)?.SocketErrorCode ?? default, ex.Message);
+                    }
+
+                    return false;
+                }
+            }
+
+            static async ValueTask WaitForConnectWithCancellation(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
             {
                 Debug.Assert(cancellationToken.CanBeCanceled);
                 try
@@ -117,7 +160,6 @@ namespace System.Net.Sockets
                     throw;
                 }
             }
-
         }
 
         internal Task ConnectAsync(IPAddress address, int port) => ConnectAsync(new IPEndPoint(address, port));

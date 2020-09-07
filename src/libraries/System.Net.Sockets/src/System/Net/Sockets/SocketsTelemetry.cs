@@ -28,7 +28,6 @@ namespace System.Net.Sockets
         [Event(1, Level = EventLevel.Informational)]
         public void ConnectStart(string? address)
         {
-            Interlocked.Increment(ref _outgoingConnectionsEstablished);
             if (IsEnabled(EventLevel.Informational, EventKeywords.All))
             {
                 WriteEvent(eventId: 1, address ?? "");
@@ -36,7 +35,7 @@ namespace System.Net.Sockets
         }
 
         [Event(2, Level = EventLevel.Informational)]
-        public void ConnectStop()
+        private void ConnectStop()
         {
             if (IsEnabled(EventLevel.Informational, EventKeywords.All))
             {
@@ -112,6 +111,17 @@ namespace System.Net.Sockets
         public void ConnectFailedAndStop(SocketError error, string? exceptionMessage)
         {
             ConnectFailed(error, exceptionMessage);
+            ConnectStop();
+        }
+
+        [NonEvent]
+        public void ConnectStop(bool successful = true)
+        {
+            if (successful)
+            {
+                Interlocked.Increment(ref _outgoingConnectionsEstablished);
+            }
+
             ConnectStop();
         }
 

@@ -200,7 +200,40 @@ namespace System.Net.Sockets
 
         protected virtual void OnCompleted(SocketAsyncEventArgs e)
         {
+            if (SocketsTelemetry.Log.IsEnabled()) AfterOperationTelemetry(e);
+
             Completed?.Invoke(e._currentSocket, e);
+        }
+
+        private void AfterOperationTelemetry(SocketAsyncEventArgs saea)
+        {
+            if (SocketsTelemetry.Log.IsEnabled())
+            {
+                switch (saea.LastOperation)
+                {
+                    case SocketAsyncOperation.Accept:
+                        if (saea.SocketError == SocketError.Success)
+                        {
+                            SocketsTelemetry.Log.AcceptStop();
+                        }
+                        else
+                        {
+                            SocketsTelemetry.Log.AcceptFailedAndStop(saea.SocketError, null);
+                        }
+                        break;
+
+                    case SocketAsyncOperation.Connect:
+                        if (saea.SocketError == SocketError.Success)
+                        {
+                            SocketsTelemetry.Log.ConnectStop();
+                        }
+                        else
+                        {
+                            SocketsTelemetry.Log.ConnectFailedAndStop(saea.SocketError, null);
+                        }
+                        break;
+                }
+            }
         }
 
         // DisconnectResuseSocket property.
@@ -558,7 +591,15 @@ namespace System.Net.Sockets
             _userSocket = userSocket;
 
             // Log only the actual connect operation to a remote endpoint.
-            if (SocketsTelemetry.Log.IsEnabled() && multipleConnect == null) SocketsTelemetry.Log.ConnectStart(_socketAddress!);
+            if (SocketsTelemetry.Log.IsEnabled() && multipleConnect == null)
+            {
+                SocketsTelemetry.Log.ConnectStart(_socketAddress!);
+
+                if (_flowExecutionContext)
+                {
+                    _context = ExecutionContext.Capture();
+                }
+            }
         }
 
         internal void CancelConnectAsync()
@@ -572,8 +613,6 @@ namespace System.Net.Sockets
                 }
                 else
                 {
-                    if (SocketsTelemetry.Log.IsEnabled()) SocketsTelemetry.Log.ConnectCanceledAndStop();
-
                     // Otherwise we're doing a normal ConnectAsync - cancel it by closing the socket.
                     // _currentSocket will only be null if _multipleConnect was set, so we don't have to check.
                     if (_currentSocket == null)
@@ -715,13 +754,9 @@ namespace System.Net.Sockets
                             }
                             catch (ObjectDisposedException) { }
                         }
-
-                        if (SocketsTelemetry.Log.IsEnabled()) SocketsTelemetry.Log.AcceptStop();
                     }
                     else
                     {
-                        if (SocketsTelemetry.Log.IsEnabled()) SocketsTelemetry.Log.AcceptFailedAndStop(socketError, null);
-
                         SetResults(socketError, bytesTransferred, flags);
                         _acceptSocket = null;
                         _currentSocket.UpdateStatusAfterSocketError(socketError);
@@ -741,16 +776,12 @@ namespace System.Net.Sockets
                             catch (ObjectDisposedException) { }
                         }
 
-                        if (SocketsTelemetry.Log.IsEnabled()) SocketsTelemetry.Log.ConnectStop();
-
                         // Mark socket connected.
                         _currentSocket!.SetToConnected();
                         _connectSocket = _currentSocket;
                     }
                     else
                     {
-                        if (SocketsTelemetry.Log.IsEnabled()) SocketsTelemetry.Log.ConnectFailedAndStop(socketError, null);
-
                         SetResults(socketError, bytesTransferred, flags);
                         _currentSocket!.UpdateStatusAfterSocketError(socketError);
                     }
