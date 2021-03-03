@@ -69,7 +69,7 @@ namespace System.Net.Http
         private const int MaxStreamId = int.MaxValue;
 
         // Temporary workaround for request burst handling on connection start.
-        private const int InitialMaxConcurrentStreams = 100;
+        private const int InitialMaxConcurrentStreams = 4;
 
         private static readonly byte[] s_http2ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
@@ -619,7 +619,7 @@ namespace System.Net.Http
                     switch ((SettingId)settingId)
                     {
                         case SettingId.MaxConcurrentStreams:
-                            ChangeMaxConcurrentStreams(settingValue);
+                            //ChangeMaxConcurrentStreams(settingValue);
                             maxConcurrentStreamsReceived = true;
                             break;
 
