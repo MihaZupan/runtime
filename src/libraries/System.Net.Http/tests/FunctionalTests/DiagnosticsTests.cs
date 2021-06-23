@@ -404,10 +404,7 @@ namespace System.Net.Http.Functional.Tests
                         HttpRequestMessage request = GetProperty<HttpRequestMessage>(kvp.Value, "Request");
                         Assert.True(request.Headers.TryGetValues("Request-Id", out var requestId));
                         Assert.True(request.Headers.TryGetValues("Correlation-Context", out var correlationContext));
-                        Assert.Equal(3, correlationContext.Count());
-                        Assert.Contains("key=value", correlationContext);
-                        Assert.Contains("bad%2Fkey=value", correlationContext);
-                        Assert.Contains("goodkey=bad%2Fvalue", correlationContext);
+                        Assert.Equal("key=value, goodkey=bad%2Fvalue, bad%2Fkey=value", Assert.Single(correlationContext));
                         TaskStatus requestStatus = GetProperty<TaskStatus>(kvp.Value, "RequestTaskStatus");
                         Assert.Equal(TaskStatus.RanToCompletion, requestStatus);
                         activityStopTcs.SetResult();
