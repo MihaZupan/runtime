@@ -879,7 +879,7 @@ namespace System.Net.Security
         --*/
         internal SecurityStatusPal Encrypt(ReadOnlyMemory<byte> buffer, ref byte[] output, out int resultSize)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.DumpBuffer(this, buffer.Span);
+            if (NetEventSource.Log.IsEnabled()) NetEventSource.DumpBuffer(this, buffer);
 
             byte[] writeBuffer = output;
 
@@ -903,12 +903,24 @@ namespace System.Net.Security
             return secStatus;
         }
 
-        internal SecurityStatusPal Decrypt(Span<byte> buffer, out int outputOffset, out int outputCount)
+        internal SecurityStatusPal Decrypt(byte[]? payload, ref int offset, ref int count)
         {
-            SecurityStatusPal status = SslStreamPal.DecryptMessage(_securityContext!, buffer, out outputOffset, out outputCount);
+            if ((uint)offset > (uint)(payload == null ? 0 : payload.Length))
+            {
+                Debug.Fail("Argument 'offset' out of range.");
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            }
+
+            if ((uint)count > (uint)(payload == null ? 0 : payload.Length - offset))
+            {
+                Debug.Fail("Argument 'count' out of range.");
+                throw new ArgumentOutOfRangeException(nameof(count));
+            }
+
+            SecurityStatusPal status = SslStreamPal.DecryptMessage(_securityContext!, payload!, ref offset, ref count);
             if (NetEventSource.Log.IsEnabled() && status.ErrorCode == SecurityStatusPalErrorCode.OK)
             {
-                NetEventSource.DumpBuffer(this, buffer.Slice(outputOffset, outputCount));
+                NetEventSource.DumpBuffer(this, payload!, offset, count);
             }
 
             return status;
