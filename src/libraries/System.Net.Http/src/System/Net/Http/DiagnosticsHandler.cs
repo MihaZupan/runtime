@@ -33,7 +33,7 @@ namespace System.Net.Http
         // Static APIs
         //
 
-        public static TextMapPropagator Default { get; set; } = CreateLegacyPropagator();
+        public static TextMapPropagator Current { get; set; } = CreateLegacyPropagator();
 
         // For Microsoft compatibility. e.g., it will propagate Baggage header name as "Correlation-Context" instead of "baggage".
         public static TextMapPropagator CreateLegacyPropagator() => new LegacyTextMapPropagator();
@@ -646,7 +646,7 @@ namespace System.Net.Http
                 Write(ActivityStartName, new ActivityStartData(request));
             }
 
-            TextMapPropagator.Default.Inject(activity, request, static (carrier, key, value) =>
+            TextMapPropagator.Current.Inject(activity, request, static (carrier, key, value) =>
             {
                 HttpRequestHeaders headers = ((HttpRequestMessage)carrier).Headers;
                 if (!headers.NonValidated.Contains(key))
