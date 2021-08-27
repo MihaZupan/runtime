@@ -30,6 +30,40 @@ namespace System.Net.Http
         private bool _disposed;
         private HttpRequestOptions? _options;
 
+        public string? RawPathAndQuery
+        {
+            get
+            {
+                if (_options is HttpRequestOptions options &&
+                    options.TryGetValue(new HttpRequestOptionsKey<string>(nameof(RawPathAndQuery)), out string? pathAndQuery) &&
+                    !string.IsNullOrEmpty(pathAndQuery))
+                {
+                    return pathAndQuery;
+                }
+
+                return _requestUri?.PathAndQuery;
+            }
+            set
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    if (_options is IDictionary<string, object?> options)
+                    {
+                        options.Remove(nameof(RawPathAndQuery));
+                    }
+                }
+                else if (value.AsSpan().IndexOfAny(' ', '\r', '\n') >= 0)
+                {
+                    // Try to prevent the user from corrupting the underlying protocol
+                    throw new ArgumentException("New-line characters or spaces are not allowed.", nameof(value));
+                }
+                else
+                {
+                    Options.Set(new HttpRequestOptionsKey<string>(nameof(RawPathAndQuery)), value);
+                }
+            }
+        }
+
         public Version Version
         {
             get { return _version; }

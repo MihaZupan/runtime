@@ -59,7 +59,9 @@ namespace System.Net.Http
                 }
 
                 // Set up for the redirect
+                request.RawPathAndQuery = null;
                 request.RequestUri = redirectUri;
+
                 if (RequestRequiresForceGet(response.StatusCode, request.Method))
                 {
                     if (NetEventSource.Log.IsEnabled())

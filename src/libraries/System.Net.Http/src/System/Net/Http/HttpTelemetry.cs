@@ -37,12 +37,13 @@ namespace System.Net.Http
         public void RequestStart(HttpRequestMessage request)
         {
             Debug.Assert(request.RequestUri != null && request.RequestUri.IsAbsoluteUri);
+            Debug.Assert(request.RawPathAndQuery != null);
 
             RequestStart(
                 request.RequestUri.Scheme,
                 request.RequestUri.IdnHost,
                 request.RequestUri.Port,
-                request.RequestUri.PathAndQuery,
+                request.RawPathAndQuery,
                 (byte)request.Version.Major,
                 (byte)request.Version.Minor,
                 request.VersionPolicy);

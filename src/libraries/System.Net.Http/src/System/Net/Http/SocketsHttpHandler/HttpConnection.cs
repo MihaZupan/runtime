@@ -448,7 +448,7 @@ namespace System.Net.Http
                             await WriteDecimalInt32Async(request.RequestUri.Port, async).ConfigureAwait(false);
                         }
                     }
-                    await WriteStringAsync(request.RequestUri.PathAndQuery, async).ConfigureAwait(false);
+                    await WriteStringAsync(request.RawPathAndQuery!, async).ConfigureAwait(false);
                 }
 
                 // Fall back to 1.1 for all versions other than 1.0

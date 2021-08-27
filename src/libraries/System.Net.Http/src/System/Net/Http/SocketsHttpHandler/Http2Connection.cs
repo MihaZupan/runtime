@@ -1438,7 +1438,7 @@ namespace System.Net.Http
             }
 
             Debug.Assert(request.RequestUri != null);
-            string pathAndQuery = request.RequestUri.PathAndQuery;
+            string pathAndQuery = request.RawPathAndQuery!;
             if (pathAndQuery == "/")
             {
                 WriteIndexedHeader(H2StaticTable.PathSlash, ref headerBuffer);
