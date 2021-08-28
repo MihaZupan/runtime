@@ -147,8 +147,7 @@ namespace System
                     if (e != null)
                     {
                         // Can we still take it as a relative Uri?
-                        if (uriKind != UriKind.Absolute && err != ParsingError.None
-                            && err <= ParsingError.LastRelativeUriOkErrIndex)
+                        if (uriKind != UriKind.Absolute && InFact(Flags.CustomParser_MayBeRelative))
                         {
                             _syntax = null!; // convert it to relative
                             e = null;
@@ -157,7 +156,7 @@ namespace System
                     }
                     else // e == null
                     {
-                        if (err != ParsingError.None || InFact(Flags.ErrorOrParsingRecursion))
+                        if (InFact(Flags.ErrorOrParsingRecursion))
                         {
                             // User parser took over on an invalid Uri
                             // we use = here to clear all parsing flags for a uri that we think is invalid.

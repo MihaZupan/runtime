@@ -70,8 +70,93 @@ namespace System.PrivateUri.Tests
     }
     #endregion Test class
 
+    public sealed class CustomHttpParser : HttpStyleUriParser
+    {
+        private readonly Func<Uri, string?> _tryExtractPathAndQuery;
+
+        public CustomHttpParser(Func<Uri, string?> tryExtractPathAndQuery)
+        {
+            _tryExtractPathAndQuery = tryExtractPathAndQuery ?? throw new ArgumentException(nameof(tryExtractPathAndQuery));
+        }
+
+        protected override string GetComponents(Uri uri, UriComponents components, UriFormat format)
+        {
+            string? pathAndQuery = null;
+
+            if (components == UriComponents.PathAndQuery && format == UriFormat.UriEscaped)
+            {
+                pathAndQuery = _tryExtractPathAndQuery(uri);
+            }
+
+            return pathAndQuery ?? base.GetComponents(uri, components, format);
+        }
+    }
+
     public static class UriParserTest
     {
+        [Theory]
+        [InlineData("http", true)]
+        [InlineData("https", true)]
+        [InlineData("wss", false)]
+        public static void Register_CanOverwriteBuiltInScheme(string scheme, bool shouldOverwrite)
+        {
+            var parser = new CustomHttpParser(static uri => uri.OriginalString.Contains(nameof(Register_CanOverwriteBuiltInScheme)) ? "override" : null);
+            int defaultPort = new Uri($"{scheme}://foo").Port;
+
+            if (shouldOverwrite)
+            {
+                UriParser.Register(parser, scheme, defaultPort);
+            }
+            else
+            {
+                Assert.Throws<InvalidOperationException>(() => UriParser.Register(parser, scheme, defaultPort));
+                return;
+            }
+
+            var uri = new Uri($"{scheme}://foo/{nameof(Register_CanOverwriteBuiltInScheme)}");
+            Assert.Equal("override", uri.PathAndQuery);
+
+            try
+            {
+                // A parser may not be registered a second time
+                UriParser.Register(parser, scheme, defaultPort);
+                Assert.False(true);
+            }
+            catch { }
+
+            try
+            {
+                // A parser may not be registered a second time
+                UriParser.Register(new CustomHttpParser(static s => null), scheme, defaultPort);
+                Assert.False(true);
+            }
+            catch { }
+        }
+
+        [Fact]
+        public static void CustomParser_NotUserDrivenParsing_InvalidAbsoluteUriMayStillBeRelative()
+        {
+            const string Scheme = "InvalidAbsoluteUriMayStillBeRelative";
+            const string UriString = $"{Scheme}:\u00E8";
+
+            UriParser.Register(new CustomHttpParser(static s => null), Scheme, 80);
+
+            Assert.Throws<UriFormatException>(() => new Uri(UriString));
+
+            Assert.False(Uri.TryCreate(UriString, UriKind.Absolute, out _));
+            Assert.Throws<UriFormatException>(() => new Uri(UriString, UriKind.Absolute));
+
+            Assert.True(Uri.TryCreate(UriString, UriKind.Relative, out Uri uri));
+            Assert.False(uri.IsAbsoluteUri);
+            uri = new Uri(UriString, UriKind.Relative);
+            Assert.False(uri.IsAbsoluteUri);
+
+            Assert.True(Uri.TryCreate(UriString, UriKind.RelativeOrAbsolute, out uri));
+            Assert.False(uri.IsAbsoluteUri);
+            uri = new Uri(UriString, UriKind.RelativeOrAbsolute);
+            Assert.False(uri.IsAbsoluteUri);
+        }
+
         #region UriParser tests
 
         private const string FullHttpUri = "http://www.mono-project.com/Main_Page#FAQ?Edit";

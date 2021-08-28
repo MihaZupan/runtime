@@ -122,6 +122,11 @@ namespace System
             UnixPath = 0x100000000000,
 
             /// <summary>
+            /// If a custom parser calls <see cref="ParseMinimal"/>, this flag is used to communicate to <see cref="InitializeUri"/> whether the Uri may still be considered as relative
+            /// </summary>
+            CustomParser_MayBeRelative = 0x2000000000000000,
+
+            /// <summary>
             /// Used to ensure that InitializeAndValidate is only called once per Uri instance and only from an override of InitializeAndValidate
             /// </summary>
             CustomParser_ParseMinimalAlreadyCalled = 0x4000000000000000,
@@ -1831,6 +1836,8 @@ namespace System
                 ParsingError err = ParsingError.None;
                 int idx = ParseSchemeCheckImplicitFile(pUriString, length, ref err, ref flags, ref syntax);
 
+                Debug.Assert(err == ParsingError.None ^ syntax is null, "We should either have an error or a valid scheme");
+
                 if (err != ParsingError.None)
                     return err;
 
@@ -1851,11 +1858,19 @@ namespace System
             DebugAssertInCtor();
 
             ParsingError result = PrivateParseMinimal();
+
+            Debug.Assert(!UserDrivenParsing);
+
             if (result == ParsingError.None)
                 return null;
 
             // Means the we think the Uri is invalid, bu that can be later overridden by a user parser
             _flags |= Flags.ErrorOrParsingRecursion;
+
+            if (result <= ParsingError.LastRelativeUriOkErrIndex)
+            {
+                _flags |= Flags.CustomParser_MayBeRelative;
+            }
 
             return GetException(result);
         }

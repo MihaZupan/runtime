@@ -61,8 +61,8 @@ namespace System
     {
         // These are always available without paying hashtable lookup cost
         // Note: see UpdateStaticSyntaxReference()
-        internal static readonly UriParser HttpUri = new BuiltInUriParser("http", 80, HttpSyntaxFlags);
-        internal static readonly UriParser HttpsUri = new BuiltInUriParser("https", 443, HttpUri._flags);
+        internal static UriParser HttpUri = new BuiltInUriParser("http", 80, HttpSyntaxFlags);
+        internal static UriParser HttpsUri = new BuiltInUriParser("https", 443, HttpUri._flags);
         internal static readonly UriParser WsUri = new BuiltInUriParser("ws", 80, HttpSyntaxFlags);
         internal static readonly UriParser WssUri = new BuiltInUriParser("wss", 443, HttpSyntaxFlags);
         internal static readonly UriParser FtpUri = new BuiltInUriParser("ftp", 21, FtpSyntaxFlags);
@@ -169,9 +169,31 @@ namespace System
             lock (s_table)
             {
                 syntax._flags &= ~UriSyntaxFlags.V1_UnknownUri;
+                syntax._port = defaultPort;
+
                 UriParser? oldSyntax = (UriParser?)s_table[lwrCaseSchemeName];
                 if (oldSyntax != null)
-                    throw new InvalidOperationException(SR.Format(SR.net_uri_AlreadyRegistered, oldSyntax.SchemeName));
+                {
+                    ref UriParser builtInParser = ref syntax;
+                    if (lwrCaseSchemeName == Uri.UriSchemeHttp)
+                    {
+                        builtInParser = ref HttpUri;
+                    }
+                    else if (lwrCaseSchemeName == Uri.UriSchemeHttps)
+                    {
+                        builtInParser = ref HttpsUri;
+                    }
+
+                    if (ReferenceEquals(builtInParser, syntax) || (oldSyntax.Flags & UriSyntaxFlags.BuiltInSyntax) == 0)
+                    {
+                        throw new InvalidOperationException(SR.Format(SR.net_uri_AlreadyRegistered, oldSyntax.SchemeName));
+                    }
+
+                    syntax._scheme = oldSyntax.SchemeName;
+                    s_table[oldSyntax.SchemeName] = syntax;
+                    builtInParser = syntax;
+                    return;
+                }
 
                 oldSyntax = (UriParser?)s_tempTable[syntax.SchemeName];
                 if (oldSyntax != null)
@@ -184,7 +206,6 @@ namespace System
                 syntax.OnRegister(lwrCaseSchemeName, defaultPort);
                 syntax._scheme = lwrCaseSchemeName;
                 syntax.CheckSetIsSimpleFlag();
-                syntax._port = defaultPort;
 
                 s_table[syntax.SchemeName] = syntax;
             }
@@ -319,7 +340,7 @@ namespace System
                                             UriSyntaxFlags.AllowIdn |
                                             UriSyntaxFlags.AllowIriParsing;
 
-        private const UriSyntaxFlags HttpSyntaxFlags =
+        internal const UriSyntaxFlags HttpSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         //
                                         UriSyntaxFlags.MayHaveUserInfo |
@@ -339,7 +360,7 @@ namespace System
                                         UriSyntaxFlags.AllowIdn |
                                         UriSyntaxFlags.AllowIriParsing;
 
-        private const UriSyntaxFlags FtpSyntaxFlags =
+        internal const UriSyntaxFlags FtpSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         //
                                         UriSyntaxFlags.MayHaveUserInfo |
@@ -358,7 +379,7 @@ namespace System
                                         UriSyntaxFlags.AllowIdn |
                                         UriSyntaxFlags.AllowIriParsing;
 
-        private const UriSyntaxFlags FileSyntaxFlags =
+        internal const UriSyntaxFlags FileSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         //
                                         UriSyntaxFlags.AllowEmptyHost |
@@ -404,7 +425,7 @@ namespace System
                                         UriSyntaxFlags.AllowIdn |
                                         UriSyntaxFlags.AllowIriParsing;
 
-        private const UriSyntaxFlags GopherSyntaxFlags =
+        internal const UriSyntaxFlags GopherSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         //
                                         UriSyntaxFlags.MayHaveUserInfo |
@@ -422,7 +443,7 @@ namespace System
         //                                        UriSyntaxFlags.KeepTailLWS |
 
         //Note that NNTP and NEWS are quite different in syntax
-        private const UriSyntaxFlags NewsSyntaxFlags =
+        internal const UriSyntaxFlags NewsSyntaxFlags =
                                         UriSyntaxFlags.MayHavePath |
                                         UriSyntaxFlags.MayHaveFragment |
                                         UriSyntaxFlags.AllowIriParsing;
@@ -459,7 +480,7 @@ namespace System
                                         UriSyntaxFlags.AllowIriParsing;
 
 
-        private const UriSyntaxFlags LdapSyntaxFlags =
+        internal const UriSyntaxFlags LdapSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         //
                                         UriSyntaxFlags.AllowEmptyHost |
@@ -495,7 +516,7 @@ namespace System
 
 
 
-        private const UriSyntaxFlags NetPipeSyntaxFlags =
+        internal const UriSyntaxFlags NetPipeSyntaxFlags =
                                         UriSyntaxFlags.MustHaveAuthority |
                                         UriSyntaxFlags.MayHavePath |
                                         UriSyntaxFlags.MayHaveQuery |
@@ -510,6 +531,6 @@ namespace System
                                         UriSyntaxFlags.AllowIriParsing;
 
 
-        private const UriSyntaxFlags NetTcpSyntaxFlags = NetPipeSyntaxFlags | UriSyntaxFlags.MayHavePort;
+        internal const UriSyntaxFlags NetTcpSyntaxFlags = NetPipeSyntaxFlags | UriSyntaxFlags.MayHavePort;
     }
 }

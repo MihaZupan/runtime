@@ -5,56 +5,56 @@ namespace System
 {
     public class HttpStyleUriParser : UriParser
     {
-        public HttpStyleUriParser() : base(UriParser.HttpUri.Flags)
+        public HttpStyleUriParser() : base(HttpSyntaxFlags)
         {
         }
     }
 
     public class FtpStyleUriParser : UriParser
     {
-        public FtpStyleUriParser() : base(UriParser.FtpUri.Flags)
+        public FtpStyleUriParser() : base(FtpSyntaxFlags)
         {
         }
     }
 
     public class FileStyleUriParser : UriParser
     {
-        public FileStyleUriParser() : base(UriParser.FileUri.Flags)
+        public FileStyleUriParser() : base(FileSyntaxFlags)
         {
         }
     }
 
     public class NewsStyleUriParser : UriParser
     {
-        public NewsStyleUriParser() : base(UriParser.NewsUri.Flags)
+        public NewsStyleUriParser() : base(NewsSyntaxFlags)
         {
         }
     }
 
     public class GopherStyleUriParser : UriParser
     {
-        public GopherStyleUriParser() : base(UriParser.GopherUri.Flags)
+        public GopherStyleUriParser() : base(GopherSyntaxFlags)
         {
         }
     }
 
     public class LdapStyleUriParser : UriParser
     {
-        public LdapStyleUriParser() : base(UriParser.LdapUri.Flags)
+        public LdapStyleUriParser() : base(LdapSyntaxFlags)
         {
         }
     }
 
     public class NetPipeStyleUriParser : UriParser
     {
-        public NetPipeStyleUriParser() : base(UriParser.NetPipeUri.Flags)
+        public NetPipeStyleUriParser() : base(NetPipeSyntaxFlags)
         {
         }
     }
 
     public class NetTcpStyleUriParser : UriParser
     {
-        public NetTcpStyleUriParser() : base(UriParser.NetTcpUri.Flags)
+        public NetTcpStyleUriParser() : base(NetTcpSyntaxFlags)
         {
         }
     }
