@@ -63,8 +63,8 @@ namespace System
         // Note: see UpdateStaticSyntaxReference()
         internal static UriParser HttpUri = new BuiltInUriParser("http", 80, HttpSyntaxFlags);
         internal static UriParser HttpsUri = new BuiltInUriParser("https", 443, HttpUri._flags);
-        internal static readonly UriParser WsUri = new BuiltInUriParser("ws", 80, HttpSyntaxFlags);
-        internal static readonly UriParser WssUri = new BuiltInUriParser("wss", 443, HttpSyntaxFlags);
+        internal static UriParser WsUri = new BuiltInUriParser("ws", 80, HttpSyntaxFlags);
+        internal static UriParser WssUri = new BuiltInUriParser("wss", 443, HttpSyntaxFlags);
         internal static readonly UriParser FtpUri = new BuiltInUriParser("ftp", 21, FtpSyntaxFlags);
         internal static readonly UriParser FileUri = new BuiltInUriParser("file", NoDefaultPort, FileSyntaxFlags);
         internal static readonly UriParser UnixFileUri = new BuiltInUriParser("file", NoDefaultPort, UnixFileSyntaxFlags);
@@ -182,6 +182,14 @@ namespace System
                     else if (lwrCaseSchemeName == Uri.UriSchemeHttps)
                     {
                         builtInParser = ref HttpsUri;
+                    }
+                    else if (lwrCaseSchemeName == Uri.UriSchemeWs)
+                    {
+                        builtInParser = ref WsUri;
+                    }
+                    else if (lwrCaseSchemeName == Uri.UriSchemeWss)
+                    {
+                        builtInParser = ref WssUri;
                     }
 
                     if (ReferenceEquals(builtInParser, syntax) || (oldSyntax.Flags & UriSyntaxFlags.BuiltInSyntax) == 0)

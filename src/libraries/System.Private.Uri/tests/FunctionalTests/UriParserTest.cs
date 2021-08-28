@@ -72,23 +72,16 @@ namespace System.PrivateUri.Tests
 
     public sealed class CustomHttpParser : HttpStyleUriParser
     {
-        private readonly Func<Uri, string?> _tryExtractPathAndQuery;
-
-        public CustomHttpParser(Func<Uri, string?> tryExtractPathAndQuery)
-        {
-            _tryExtractPathAndQuery = tryExtractPathAndQuery ?? throw new ArgumentException(nameof(tryExtractPathAndQuery));
-        }
-
         protected override string GetComponents(Uri uri, UriComponents components, UriFormat format)
         {
-            string? pathAndQuery = null;
-
-            if (components == UriComponents.PathAndQuery && format == UriFormat.UriEscaped)
+            if (components == UriComponents.PathAndQuery &&
+                format == UriFormat.UriEscaped &&
+                uri.OriginalString.Contains(nameof(CustomHttpParser)))
             {
-                pathAndQuery = _tryExtractPathAndQuery(uri);
+                return "override";
             }
 
-            return pathAndQuery ?? base.GetComponents(uri, components, format);
+            return base.GetComponents(uri, components, format);
         }
     }
 
@@ -97,10 +90,12 @@ namespace System.PrivateUri.Tests
         [Theory]
         [InlineData("http", true)]
         [InlineData("https", true)]
-        [InlineData("wss", false)]
+        [InlineData("ws", true)]
+        [InlineData("wss", true)]
+        [InlineData("telnet", false)]
         public static void Register_CanOverwriteBuiltInScheme(string scheme, bool shouldOverwrite)
         {
-            var parser = new CustomHttpParser(static uri => uri.OriginalString.Contains(nameof(Register_CanOverwriteBuiltInScheme)) ? "override" : null);
+            var parser = new CustomHttpParser();
             int defaultPort = new Uri($"{scheme}://foo").Port;
 
             if (shouldOverwrite)
@@ -113,7 +108,7 @@ namespace System.PrivateUri.Tests
                 return;
             }
 
-            var uri = new Uri($"{scheme}://foo/{nameof(Register_CanOverwriteBuiltInScheme)}");
+            var uri = new Uri($"{scheme}://foo/{nameof(CustomHttpParser)}");
             Assert.Equal("override", uri.PathAndQuery);
 
             try
@@ -127,7 +122,7 @@ namespace System.PrivateUri.Tests
             try
             {
                 // A parser may not be registered a second time
-                UriParser.Register(new CustomHttpParser(static s => null), scheme, defaultPort);
+                UriParser.Register(new CustomHttpParser(), scheme, defaultPort);
                 Assert.False(true);
             }
             catch { }
@@ -139,7 +134,7 @@ namespace System.PrivateUri.Tests
             const string Scheme = "InvalidAbsoluteUriMayStillBeRelative";
             const string UriString = $"{Scheme}:\u00E8";
 
-            UriParser.Register(new CustomHttpParser(static s => null), Scheme, 80);
+            UriParser.Register(new CustomHttpParser(), Scheme, 80);
 
             Assert.Throws<UriFormatException>(() => new Uri(UriString));
 
