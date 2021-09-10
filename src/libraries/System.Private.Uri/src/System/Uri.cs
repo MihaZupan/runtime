@@ -122,6 +122,18 @@ namespace System
             UnixPath = 0x100000000000,
 
             /// <summary>
+            /// Disables any validation/normalization past the authority. Fragments will always be empty.
+            /// <see cref="UriFormat"/> passed to <see cref="GetComponents(UriComponents, UriFormat)"/> will be ignored for
+            /// <see cref="UriComponents.Path"/> and <see cref="UriComponents.Query"/>
+            /// </summary>
+            UseRawTarget = 0x200000000000,
+
+            /// <summary>
+            /// Disables recognizing "/foo", "\\bar" or "C:/" as absolute Uris
+            /// </summary>
+            DisableImplicitFilePaths = 0x400000000000,
+
+            /// <summary>
             /// Used to ensure that InitializeAndValidate is only called once per Uri instance and only from an override of InitializeAndValidate
             /// </summary>
             CustomParser_ParseMinimalAlreadyCalled = 0x4000000000000000,
@@ -129,7 +141,12 @@ namespace System
             /// <summary>
             /// Used for asserting that certain methods are only called from the constructor to validate thread-safety assumptions
             /// </summary>
-            Debug_LeftConstructor = 0x8000000000000000
+            Debug_LeftConstructor = 0x8000000000000000,
+
+            /// <summary>
+            /// Flags that are set via <see cref="UriCreationOptions"/>
+            /// </summary>
+            CreationOptionsFlags = UserEscaped | UseRawTarget | DisableImplicitFilePaths,
         }
 
         [Conditional("DEBUG")]
@@ -267,6 +284,8 @@ namespace System
             return syntax is null || syntax.InFact(UriSyntaxFlags.AllowIriParsing);
         }
 
+        private bool UseRawTarget => (_flags & Flags.UseRawTarget) != 0;
+
         internal bool UserDrivenParsing
         {
             get
@@ -356,13 +375,8 @@ namespace System
         //  expect already encoded URI to be supplied.
         //
         public Uri(string uriString)
-        {
-            if (uriString is null)
-                throw new ArgumentNullException(nameof(uriString));
-
-            CreateThis(uriString, false, UriKind.Absolute);
-            DebugSetLeftCtor();
-        }
+            : this(uriString, new UriCreationOptions(UriKind.Absolute))
+        { }
 
         //
         // Uri(string, bool)
@@ -371,13 +385,8 @@ namespace System
         //
         [Obsolete("This constructor has been deprecated; the dontEscape parameter is always false. Use Uri(string) instead.")]
         public Uri(string uriString, bool dontEscape)
-        {
-            if (uriString == null)
-                throw new ArgumentNullException(nameof(uriString));
-
-            CreateThis(uriString, dontEscape, UriKind.Absolute);
-            DebugSetLeftCtor();
-        }
+            : this(uriString, new UriCreationOptions(UriKind.Absolute, dontEscape))
+        { }
 
         //
         // Uri(Uri, string, bool)
@@ -402,11 +411,15 @@ namespace System
         // Uri(string, UriKind);
         //
         public Uri(string uriString, UriKind uriKind)
+            : this(uriString, new UriCreationOptions(uriKind))
+        { }
+
+        public Uri(string uriString, UriCreationOptions creationOptions)
         {
             if (uriString is null)
                 throw new ArgumentNullException(nameof(uriString));
 
-            CreateThis(uriString, false, uriKind);
+            CreateThis(uriString, creationOptions);
             DebugSetLeftCtor();
         }
 
@@ -440,7 +453,7 @@ namespace System
 
             if (uriString!.Length != 0)
             {
-                CreateThis(uriString, false, UriKind.Absolute);
+                CreateThis(uriString, new UriCreationOptions(UriKind.Absolute));
                 DebugSetLeftCtor();
                 return;
             }
@@ -449,7 +462,7 @@ namespace System
             if (uriString is null)
                 throw new ArgumentException(SR.Format(SR.InvalidNullArgument, "RelativeUri"), nameof(serializationInfo));
 
-            CreateThis(uriString, false, UriKind.Relative);
+            CreateThis(uriString, new UriCreationOptions(UriKind.Relative));
             DebugSetLeftCtor();
         }
 
@@ -483,12 +496,12 @@ namespace System
             DebugAssertInCtor();
 
             // Parse relativeUri and populate Uri internal data.
-            CreateThis(relativeUri, dontEscape, UriKind.RelativeOrAbsolute);
+            CreateThis(relativeUri, new UriCreationOptions(UriKind.RelativeOrAbsolute, dontEscape));
 
             if (baseUri.Syntax!.IsSimple)
             {
                 // Resolve Uris if possible OR get merged Uri String to re-parse below
-                Uri? uriResult = ResolveHelper(baseUri, this, ref relativeUri, ref dontEscape);
+                Uri? uriResult = ResolveHelper(baseUri, this, ref relativeUri, dontEscape);
 
                 // If resolved into a Uri then we build from that Uri
                 if (uriResult != null)
@@ -501,7 +514,6 @@ namespace System
             }
             else
             {
-                dontEscape = false;
                 relativeUri = baseUri.Syntax.InternalResolve(baseUri, this, out UriFormatException? e);
                 if (e != null)
                     throw e;
@@ -512,7 +524,7 @@ namespace System
             _syntax = null!;
             _originalUnicodeString = null!;
             // If not resolved, we reparse modified Uri string and populate Uri internal data.
-            CreateThis(relativeUri, dontEscape, UriKind.Absolute);
+            CreateThis(relativeUri, new UriCreationOptions(UriKind.Absolute, dontEscape));
         }
 
         //
@@ -530,12 +542,11 @@ namespace System
             CreateThisFromUri(relativeUri);
 
             string? newUriString = null;
-            bool dontEscape;
+            var options = new UriCreationOptions(this, UriKind.Absolute);
 
             if (baseUri.Syntax!.IsSimple)
             {
-                dontEscape = InFact(Flags.UserEscaped);
-                Uri? resolvedRelativeUri = ResolveHelper(baseUri, this, ref newUriString, ref dontEscape);
+                Uri? resolvedRelativeUri = ResolveHelper(baseUri, this, ref newUriString);
 
                 if (resolvedRelativeUri != null)
                 {
@@ -548,7 +559,6 @@ namespace System
             }
             else
             {
-                dontEscape = false;
                 newUriString = baseUri.Syntax.InternalResolve(baseUri, this, out UriFormatException? e);
                 if (e != null)
                     throw e;
@@ -558,7 +568,7 @@ namespace System
             _info = null!;
             _syntax = null!;
             _originalUnicodeString = null!;
-            CreateThis(newUriString, dontEscape, UriKind.Absolute);
+            CreateThis(newUriString, options);
             DebugSetLeftCtor();
         }
 
@@ -1639,6 +1649,9 @@ namespace System
             // canonicalize the comparand, making comparison possible
             if (obj is null)
             {
+                if (UseRawTarget)
+                    return false;
+
                 if (!(comparand is string s))
                     return false;
 
@@ -1648,6 +1661,9 @@ namespace System
                 if (!TryCreate(s, UriKind.RelativeOrAbsolute, out obj))
                     return false;
             }
+
+            if (UseRawTarget != obj.UseRawTarget)
+                return false;
 
             if (ReferenceEquals(OriginalString, obj.OriginalString))
             {
@@ -3158,9 +3174,6 @@ namespace System
             idx = _info.Offset.Path;
             origIdx = _info.Offset.Path;
 
-            //Some uris do not have a query
-            //    When '?' is passed as delimiter, then it's special case
-            //    so both '?' and '#' will work as delimiters
             if (buildIriStringFromPath)
             {
                 DebugAssertInCtor();
@@ -3180,6 +3193,45 @@ namespace System
 
                 _info.Offset.Path = (ushort)_string.Length;
                 idx = _info.Offset.Path;
+            }
+
+            // If the user explicitly requested UseRawTarget, only figure out the offsets
+            if (UseRawTarget)
+            {
+                if (buildIriStringFromPath)
+                {
+                    DebugAssertInCtor();
+                    _string += _originalUnicodeString.Substring(origIdx);
+                }
+
+                string str = _string;
+
+                if (IsImplicitFile || (syntaxFlags & UriSyntaxFlags.MayHaveQuery) == 0)
+                {
+                    idx = str.Length;
+                }
+                else
+                {
+                    idx = str.IndexOf('?');
+                    if (idx == -1)
+                    {
+                        idx = str.Length;
+                    }
+                }
+
+                _info.Offset.Query = (ushort)idx;
+                _info.Offset.Fragment = (ushort)str.Length; // There is no fragment in UseRawTarget mode
+                _info.Offset.End = (ushort)str.Length;
+
+                goto Done;
+            }
+
+            //Some uris do not have a query
+            //    When '?' is passed as delimiter, then it's special case
+            //    so both '?' and '#' will work as delimiters
+            if (buildIriStringFromPath)
+            {
+                DebugAssertInCtor();
 
                 int offset = origIdx;
                 if (IsImplicitFile || ((syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) == 0))
@@ -3446,6 +3498,9 @@ namespace System
             _info.Offset.End = (ushort)idx;
 
         Done:
+            const Flags PathFlags = Flags.PathNotCanonical | Flags.E_PathNotCanonical | Flags.ShouldBeCompressed | Flags.BackslashInPath | Flags.FirstSlashAbsent;
+            Debug.Assert(!UseRawTarget || (cF & PathFlags) == 0);
+
             cF |= Flags.AllUriInfoSet | Flags.RestUnicodeNormalized;
             InterlockedSetFlags(cF);
         }
@@ -3471,7 +3526,7 @@ namespace System
 
             // Unix: Unix path?
             // A path starting with 2 / or \ (including mixed) is treated as UNC and will be matched below
-            if (!IsWindowsSystem && idx < length && uriString[idx] == '/' &&
+            if (!IsWindowsSystem && StaticNotAny(flags, Flags.DisableImplicitFilePaths) && idx < length && uriString[idx] == '/' &&
                 (idx + 1 == length || (uriString[idx + 1] != '/' && uriString[idx + 1] != '\\')))
             {
                 flags |= (Flags.UnixPath | Flags.ImplicitFile | Flags.AuthorityFound);
@@ -3515,7 +3570,7 @@ namespace System
                 if ((c = uriString[idx + 1]) == ':' || c == '|')
                 {
                     //DOS-like path?
-                    if (UriHelper.IsAsciiLetter(uriString[idx]))
+                    if (UriHelper.IsAsciiLetter(uriString[idx]) && StaticNotAny(flags, Flags.DisableImplicitFilePaths))
                     {
                         if ((c = uriString[idx + 2]) == '\\' || c == '/')
                         {
@@ -3535,7 +3590,7 @@ namespace System
                 else if ((c = uriString[idx]) == '/' || c == '\\')
                 {
                     //UNC share?
-                    if ((c = uriString[idx + 1]) == '\\' || c == '/')
+                    if (((c = uriString[idx + 1]) == '\\' || c == '/') && StaticNotAny(flags, Flags.DisableImplicitFilePaths))
                     {
                         flags |= (Flags.UncPath | Flags.ImplicitFile | Flags.AuthorityFound);
                         syntax = UriParser.FileUri;

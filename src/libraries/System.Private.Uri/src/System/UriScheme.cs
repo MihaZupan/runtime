@@ -104,10 +104,9 @@ namespace System
                 throw new InvalidOperationException(SR.net_uri_NotAbsolute);
 
             string? newUriString = null;
-            bool userEscaped = false;
             parsingError = null;
 
-            Uri? result = Uri.ResolveHelper(baseUri, relativeUri, ref newUriString, ref userEscaped);
+            Uri? result = Uri.ResolveHelper(baseUri, relativeUri, ref newUriString);
 
             if (result != null)
                 return result.OriginalString;

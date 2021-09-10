@@ -13,27 +13,17 @@ namespace System
         //
         // All public ctors go through here
         //
-        private void CreateThis(string? uri, bool dontEscape, UriKind uriKind)
+        private void CreateThis(string? uri, UriCreationOptions creationOptions)
         {
             DebugAssertInCtor();
-
-            // if (!Enum.IsDefined(typeof(UriKind), uriKind)) -- We currently believe that Enum.IsDefined() is too slow
-            // to be used here.
-            if ((int)uriKind < (int)UriKind.RelativeOrAbsolute || (int)uriKind > (int)UriKind.Relative)
-            {
-                throw new ArgumentException(SR.Format(SR.net_uri_InvalidUriKind, uriKind));
-            }
-
-            _string = uri ?? string.Empty;
-
             Debug.Assert(_originalUnicodeString is null && _info is null && _syntax is null && _flags == Flags.Zero);
 
-            if (dontEscape)
-                _flags |= Flags.UserEscaped;
+            _string = uri ?? string.Empty;
+            _flags = creationOptions._flags;
 
             ParsingError err = ParseScheme(_string, ref _flags, ref _syntax!);
 
-            InitializeUri(err, uriKind, out UriFormatException? e);
+            InitializeUri(err, creationOptions.UriKind, out UriFormatException? e);
             if (e != null)
                 throw e;
         }
@@ -56,7 +46,7 @@ namespace System
                     || (!IsWindowsSystem && InFact(Flags.UnixPath))))
                     {
                         _syntax = null!; //make it be relative Uri
-                        _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                        _flags &= Flags.CreationOptionsFlags;
                         e = null;
                         return;
                         // Otherwise an absolute file Uri wins when it's of the form "\\something"
@@ -68,7 +58,7 @@ namespace System
                     else if (uriKind == UriKind.Relative && InFact(Flags.DosPath))
                     {
                         _syntax = null!; //make it be relative Uri
-                        _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                        _flags &= Flags.CreationOptionsFlags;
                         e = null;
                         return;
                         // Otherwise an absolute file Uri wins when it's of the form "c:\something"
@@ -104,7 +94,7 @@ namespace System
                             // RFC 3986 Section 5.4.2 - http:(relativeUri) may be considered a valid relative Uri.
                             _syntax = null!; // convert to relative uri
                             e = null;
-                            _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                            _flags &= Flags.CreationOptionsFlags;
                             return;
                         }
                         else
@@ -152,7 +142,7 @@ namespace System
                         {
                             _syntax = null!; // convert it to relative
                             e = null;
-                            _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                            _flags &= Flags.CreationOptionsFlags;
                         }
                     }
                     else // e == null
@@ -193,8 +183,8 @@ namespace System
                 && err <= ParsingError.LastRelativeUriOkErrIndex)
             {
                 e = null;
-                _flags &= (Flags.UserEscaped | Flags.HasUnicode); // the only flags that makes sense for a relative uri
-                if (hasUnicode)
+                _flags &= Flags.CreationOptionsFlags;
+                if (hasUnicode && !UseRawTarget)
                 {
                     // Iri'ze and then normalize relative uris
                     _string = EscapeUnescapeIri(_originalUnicodeString, 0, _originalUnicodeString.Length,
@@ -248,20 +238,25 @@ namespace System
         //
         public static bool TryCreate([NotNullWhen(true)] string? uriString, UriKind uriKind, [NotNullWhen(true)] out Uri? result)
         {
+            return TryCreate(uriString, new UriCreationOptions(uriKind), out result);
+        }
+
+        public static bool TryCreate([NotNullWhen(true)] string? uriString, UriCreationOptions creationOptions, [NotNullWhen(true)] out Uri? result)
+        {
             if (uriString is null)
             {
                 result = null;
                 return false;
             }
             UriFormatException? e = null;
-            result = CreateHelper(uriString, false, uriKind, ref e);
+            result = CreateHelper(uriString, creationOptions, ref e);
             result?.DebugSetLeftCtor();
             return e is null && result != null;
         }
 
         public static bool TryCreate(Uri? baseUri, string? relativeUri, [NotNullWhen(true)] out Uri? result)
         {
-            if (TryCreate(relativeUri, UriKind.RelativeOrAbsolute, out Uri? relativeLink))
+            if (TryCreate(relativeUri, new UriCreationOptions(UriKind.RelativeOrAbsolute), out Uri? relativeLink))
             {
                 if (!relativeLink.IsAbsoluteUri)
                     return TryCreate(baseUri, relativeLink, out result);
@@ -285,16 +280,14 @@ namespace System
 
             UriFormatException? e = null;
             string? newUriString = null;
+            var options = new UriCreationOptions(relativeUri, UriKind.Absolute);
 
-            bool dontEscape;
             if (baseUri.Syntax.IsSimple)
             {
-                dontEscape = relativeUri.UserEscaped;
-                result = ResolveHelper(baseUri, relativeUri, ref newUriString, ref dontEscape);
+                result = ResolveHelper(baseUri, relativeUri, ref newUriString);
             }
             else
             {
-                dontEscape = false;
                 newUriString = baseUri.Syntax.InternalResolve(baseUri, relativeUri, out e);
 
                 if (e != null)
@@ -302,7 +295,7 @@ namespace System
             }
 
             if (result is null)
-                result = CreateHelper(newUriString!, dontEscape, UriKind.Absolute, ref e);
+                result = CreateHelper(newUriString!, options, ref e);
 
             result?.DebugSetLeftCtor();
             return e is null && result != null && result.IsAbsoluteUri;
@@ -590,27 +583,17 @@ namespace System
         //
         // a Uri.TryCreate() method goes through here.
         //
-        internal static Uri? CreateHelper(string uriString, bool dontEscape, UriKind uriKind, ref UriFormatException? e)
+        internal static Uri? CreateHelper(string uriString, UriCreationOptions creationOptions, ref UriFormatException? e)
         {
-            // if (!Enum.IsDefined(typeof(UriKind), uriKind)) -- We currently believe that Enum.IsDefined() is too slow
-            // to be used here.
-            if ((int)uriKind < (int)UriKind.RelativeOrAbsolute || (int)uriKind > (int)UriKind.Relative)
-            {
-                throw new ArgumentException(SR.Format(SR.net_uri_InvalidUriKind, uriKind));
-            }
-
             UriParser? syntax = null;
-            Flags flags = Flags.Zero;
+            Flags flags = creationOptions._flags;
             ParsingError err = ParseScheme(uriString, ref flags, ref syntax);
-
-            if (dontEscape)
-                flags |= Flags.UserEscaped;
 
             // We won't use User factory for these errors
             if (err != ParsingError.None)
             {
                 // If it looks as a relative Uri, custom factory is ignored
-                if (uriKind != UriKind.Absolute && err <= ParsingError.LastRelativeUriOkErrIndex)
+                if (creationOptions.UriKind != UriKind.Absolute && err <= ParsingError.LastRelativeUriOkErrIndex)
                     return new Uri((flags & Flags.UserEscaped), null, uriString);
 
                 return null;
@@ -623,7 +606,7 @@ namespace System
             // Validate instance using ether built in or a user Parser
             try
             {
-                result.InitializeUri(err, uriKind, out e);
+                result.InitializeUri(err, creationOptions.UriKind, out e);
 
                 if (e == null)
                 {
@@ -647,7 +630,7 @@ namespace System
         // to  return combined URI strings from both Uris
         // otherwise if e != null on output the operation has failed
         //
-        internal static Uri? ResolveHelper(Uri baseUri, Uri? relativeUri, ref string? newUriString, ref bool userEscaped)
+        internal static Uri? ResolveHelper(Uri baseUri, Uri? relativeUri, ref string? newUriString, bool userEscaped = false)
         {
             Debug.Assert(!baseUri.IsNotAbsoluteUri && !baseUri.UserDrivenParsing, "Uri::ResolveHelper()|baseUri is not Absolute or is controlled by User Parser.");
 
@@ -844,15 +827,15 @@ namespace System
             {
                 //a relative uri could have quite tricky form, it's better to fix it now.
                 string? newUriString = null;
-                bool dontEscape = false;
+                var options = new UriCreationOptions(uriLink, UriKind.Absolute);
 
-                uriLink = ResolveHelper(this, uriLink, ref newUriString, ref dontEscape)!;
+                uriLink = ResolveHelper(this, uriLink, ref newUriString)!;
 
                 if (uriLink is null)
                 {
                     UriFormatException? e = null;
 
-                    uriLink = CreateHelper(newUriString!, dontEscape, UriKind.Absolute, ref e)!;
+                    uriLink = CreateHelper(newUriString!, options, ref e)!;
 
                     if (e != null)
                         return false;
