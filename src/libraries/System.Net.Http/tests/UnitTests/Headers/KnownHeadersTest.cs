@@ -152,6 +152,7 @@ namespace System.Net.Http.Tests
         [InlineData("Cache-Control", "private")]
         [InlineData("Cache-Control", "proxy-revalidate")]
         [InlineData("Cache-Control", "public")]
+        [InlineData("Connection", "Keep-Alive")]
         [InlineData("Connection", "close")]
         [InlineData("Content-Disposition", "attachment")]
         [InlineData("Content-Disposition", "inline")]
