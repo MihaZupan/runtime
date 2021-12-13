@@ -121,11 +121,11 @@ namespace System.Net.Http
 #pragma warning disable CA1845 // file is shared with a build that lacks string.Concat for spans
             // Underlying code does not understand WebSockets so we need to convert it to http or https.
             string destination = uri.AbsoluteUri;
-            if (uri.Scheme == UriScheme.Wss)
+            if (HttpUtilities.IsSecureWebSocketScheme(uri.Scheme))
             {
                 destination = UriScheme.Https + destination.Substring(UriScheme.Wss.Length);
             }
-            else if (uri.Scheme == UriScheme.Ws)
+            else if (HttpUtilities.IsNonSecureWebSocketScheme(uri.Scheme))
             {
                 destination = UriScheme.Http + destination.Substring(UriScheme.Ws.Length);
             }

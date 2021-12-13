@@ -211,7 +211,7 @@ namespace System.Net.Http
                             {
                                 string proxyStr = Marshal.PtrToStringUni(proxyInfo.Proxy)!;
 
-                                return MultiProxy.CreateLazy(_failedProxies, proxyStr, IsSecureUri(uri));
+                                return MultiProxy.CreateLazy(_failedProxies, proxyStr, HttpUtilities.IsSupportedSecureScheme(uri.Scheme));
                             }
                             else
                             {
@@ -292,15 +292,10 @@ namespace System.Net.Http
                 }
 
                 // We did not find match on bypass list.
-                return IsSecureUri(uri) ? _secureProxy : _insecureProxy;
+                return HttpUtilities.IsSupportedSecureScheme(uri.Scheme) ? _secureProxy : _insecureProxy;
             }
 
             return MultiProxy.Empty;
-        }
-
-        private static bool IsSecureUri(Uri uri)
-        {
-            return uri.Scheme == UriScheme.Https || uri.Scheme == UriScheme.Wss;
         }
 
         /// <summary>

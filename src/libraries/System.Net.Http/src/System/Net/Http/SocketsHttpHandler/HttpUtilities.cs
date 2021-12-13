@@ -10,19 +10,19 @@ namespace System.Net.Http
             IsSupportedSecureScheme(scheme);
 
         internal static bool IsSupportedNonSecureScheme(string scheme) =>
-            string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) || IsNonSecureWebSocketScheme(scheme);
+            ReferenceEquals(scheme, Uri.UriSchemeHttp) || IsNonSecureWebSocketScheme(scheme);
 
         internal static bool IsSupportedSecureScheme(string scheme) =>
-            string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || IsSecureWebSocketScheme(scheme);
+            ReferenceEquals(scheme, Uri.UriSchemeHttps) || IsSecureWebSocketScheme(scheme);
 
         internal static bool IsNonSecureWebSocketScheme(string scheme) =>
-            string.Equals(scheme, "ws", StringComparison.OrdinalIgnoreCase);
+            ReferenceEquals(scheme, Uri.UriSchemeWs);
 
         internal static bool IsSecureWebSocketScheme(string scheme) =>
-            string.Equals(scheme, "wss", StringComparison.OrdinalIgnoreCase);
+            ReferenceEquals(scheme, Uri.UriSchemeWss);
 
         internal static bool IsSupportedProxyScheme(string scheme) =>
-            string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) || IsSocksScheme(scheme);
+            ReferenceEquals(scheme, Uri.UriSchemeHttp) || IsSocksScheme(scheme);
 
         internal static bool IsSocksScheme(string scheme) =>
             string.Equals(scheme, "socks5", StringComparison.OrdinalIgnoreCase) ||
