@@ -361,6 +361,7 @@ namespace System.Net.Http.Functional.Tests
         [InlineData(false, false, false)]
         [InlineData(false, true, true)]
         [InlineData(true, false, true)]
+        [ActiveIssue("TEMP")]
         public async Task SendAsync_MultipleEntriesPerHeaderName_ValuesMayNotBeGrouped(bool manyHeaders, bool enumerateHeadersBeforeSend, bool valuesShouldBeGrouped)
         {
             Assert.True(valuesShouldBeGrouped || !manyHeaders, "Values will be grouped if we go over the HttpHeaders.ArrayThreshold");
