@@ -522,21 +522,62 @@ namespace System.Net.Http.Headers
             Debug.Assert(sourceHeaders != null);
             Debug.Assert(GetType() == sourceHeaders.GetType(), "Can only copy headers from an instance of the same type.");
 
-            foreach (HeaderEntry entry in sourceHeaders.GetEntriesGroupedByName())
-            {
-                // Only add header values if they're not already set on the message. Note that we don't merge
-                // collections: If both the default headers and the message have set some values for a certain
-                // header, then we don't try to merge the values.
-                if (!ContainsEntry(entry.Key))
-                {
-                    object value = entry.Value;
-                    if (value is HeaderStoreItemInfo info)
-                    {
-                        value = CloneHeaderInfo(entry.Key, info);
-                    }
+            // Only add header values if they're not already set on the message. Note that we don't merge
+            // collections: If both the default headers and the message have set some values for a certain
+            // header, then we don't try to merge the values.
 
-                    AddEntryToStore(new HeaderEntry(entry.Key, value));
+            bool sourceHeadersAreAlreadyGrouped =
+                !sourceHeaders._entriesMayBeUngrouped ||
+                sourceHeaders._headerStore is Dictionary<HeaderDescriptor, object>;
+
+            int originalCount = _count;
+
+            // If the _headerStore is already a Dictionary, or we may transform it into one as part of copying entries,
+            // it's harder to tell if a given key existed before the call to AddHeaders.
+            // In that case, we copy the keys to a separate HashSet that is not modified while copying entries.
+            // But if source headers are already grouped, we won't see the multiple entries for the same key.
+            if (!sourceHeadersAreAlreadyGrouped &&
+                (_headerStore is Dictionary<HeaderDescriptor, object> || _count + sourceHeaders._count > ArrayThreshold))
+            {
+                var originalKeys = new HashSet<HeaderDescriptor>(_count);
+                foreach (HeaderEntry entry in GetEntries())
+                {
+                    originalKeys.Add(entry.Key);
                 }
+
+                foreach (HeaderEntry entry in sourceHeaders.GetEntries())
+                {
+                    if (!originalKeys.Contains(entry.Key))
+                    {
+                        CloneAndAddToStore(entry);
+                    }
+                }
+            }
+            else
+            {
+                foreach (HeaderEntry entry in sourceHeaders.GetEntries())
+                {
+                    if (!ContainsEntry(entry.Key, originalCount))
+                    {
+                        CloneAndAddToStore(entry);
+                    }
+                }
+            }
+
+            if (!sourceHeadersAreAlreadyGrouped && _count != originalCount)
+            {
+                _entriesMayBeUngrouped = true;
+            }
+
+            void CloneAndAddToStore(HeaderEntry entry)
+            {
+                object value = entry.Value;
+                if (value is HeaderStoreItemInfo info)
+                {
+                    value = CloneHeaderInfo(entry.Key, info);
+                }
+
+                AddEntryToStore(new HeaderEntry(entry.Key, value));
             }
         }
 
@@ -1478,14 +1519,17 @@ namespace System.Net.Http.Headers
             }
         }
 
-        internal bool ContainsEntry(HeaderDescriptor key)
+        internal bool ContainsEntry(HeaderDescriptor key) => ContainsEntry(key, _count);
+
+        internal bool ContainsEntry(HeaderDescriptor key, int count)
         {
+            Debug.Assert(count <= _count);
             object? store = _headerStore;
             if (store is not null)
             {
                 if (store is HeaderEntry[] entries)
                 {
-                    for (int i = 0; i < _count && i < entries.Length; i++)
+                    for (int i = 0; i < count && i < entries.Length; i++)
                     {
                         if (key.Equals(entries[i].Key))
                         {
