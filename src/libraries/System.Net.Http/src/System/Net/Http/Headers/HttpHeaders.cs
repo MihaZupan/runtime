@@ -1299,41 +1299,32 @@ namespace System.Net.Http.Headers
 
         private ref object GetValueRefOrNullRef(HeaderDescriptor key)
         {
+            ref object valueRef = ref Unsafe.NullRef<object>();
+
             object? store = _headerStore;
-            if (store is not null)
+            if (store is HeaderEntry[] entries)
             {
-                if (store is HeaderEntry[] entries)
+                for (int i = 0; i < _count && i < entries.Length; i++)
                 {
-                    for (int i = 0; i < _count && i < entries.Length; i++)
+                    if (key.Equals(entries[i].Key))
                     {
-                        if (key.Equals(entries[i].Key))
-                        {
-                            return ref entries[i].Value;
-                        }
+                        valueRef = ref entries[i].Value;
+                        break;
                     }
                 }
-                else
-                {
-                    return ref CollectionsMarshal.GetValueRefOrNullRef(Unsafe.As<Dictionary<HeaderDescriptor, object>>(store), key);
-                }
+            }
+            else if (store is not null)
+            {
+                valueRef = ref CollectionsMarshal.GetValueRefOrNullRef(Unsafe.As<Dictionary<HeaderDescriptor, object>>(store), key);
             }
 
-            return ref Unsafe.NullRef<object>();
+            return ref valueRef;
         }
 
         private ref object? GetValueRefOrAddDefault(HeaderDescriptor key)
         {
             object? store = _headerStore;
-            if (store is null)
-            {
-                _count = 1;
-                var entries = new HeaderEntry[InitialCapacity];
-                _headerStore = entries;
-                ref HeaderEntry firstElement = ref MemoryMarshal.GetArrayDataReference(entries);
-                firstElement.Key = key;
-                return ref firstElement.Value!;
-            }
-            else if (store is HeaderEntry[] entries)
+            if (store is HeaderEntry[] entries)
             {
                 for (int i = 0; i < _count && i < entries.Length; i++)
                 {
@@ -1344,15 +1335,23 @@ namespace System.Net.Http.Headers
                 }
 
                 int count = _count;
+                _count++;
                 if ((uint)count < (uint)entries.Length)
                 {
-                    ref HeaderEntry entry = ref entries[count];
-                    entry.Key = key;
-                    _count++;
-                    return ref entry.Value!;
+                    entries[count].Key = key;
+                    return ref entries[count].Value!;
                 }
 
                 return ref GrowEntriesAndAddDefault(key);
+            }
+            else if (store is null)
+            {
+                _count++;
+                entries = new HeaderEntry[InitialCapacity];
+                _headerStore = entries;
+                ref HeaderEntry firstEntry = ref MemoryMarshal.GetArrayDataReference(entries);
+                firstEntry.Key = key;
+                return ref firstEntry.Value!;
             }
             else
             {
@@ -1361,17 +1360,10 @@ namespace System.Net.Http.Headers
 
             ref object? GrowEntriesAndAddDefault(HeaderDescriptor key)
             {
-                _count++;
                 var entries = (HeaderEntry[])_headerStore!;
                 if (entries.Length == ArrayThreshold)
                 {
-                    var dictionary = new Dictionary<HeaderDescriptor, object>(ArrayThreshold);
-                    _headerStore = dictionary;
-                    foreach (HeaderEntry entry in entries)
-                    {
-                        dictionary.Add(entry.Key, entry.Value);
-                    }
-                    return ref CollectionsMarshal.GetValueRefOrAddDefault(dictionary, key, out s_dictionaryGetValueRefOrAddDefaultExistsDummy);
+                    return ref ConvertToDictionaryAndAddDefault(key);
                 }
                 else
                 {
@@ -1381,6 +1373,19 @@ namespace System.Net.Http.Headers
                     firstNewEntry.Key = key;
                     return ref firstNewEntry.Value!;
                 }
+            }
+
+            ref object? ConvertToDictionaryAndAddDefault(HeaderDescriptor key)
+            {
+                var entries = (HeaderEntry[])_headerStore!;
+                var dictionary = new Dictionary<HeaderDescriptor, object>(ArrayThreshold);
+                _headerStore = dictionary;
+                foreach (HeaderEntry entry in entries)
+                {
+                    dictionary.Add(entry.Key, entry.Value);
+                }
+                Debug.Assert(dictionary.Count == _count - 1);
+                return ref CollectionsMarshal.GetValueRefOrAddDefault(dictionary, key, out s_dictionaryGetValueRefOrAddDefaultExistsDummy);
             }
 
             ref object? DictionaryGetValueRefOrAddDefault(HeaderDescriptor key)
@@ -1437,34 +1442,37 @@ namespace System.Net.Http.Headers
 
         internal bool Remove(HeaderDescriptor key)
         {
+            bool removed = false;
+
             object? store = _headerStore;
-            if (store is not null)
+            if (store is HeaderEntry[] entries)
             {
-                if (store is HeaderEntry[] entries)
+                for (int i = 0; i < _count && i < entries.Length; i++)
                 {
-                    for (int i = 0; i < _count && i < entries.Length; i++)
+                    if (key.Equals(entries[i].Key))
                     {
-                        if (key.Equals(entries[i].Key))
+                        while (i + 1 < _count && (uint)(i + 1) < (uint)entries.Length)
                         {
-                            int count = _count--;
-                            while ((uint)(i + 1) < (uint)entries.Length && i + 1 < count)
-                            {
-                                entries[i] = entries[i + 1];
-                                i++;
-                            }
-                            entries[i] = default;
-                            return true;
+                            entries[i] = entries[i + 1];
+                            i++;
                         }
+                        entries[i] = default;
+                        removed = true;
+                        break;
                     }
                 }
-                else if (Unsafe.As<Dictionary<HeaderDescriptor, object>>(store).Remove(key))
-                {
-                    _count--;
-                    return true;
-                }
+            }
+            else if (store is not null)
+            {
+                removed = Unsafe.As<Dictionary<HeaderDescriptor, object>>(store).Remove(key);
             }
 
-            return false;
+            if (removed)
+            {
+                _count--;
+            }
+
+            return removed;
         }
 
         #endregion // _headerStore implementation
