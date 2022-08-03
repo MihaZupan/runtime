@@ -1152,13 +1152,15 @@ namespace System.Net.Http
                                 HeaderUtilities.TryParseInt32(nameValue.Value, out int timeout) &&
                                 timeout >= 0)
                             {
-                                if (timeout == 0)
+                                const int TimeoutOffsetSeconds = 1;
+
+                                if (timeout <= TimeoutOffsetSeconds)
                                 {
                                     _connectionClose = true;
                                 }
                                 else
                                 {
-                                    _keepAliveTimeoutSeconds = timeout;
+                                    _keepAliveTimeoutSeconds = timeout - TimeoutOffsetSeconds;
                                 }
                             }
                         }
