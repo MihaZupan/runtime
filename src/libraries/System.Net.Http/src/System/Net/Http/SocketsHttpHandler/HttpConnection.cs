@@ -668,10 +668,7 @@ namespace System.Net.Http
                     ParseHeaderNameValue(this, line.Span, response, isFromTrailer: false);
                 }
 
-                if (response.Version.Minor == 0)
-                {
-                    ProcessHttp10KeepAliveHeader(response);
-                }
+                ProcessHttp10KeepAliveHeader(response);
 
                 if (HttpTelemetry.Log.IsEnabled()) HttpTelemetry.Log.ResponseHeadersStop();
 
