@@ -702,6 +702,18 @@ namespace System
                     return IndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
+                    if (typeof(T) == typeof(char))
+                    {
+                        if (IndexOfAnyAsciiSearcher.TryIndexOfAnyExcept(
+                                ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                                span.Length,
+                                new ReadOnlySpan<char>(ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)), values.Length),
+                                out int index))
+                        {
+                            return index;
+                        }
+                    }
+
                     for (int i = 0; i < span.Length; i++)
                     {
                         if (!values.Contains(span[i]))
@@ -946,6 +958,18 @@ namespace System
                     return LastIndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
+                    if (typeof(T) == typeof(char))
+                    {
+                        if (IndexOfAnyAsciiSearcher.TryLastIndexOfAnyExcept(
+                                ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                                span.Length,
+                                new ReadOnlySpan<char>(ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)), values.Length),
+                                out int index))
+                        {
+                            return index;
+                        }
+                    }
+
                     for (int i = span.Length - 1; i >= 0; i--)
                     {
                         if (!values.Contains(span[i]))
@@ -1383,6 +1407,12 @@ namespace System
             Debug.Assert(valuesLength >= 0);
 
             ReadOnlySpan<char> valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
+
+            if (IndexOfAnyAsciiSearcher.TryIndexOfAny(ref searchSpace, searchSpaceLength, valuesSpan, out int index))
+            {
+                return index;
+            }
+
             ProbabilisticMap map = default;
 
             uint* charMap = (uint*)&map;
@@ -1396,7 +1426,7 @@ namespace System
                     ProbabilisticMap.IsCharBitSet(charMap, (byte)(ch >> 8)) &&
                     ProbabilisticMap.SpanContains(valuesSpan, (char)ch))
                 {
-                    return (int)((nint)Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
+                    return (int)(Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
                 }
 
                 searchSpaceLength--;
@@ -1479,17 +1509,8 @@ namespace System
         /// <param name="span">The span to search.</param>
         /// <param name="values">The set of values to search for.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int LastIndexOfAny<T>(this Span<T> span, ReadOnlySpan<T> values) where T : IEquatable<T>?
-        {
-            if (Unsafe.SizeOf<T>() == sizeof(byte) && RuntimeHelpers.IsBitwiseEquatable<T>())
-                return SpanHelpers.LastIndexOfAny(
-                    ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span)),
-                    span.Length,
-                    ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(values)),
-                    values.Length);
-
-            return SpanHelpers.LastIndexOfAny(ref MemoryMarshal.GetReference(span), span.Length, ref MemoryMarshal.GetReference(values), values.Length);
-        }
+        public static int LastIndexOfAny<T>(this Span<T> span, ReadOnlySpan<T> values) where T : IEquatable<T>? =>
+            LastIndexOfAny((ReadOnlySpan<T>)span, values);
 
         /// <summary>
         /// Searches for the last index of any of the specified values similar to calling LastIndexOf several times with the logical OR operator. If not found, returns -1.
@@ -1644,6 +1665,12 @@ namespace System
             Debug.Assert(valuesLength >= 0);
 
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
+
+            if (IndexOfAnyAsciiSearcher.TryLastIndexOfAny(ref searchSpace, searchSpaceLength, valuesSpan, out int index))
+            {
+                return index;
+            }
+
             ProbabilisticMap map = default;
 
             uint* charMap = (uint*)&map;
@@ -1657,7 +1684,7 @@ namespace System
                     ProbabilisticMap.IsCharBitSet(charMap, (byte)(ch >> 8)) &&
                     ProbabilisticMap.SpanContains(valuesSpan, (char)ch))
                 {
-                    return (int)((nint)Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
+                    return (int)(Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
                 }
 
                 searchSpaceLength--;
