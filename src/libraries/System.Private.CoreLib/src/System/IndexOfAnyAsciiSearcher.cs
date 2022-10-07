@@ -17,7 +17,7 @@ namespace System
             searchSpaceLength >= Vector128<short>.Count;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool TryComputeBitmap(ReadOnlySpan<char> values, byte* bitmap)
+        private static unsafe bool TryComputeBitmap(ReadOnlySpan<char> values, byte* bitmap, out bool needleContainsZero)
         {
             byte* bitmapLocal = bitmap;
 
@@ -25,15 +25,17 @@ namespace System
             {
                 if (c > 127)
                 {
+                    needleContainsZero = false;
                     return false;
                 }
 
                 int highNibble = c >> 4;
                 int lowNibble = c & 0xF;
 
-                bitmapLocal[lowNibble] |= (byte)(1 << highNibble);
+                bitmapLocal[(uint)lowNibble] |= (byte)(1 << highNibble);
             }
 
+            needleContainsZero = (bitmap[0] & 1) != 0;
             return true;
         }
 
@@ -60,11 +62,11 @@ namespace System
             if (IsSupportedAndProfitable(searchSpaceLength))
             {
                 Vector128<byte> bitmap = default;
-                if (TryComputeBitmap(asciiValues, (byte*)&bitmap))
+                if (TryComputeBitmap(asciiValues, (byte*)&bitmap, out bool needleContainsZero))
                 {
-                    index = Ssse3.IsSupported && (bitmap.GetElementUnsafe(0) & 1) != 0
+                    index = Ssse3.IsSupported && needleContainsZero
                         ? IndexOfAnyVectorized<TNegator, Ssse3HandleZeroInNeedle>(ref searchSpace, searchSpaceLength, bitmap)
-                        : IndexOfAnyVectorized<TNegator, Fallback>(ref searchSpace, searchSpaceLength, bitmap);
+                        : IndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, bitmap);
                     return true;
                 }
             }
@@ -80,11 +82,11 @@ namespace System
             if (IsSupportedAndProfitable(searchSpaceLength))
             {
                 Vector128<byte> bitmap = default;
-                if (TryComputeBitmap(asciiValues, (byte*)&bitmap))
+                if (TryComputeBitmap(asciiValues, (byte*)&bitmap, out bool needleContainsZero))
                 {
-                    index = Ssse3.IsSupported && (bitmap.GetElementUnsafe(0) & 1) != 0
+                    index = Ssse3.IsSupported && needleContainsZero
                         ? LastIndexOfAnyVectorized<TNegator, Ssse3HandleZeroInNeedle>(ref searchSpace, searchSpaceLength, bitmap)
-                        : LastIndexOfAnyVectorized<TNegator, Fallback>(ref searchSpace, searchSpaceLength, bitmap);
+                        : LastIndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, bitmap);
                     return true;
                 }
             }
@@ -101,6 +103,9 @@ namespace System
 
             if (searchSpaceLength > 2 * Vector128<short>.Count)
             {
+                // Process the input in chunks of 16 characters. If the input length is a multiple of 16, don't consume
+                // the last 16 characters in this loop. Let the fallback below handle it instead. This is why the condition is
+                // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
                 ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector128<short>.Count));
 
                 do
@@ -149,6 +154,9 @@ namespace System
 
             if (searchSpaceLength > 2 * Vector128<short>.Count)
             {
+                // Process the input in chunks of 16 characters. If the input length is a multiple of 16, don't consume
+                // the last 16 characters in this loop. Let the fallback below handle it instead. This is why the condition is
+                // ">" instead of ">=" above, and why "IsAddressGreaterThan" is used instead of "!IsAddressLessThan".
                 ref short twoVectorsAfterStart = ref Unsafe.Add(ref searchSpace, 2 * Vector128<short>.Count);
 
                 do
@@ -194,7 +202,7 @@ namespace System
             where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
         {
-            // Pack two vectors of characters into bytes.
+            // Pack two vectors of characters into bytes. While the type is Vector128<short>, these are really UInt16 characters.
             // X86: Downcast every character using saturation.
             // - Values <= 32767 result in min(value, 255).
             // - Values  > 32767 result in 0. Because of this we must do more work to handle needles that contain 0.
@@ -240,7 +248,7 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> Shuffle(Vector128<byte> vector, Vector128<byte> indices)
         {
-            // Vector128.Shuffle is emitting a software fallback as indices are not constant
+            // Vector128.Shuffle is emitting a software fallback as indices are not given as inline constants.
             return Ssse3.IsSupported
                 ? Ssse3.Shuffle(vector, indices)
                 : AdvSimd.Arm64.VectorTableLookup(vector, indices);
@@ -311,6 +319,8 @@ namespace System
         private struct Negate : INegator
         {
             public static bool NegateIfNeeded(bool result) => !result;
+            // This is intentionally testing for equality with 0 instead of "~result".
+            // We want to know if any character didn't match, as that means it should be treated as a match for the -Except method.
             public static Vector128<byte> NegateIfNeeded(Vector128<byte> result) => Vector128.Equals(result, Vector128<byte>.Zero);
             public static uint ExtractMask(Vector128<byte> result) => result.ExtractMostSignificantBits();
         }
@@ -325,7 +335,7 @@ namespace System
             public static bool NeedleContainsZero => true;
         }
 
-        private struct Fallback : IOptimizations
+        private struct Default : IOptimizations
         {
             public static bool NeedleContainsZero => false;
         }
