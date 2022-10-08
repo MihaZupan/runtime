@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
@@ -11,10 +12,7 @@ namespace System
 {
     internal static class IndexOfAnyAsciiSearcher
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool IsSupportedAndProfitable(int searchSpaceLength) =>
-            (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
-            searchSpaceLength >= Vector128<short>.Count;
+        private static bool IsSupported => Ssse3.IsSupported || AdvSimd.Arm64.IsSupported;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool TryComputeBitmap(ReadOnlySpan<char> values, byte* bitmap, out bool needleContainsZero)
@@ -59,7 +57,9 @@ namespace System
         private static unsafe bool TryIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
-            if (IsSupportedAndProfitable(searchSpaceLength))
+            Debug.Assert(searchSpace >= Vector128<short>.Count);
+
+            if (IsSupported)
             {
                 Vector128<byte> bitmap = default;
                 if (TryComputeBitmap(asciiValues, (byte*)&bitmap, out bool needleContainsZero))
@@ -79,7 +79,9 @@ namespace System
         private static unsafe bool TryLastIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
-            if (IsSupportedAndProfitable(searchSpaceLength))
+            Debug.Assert(searchSpace >= Vector128<short>.Count);
+
+            if (IsSupported)
             {
                 Vector128<byte> bitmap = default;
                 if (TryComputeBitmap(asciiValues, (byte*)&bitmap, out bool needleContainsZero))
