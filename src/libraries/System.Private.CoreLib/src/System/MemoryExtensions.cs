@@ -6,7 +6,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 
 namespace System
 {
@@ -702,16 +701,13 @@ namespace System
                     return IndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
-                    if (typeof(T) == typeof(char))
+                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(short))
                     {
-                        if (IndexOfAnyAsciiSearcher.TryIndexOfAnyExcept(
-                                ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
-                                span.Length,
-                                new ReadOnlySpan<char>(ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)), values.Length),
-                                out int index))
-                        {
-                            return index;
-                        }
+                        return ProbabilisticMap.IndexOfAnyExcept(
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                            span.Length,
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)),
+                            values.Length);
                     }
 
                     for (int i = 0; i < span.Length; i++)
@@ -958,16 +954,13 @@ namespace System
                     return LastIndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
-                    if (typeof(T) == typeof(char))
+                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(short))
                     {
-                        if (IndexOfAnyAsciiSearcher.TryLastIndexOfAnyExcept(
-                                ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
-                                span.Length,
-                                new ReadOnlySpan<char>(ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)), values.Length),
-                                out int index))
-                        {
-                            return index;
-                        }
+                        return ProbabilisticMap.LastIndexOfAnyExcept(
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                            span.Length,
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(values)),
+                            values.Length);
                     }
 
                     for (int i = span.Length - 1; i >= 0; i--)
@@ -1392,48 +1385,12 @@ namespace System
                                 span.Length);
 
                         default:
-                            return IndexOfAnyProbabilistic(ref Unsafe.As<short, char>(ref spanRef), span.Length, ref Unsafe.As<short, char>(ref valueRef), values.Length);
+                            return ProbabilisticMap.IndexOfAny(ref Unsafe.As<short, char>(ref spanRef), span.Length, ref Unsafe.As<short, char>(ref valueRef), values.Length);
                     }
                 }
             }
 
             return SpanHelpers.IndexOfAny(ref MemoryMarshal.GetReference(span), span.Length, ref MemoryMarshal.GetReference(values), values.Length);
-        }
-
-        /// <summary>Searches for the first index of any of the specified values using a <see cref="ProbabilisticMap"/>.</summary>
-        private static unsafe int IndexOfAnyProbabilistic(ref char searchSpace, int searchSpaceLength, ref char values, int valuesLength)
-        {
-            Debug.Assert(searchSpaceLength >= 0);
-            Debug.Assert(valuesLength >= 0);
-
-            ReadOnlySpan<char> valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
-
-            if (IndexOfAnyAsciiSearcher.TryIndexOfAny(ref searchSpace, searchSpaceLength, valuesSpan, out int index))
-            {
-                return index;
-            }
-
-            ProbabilisticMap map = default;
-
-            uint* charMap = (uint*)&map;
-            ProbabilisticMap.Initialize(charMap, valuesSpan);
-
-            ref char cur = ref searchSpace;
-            while (searchSpaceLength != 0)
-            {
-                int ch = cur;
-                if (ProbabilisticMap.IsCharBitSet(charMap, (byte)ch) &&
-                    ProbabilisticMap.IsCharBitSet(charMap, (byte)(ch >> 8)) &&
-                    ProbabilisticMap.SpanContains(valuesSpan, (char)ch))
-                {
-                    return (int)(Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
-                }
-
-                searchSpaceLength--;
-                cur = ref Unsafe.Add(ref cur, 1);
-            }
-
-            return -1;
         }
 
         /// <summary>
@@ -1650,48 +1607,12 @@ namespace System
 #endif
 
                         default:
-                            return LastIndexOfAnyProbabilistic(ref Unsafe.As<short, char>(ref spanRef), span.Length, ref Unsafe.As<short, char>(ref valueRef), values.Length);
+                            return ProbabilisticMap.LastIndexOfAny(ref Unsafe.As<short, char>(ref spanRef), span.Length, ref Unsafe.As<short, char>(ref valueRef), values.Length);
                     }
                 }
             }
 
             return SpanHelpers.LastIndexOfAny(ref MemoryMarshal.GetReference(span), span.Length, ref MemoryMarshal.GetReference(values), values.Length);
-        }
-
-        /// <summary>Searches for the last index of any of the specified values using a <see cref="ProbabilisticMap"/>.</summary>
-        private static unsafe int LastIndexOfAnyProbabilistic(ref char searchSpace, int searchSpaceLength, ref char values, int valuesLength)
-        {
-            Debug.Assert(searchSpaceLength >= 0);
-            Debug.Assert(valuesLength >= 0);
-
-            var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
-
-            if (IndexOfAnyAsciiSearcher.TryLastIndexOfAny(ref searchSpace, searchSpaceLength, valuesSpan, out int index))
-            {
-                return index;
-            }
-
-            ProbabilisticMap map = default;
-
-            uint* charMap = (uint*)&map;
-            ProbabilisticMap.Initialize(charMap, valuesSpan);
-
-            ref char cur = ref Unsafe.Add(ref searchSpace, searchSpaceLength - 1);
-            while (searchSpaceLength != 0)
-            {
-                int ch = cur;
-                if (ProbabilisticMap.IsCharBitSet(charMap, (byte)ch) &&
-                    ProbabilisticMap.IsCharBitSet(charMap, (byte)(ch >> 8)) &&
-                    ProbabilisticMap.SpanContains(valuesSpan, (char)ch))
-                {
-                    return (int)(Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
-                }
-
-                searchSpaceLength--;
-                cur = ref Unsafe.Add(ref cur, -1);
-            }
-
-            return -1;
         }
 
         /// <summary>
