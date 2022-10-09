@@ -94,8 +94,8 @@ namespace System
         {
             ReadOnlySpan<char> valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
-            // If the search space is short, do a simple O(n * m) search.
-            if (searchSpaceLength < Vector128<short>.Count)
+            // If the search space is relatively short compared to the needle, do a simple O(n * m) search.
+            if (searchSpaceLength < Vector128<short>.Count || (searchSpaceLength < 20 && searchSpaceLength < (valuesLength >> 1)))
             {
                 ref char searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
                 ref char cur = ref searchSpace;
@@ -129,8 +129,8 @@ namespace System
         {
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
-            // If the search space is short, do a simple O(n * m) search.
-            if (searchSpaceLength < Vector128<short>.Count)
+            // If the search space is relatively short compared to the needle, do a simple O(n * m) search.
+            if (searchSpaceLength < Vector128<short>.Count || (searchSpaceLength < 20 && searchSpaceLength < (valuesLength >> 1)))
             {
                 ref char cur = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
 
