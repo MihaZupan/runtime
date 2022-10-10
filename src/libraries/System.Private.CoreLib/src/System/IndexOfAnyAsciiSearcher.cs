@@ -57,7 +57,7 @@ namespace System
         private static unsafe bool TryIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
-            Debug.Assert(searchSpace >= Vector128<short>.Count);
+            Debug.Assert(searchSpaceLength >= Vector128<short>.Count);
 
             if (IsSupported)
             {
@@ -79,7 +79,7 @@ namespace System
         private static unsafe bool TryLastIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
-            Debug.Assert(searchSpace >= Vector128<short>.Count);
+            Debug.Assert(searchSpaceLength >= Vector128<short>.Count);
 
             if (IsSupported)
             {
@@ -128,6 +128,7 @@ namespace System
 
             // We have 1-16 characters remaining. Process the first and last vector in the search space.
             // They may overlap, but we'll handle that in the index calculation if we do get a match.
+            Debug.Assert(searchSpaceLength >= Vector128<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
             {
                 ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector128<short>.Count);
 
@@ -179,6 +180,7 @@ namespace System
 
             // We have 1-16 characters remaining. Process the first and last vector in the search space.
             // They may overlap, but we'll handle that in the index calculation if we do get a match.
+            Debug.Assert(searchSpaceLength >= Vector128<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
             {
                 ref short oneVectorAfterStart = ref Unsafe.Add(ref searchSpace, Vector128<short>.Count);
 
