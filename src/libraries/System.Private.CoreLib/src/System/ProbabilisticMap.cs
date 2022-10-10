@@ -29,7 +29,6 @@ namespace System
         /// <summary>Initializes the map based on the specified values.</summary>
         /// <param name="charMap">A pointer to the beginning of a <see cref="ProbabilisticMap"/>.</param>
         /// <param name="values">The values to set in the map.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void Initialize(uint* charMap, ReadOnlySpan<char> values)
         {
 #if DEBUG
@@ -68,11 +67,9 @@ namespace System
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool IsCharBitSet(uint* charMap, byte value) =>
             (charMap[(uint)value & IndexMask] & (1u << (value >> IndexShift))) != 0;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void SetCharBit(uint* charMap, byte value) =>
             charMap[(uint)value & IndexMask] |= 1u << (value >> IndexShift);
 
@@ -88,7 +85,6 @@ namespace System
         public static int LastIndexOfAnyExcept(ref char searchSpace, int searchSpaceLength, ref char values, int valuesLength) =>
             LastIndexOfAny<Negate>(ref searchSpace, searchSpaceLength, ref values, valuesLength);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int IndexOfAny<TNegator>(ref char searchSpace, int searchSpaceLength, ref char values, int valuesLength)
             where TNegator : struct, INegator
         {
@@ -123,7 +119,6 @@ namespace System
             return ProbabilisticIndexOfAny<TNegator>(ref searchSpace, searchSpaceLength, ref values, valuesLength);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int LastIndexOfAny<TNegator>(ref char searchSpace, int searchSpaceLength, ref char values, int valuesLength)
             where TNegator : struct, INegator
         {
