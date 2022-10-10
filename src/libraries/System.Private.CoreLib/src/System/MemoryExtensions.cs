@@ -701,7 +701,7 @@ namespace System
                     return IndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
-                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(short))
+                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(char))
                     {
                         return ProbabilisticMap.IndexOfAnyExcept(
                             ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
@@ -954,7 +954,7 @@ namespace System
                     return LastIndexOfAnyExcept(span, values[0], values[1], values[2], values[3]);
 
                 default:
-                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(short))
+                    if (RuntimeHelpers.IsBitwiseEquatable<T>() && Unsafe.SizeOf<T>() == sizeof(char))
                     {
                         return ProbabilisticMap.LastIndexOfAnyExcept(
                             ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),

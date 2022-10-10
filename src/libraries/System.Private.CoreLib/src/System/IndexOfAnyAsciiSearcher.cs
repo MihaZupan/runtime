@@ -105,8 +105,11 @@ namespace System
 
             if (searchSpaceLength > 2 * Vector128<short>.Count)
             {
-                // Process the input in chunks of 16 characters. If the input length is a multiple of 16, don't consume
-                // the last 16 characters in this loop. Let the fallback below handle it instead. This is why the condition is
+                // Process the input in chunks of 16 characters (2 * Vector128<short>).
+                // We're mainly interested in a single byte of each character, and the core lookup operates on a Vector128<byte>.
+                // As packing two Vector128<short>s into a Vector128<byte> is cheap compared to the lookup, we can effectively double the throughput.
+                // If the input length is a multiple of 16, don't consume the last 16 characters in this loop.
+                // Let the fallback below handle it instead. This is why the condition is
                 // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
                 ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector128<short>.Count));
 
@@ -157,8 +160,11 @@ namespace System
 
             if (searchSpaceLength > 2 * Vector128<short>.Count)
             {
-                // Process the input in chunks of 16 characters. If the input length is a multiple of 16, don't consume
-                // the last 16 characters in this loop. Let the fallback below handle it instead. This is why the condition is
+                // Process the input in chunks of 16 characters (2 * Vector128<short>).
+                // We're mainly interested in a single byte of each character, and the core lookup operates on a Vector128<byte>.
+                // As packing two Vector128<short>s into a Vector128<byte> is cheap compared to the lookup, we can effectively double the throughput.
+                // If the input length is a multiple of 16, don't consume the last 16 characters in this loop.
+                // Let the fallback below handle it instead. This is why the condition is
                 // ">" instead of ">=" above, and why "IsAddressGreaterThan" is used instead of "!IsAddressLessThan".
                 ref short twoVectorsAfterStart = ref Unsafe.Add(ref searchSpace, 2 * Vector128<short>.Count);
 
@@ -252,7 +258,7 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> Shuffle(Vector128<byte> vector, Vector128<byte> indices)
         {
-            // Vector128.Shuffle is emitting a software fallback as indices are not given as inline constants.
+            // We're not using Vector128.Shuffle as the caller already accounts for and relies on differences in behavior between platforms.
             return Ssse3.IsSupported
                 ? Ssse3.Shuffle(vector, indices)
                 : AdvSimd.Arm64.VectorTableLookup(vector, indices);
