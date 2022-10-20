@@ -575,9 +575,9 @@ namespace System.Net.Http
             BufferBytes(normalizedMethod.Http3EncodedBytes);
             BufferIndexedHeader(H3StaticTable.SchemeHttps);
 
-            if (request.HasHeaders && request.Headers.Host != null)
+            if (request.HasHeaders && request.Headers.Host is string host)
             {
-                BufferLiteralHeaderWithStaticNameReference(H3StaticTable.Authority, request.Headers.Host);
+                BufferLiteralHeaderWithStaticNameReference(H3StaticTable.Authority, host);
             }
             else
             {

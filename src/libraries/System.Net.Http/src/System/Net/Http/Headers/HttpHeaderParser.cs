@@ -10,6 +10,7 @@ namespace System.Net.Http.Headers
     internal abstract class HttpHeaderParser
     {
         internal const string DefaultSeparator = ", ";
+        internal const int DefaultSeparatorLength = 2;
 
         private readonly bool _supportsMultipleValues;
         private readonly string? _separator;

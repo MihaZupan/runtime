@@ -99,7 +99,7 @@ namespace System.Net.Http
         internal readonly byte[]? _http3EncodedAuthorityHostHeader;
 
         /// <summary>For non-proxy connection pools, this is the host name in bytes; for proxies, null.</summary>
-        private readonly byte[]? _hostHeaderValueBytes;
+        internal readonly byte[]? _hostHeaderValueBytes;
         /// <summary>Options specialized and cached for this pool and its key.</summary>
         private readonly SslClientAuthenticationOptions? _sslOptionsHttp11;
         private readonly SslClientAuthenticationOptions? _sslOptionsHttp2;
