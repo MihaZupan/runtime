@@ -7099,6 +7099,18 @@ namespace System.Buffers.Text
         public static int GetMaxDecodedFromUtf8Length(int length) { throw null; }
         public static int GetMaxEncodedToUtf8Length(int length) { throw null; }
     }
+    public sealed partial class IndexOfAnyAsciiSearcher
+    {
+        public IndexOfAnyAsciiSearcher(System.ReadOnlySpan<char> asciiValues) { throw null; }
+        public int IndexOfAny(System.ReadOnlySpan<byte> searchSpace) { throw null; }
+        public int IndexOfAny(System.ReadOnlySpan<char> searchSpace) { throw null; }
+        public int IndexOfAnyExcept(System.ReadOnlySpan<byte> searchSpace) { throw null; }
+        public int IndexOfAnyExcept(System.ReadOnlySpan<char> searchSpace) { throw null; }
+        public int LastIndexOfAny(System.ReadOnlySpan<byte> searchSpace) { throw null; }
+        public int LastIndexOfAny(System.ReadOnlySpan<char> searchSpace) { throw null; }
+        public int LastIndexOfAnyExcept(System.ReadOnlySpan<byte> searchSpace) { throw null; }
+        public int LastIndexOfAnyExcept(System.ReadOnlySpan<char> searchSpace) { throw null; }
+    }
 }
 namespace System.CodeDom.Compiler
 {
