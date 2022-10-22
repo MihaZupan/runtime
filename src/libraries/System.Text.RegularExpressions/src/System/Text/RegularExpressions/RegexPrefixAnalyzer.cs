@@ -227,6 +227,11 @@ namespace System.Text.RegularExpressions
                         result.Range = (lowInclusive, highInclusive, negated);
                         results[i] = result;
                     }
+                    else if (RegexCharClass.TryGetAsciiSetChars(result.Set, out char[]? asciiChars))
+                    {
+                        result.IndexOfAnyAscii = (asciiChars, negated);
+                        results[i] = result;
+                    }
                 }
             }
 
@@ -482,6 +487,12 @@ namespace System.Text.RegularExpressions
                 if ((s1.Range is not null) != (s2.Range is not null))
                 {
                     return s1.Range is not null ? -1 : 1;
+                }
+
+                // If one has an ASCII-only set and the other doesn't, prioritize the one with the ASCII set.
+                if ((s1.IndexOfAnyAscii is not null) != (s2.IndexOfAnyAscii is not null))
+                {
+                    return s1.IndexOfAnyAscii is not null ? -1 : 1;
                 }
 
                 // As a tiebreaker, prioritize the earlier one.

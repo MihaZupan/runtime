@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -17,6 +18,13 @@ namespace System.Text.RegularExpressions
     [RequiresDynamicCode("Compiling a RegEx requires dynamic code.")]
     internal abstract class RegexCompiler
     {
+        // The generated code accesses IndexOfAnyAsciiSearcher instances from this field
+        private static IndexOfAnyAsciiSearcher[] s_asciiSearchers = Array.Empty<IndexOfAnyAsciiSearcher>();
+        private static UInt128[] s_asciiSearchersSets = Array.Empty<UInt128>();
+        private static readonly object s_asciiSearchersLock = new();
+
+        private static readonly FieldInfo s_asciiSearchersField = typeof(RegexCompiler).GetField(nameof(s_asciiSearchers), BindingFlags.Static | BindingFlags.NonPublic)!;
+
         private static readonly FieldInfo s_runtextstartField = RegexRunnerField("runtextstart");
         private static readonly FieldInfo s_runtextposField = RegexRunnerField("runtextpos");
         private static readonly FieldInfo s_runtrackposField = RegexRunnerField("runtrackpos");
@@ -83,6 +91,10 @@ namespace System.Text.RegularExpressions
         private static readonly MethodInfo s_spanSliceIntIntMethod = typeof(ReadOnlySpan<char>).GetMethod("Slice", new Type[] { typeof(int), typeof(int) })!;
         private static readonly MethodInfo s_spanStartsWithSpan = typeof(MemoryExtensions).GetMethod("StartsWith", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)) })!.MakeGenericMethod(typeof(char));
         private static readonly MethodInfo s_spanStartsWithSpanComparison = typeof(MemoryExtensions).GetMethod("StartsWith", new Type[] { typeof(ReadOnlySpan<char>), typeof(ReadOnlySpan<char>), typeof(StringComparison) })!;
+        private static readonly MethodInfo s_indexOfAnyAsciiSearcherIndexOfAny = typeof(IndexOfAnyAsciiSearcher).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<char>) })!;
+        private static readonly MethodInfo s_indexOfAnyAsciiSearcherIndexOfAnyExcept = typeof(IndexOfAnyAsciiSearcher).GetMethod("IndexOfAnyExcept", new Type[] { typeof(ReadOnlySpan<char>) })!;
+        private static readonly MethodInfo s_indexOfAnyAsciiSearcherLastIndexOfAny = typeof(IndexOfAnyAsciiSearcher).GetMethod("LastIndexOfAny", new Type[] { typeof(ReadOnlySpan<char>) })!;
+        private static readonly MethodInfo s_indexOfAnyAsciiSearcherLastIndexOfAnyExcept = typeof(IndexOfAnyAsciiSearcher).GetMethod("LastIndexOfAnyExcept", new Type[] { typeof(ReadOnlySpan<char>) })!;
         private static readonly MethodInfo s_stringAsSpanMethod = typeof(MemoryExtensions).GetMethod("AsSpan", new Type[] { typeof(string) })!;
         private static readonly MethodInfo s_stringGetCharsMethod = typeof(string).GetMethod("get_Chars", new Type[] { typeof(int) })!;
         private static readonly MethodInfo s_arrayResize = typeof(Array).GetMethod("Resize")!.MakeGenericMethod(typeof(int));
@@ -822,7 +834,7 @@ namespace System.Text.RegularExpressions
                 // If we can use IndexOf{Any}, try to accelerate the skip loop via vectorization to match the first prefix.
                 // We can use it if this is a case-sensitive class with a small number of characters in the class.
                 int setIndex = 0;
-                bool canUseIndexOf = primarySet.Chars is not null || primarySet.Range is not null;
+                bool canUseIndexOf = primarySet.Chars is not null || primarySet.Range is not null || primarySet.IndexOfAnyAscii is not null;
                 bool needLoop = !canUseIndexOf || setsToUse > 1;
 
                 Label checkSpanLengthLabel = default;
@@ -844,6 +856,11 @@ namespace System.Text.RegularExpressions
                 if (canUseIndexOf)
                 {
                     setIndex = 1;
+
+                    if (primarySet.IndexOfAnyAscii is not null)
+                    {
+                        EmitLoadIndexOfAnyAsciiSearcherInstance(primarySet.IndexOfAnyAscii.Value.Chars);
+                    }
 
                     if (needLoop)
                     {
@@ -902,9 +919,9 @@ namespace System.Text.RegularExpressions
                                 break;
                         }
                     }
-                    else
+                    else if (primarySet.Range is not null)
                     {
-                        if (primarySet.Range!.Value.LowInclusive == primarySet.Range.Value.HighInclusive)
+                        if (primarySet.Range.Value.LowInclusive == primarySet.Range.Value.HighInclusive)
                         {
                             // tmp = ...IndexOf{AnyExcept}(low);
                             Ldc(primarySet.Range!.Value.LowInclusive);
@@ -917,6 +934,10 @@ namespace System.Text.RegularExpressions
                             Ldc(primarySet.Range.Value.HighInclusive);
                             Call(primarySet.Range.Value.Negated ? s_spanIndexOfAnyExceptInRange : s_spanIndexOfAnyInRange);
                         }
+                    }
+                    else
+                    {
+                        Callvirt(primarySet.IndexOfAnyAscii!.Value.Negated ? s_indexOfAnyAsciiSearcherIndexOfAnyExcept : s_indexOfAnyAsciiSearcherIndexOfAny);
                     }
 
                     if (needLoop)
@@ -3180,6 +3201,11 @@ namespace System.Text.RegularExpressions
                     // {
                     //     goto doneLabel;
                     // }
+                    if (literal.AsciiSetChars is not null)
+                    {
+                        EmitLoadIndexOfAnyAsciiSearcherInstance(literal.AsciiSetChars);
+                    }
+
                     Ldloca(inputSpan);
                     Ldloc(startingPos);
                     if (literal.String is not null)
@@ -3227,6 +3253,10 @@ namespace System.Text.RegularExpressions
                                     Call(literal.Negated ? s_spanLastIndexOfAnyExceptSpan : s_spanLastIndexOfAnySpan);
                                     break;
                             }
+                        }
+                        else if (literal.AsciiSetChars is not null)
+                        {
+                            Callvirt(literal.Negated ? s_indexOfAnyAsciiSearcherLastIndexOfAnyExcept : s_indexOfAnyAsciiSearcherLastIndexOfAny);
                         }
                         else if (literal.Range.LowInclusive == literal.Range.HighInclusive)
                         {
@@ -3412,6 +3442,7 @@ namespace System.Text.RegularExpressions
                     !literal.Negated && // not negated; can't search for both the node.Ch and a negated subsequent char with an IndexOf* method
                     (literal.String is not null ||
                      literal.SetChars is not null ||
+                     literal.AsciiSetChars is not null ||
                      literal.Range.LowInclusive == literal.Range.HighInclusive ||
                      (literal.Range.LowInclusive <= node.Ch && node.Ch <= literal.Range.HighInclusive)))
                 {
@@ -3423,6 +3454,11 @@ namespace System.Text.RegularExpressions
 
                     // This lazy loop will consume all characters other than node.Ch until the subsequent literal.
                     // We can implement it to search for either that char or the literal, whichever comes first.
+                    if (literal.AsciiSetChars is not null)
+                    {
+                        EmitLoadIndexOfAnyAsciiSearcherInstance(literal.AsciiSetChars);
+                    }
+
                     Ldloc(slice);
                     if (literal.String is not null) // string literal
                     {
@@ -3483,6 +3519,11 @@ namespace System.Text.RegularExpressions
                                 Call(s_spanIndexOfAnySpan);
                                 break;
                         }
+                    }
+                    else if (literal.AsciiSetChars is not null) // set of only ASCII characters
+                    {
+                        overlap = literal.AsciiSetChars.AsSpan().Contains(node.Ch);
+                        Callvirt(s_indexOfAnyAsciiSearcherIndexOfAny);
                     }
                     else if (literal.Range.LowInclusive == literal.Range.HighInclusive) // char literal
                     {
@@ -3559,6 +3600,10 @@ namespace System.Text.RegularExpressions
                     // e.g. ".*?string" with RegexOptions.Singleline
                     // This lazy loop will consume all characters until the subsequent literal. If the subsequent literal
                     // isn't found, the loop fails. We can implement it to just search for that literal.
+                    if (literal2.AsciiSetChars is not null)
+                    {
+                        EmitLoadIndexOfAnyAsciiSearcherInstance(literal2.AsciiSetChars);
+                    }
 
                     // startingPos = slice.IndexOf(literal);
                     Ldloc(slice);
@@ -3592,6 +3637,10 @@ namespace System.Text.RegularExpressions
                                 Call(literal2.Negated ? s_spanIndexOfAnyExceptSpan : s_spanIndexOfAnySpan);
                                 break;
                         }
+                    }
+                    else if (literal2.AsciiSetChars is not null)
+                    {
+                        Callvirt(literal2.Negated ? s_indexOfAnyAsciiSearcherIndexOfAnyExcept : s_indexOfAnyAsciiSearcherIndexOfAny);
                     }
                     else
                     {
@@ -4404,7 +4453,44 @@ namespace System.Text.RegularExpressions
                     }
                     Ldc(rangeLowInclusive);
                     Ldc(rangeHighInclusive);
-                    Call(RegexCharClass.IsNegated(node.Str!) ? s_spanIndexOfAnyInRange : s_spanIndexOfAnyExceptInRange);
+                    Call(RegexCharClass.IsNegated(node.Str) ? s_spanIndexOfAnyInRange : s_spanIndexOfAnyExceptInRange);
+                    Stloc(iterationLocal);
+
+                    // if (i >= 0) goto atomicLoopDoneLabel;
+                    Ldloc(iterationLocal);
+                    Ldc(0);
+                    BgeFar(atomicLoopDoneLabel);
+
+                    // i = slice.Length - sliceStaticPos;
+                    Ldloca(slice);
+                    Call(s_spanGetLengthMethod);
+                    if (sliceStaticPos > 0)
+                    {
+                        Ldc(sliceStaticPos);
+                        Sub();
+                    }
+                    Stloc(iterationLocal);
+                }
+                else if (node.IsSetFamily &&
+                    maxIterations == int.MaxValue &&
+                    RegexCharClass.TryGetAsciiSetChars(node.Str, out char[]? asciiChars))
+                {
+                    // If the set contains only ASCII characters, we can use IndexOfAnyAsciiSearcher to find any of the target characters.
+                    // As with the cases above, the unbounded constraint is purely for simplicity.
+
+                    // int i = s_asciiSearchers[42].IndexOfAny{Except}(slice.Slice(sliceStaticPos));
+                    EmitLoadIndexOfAnyAsciiSearcherInstance(asciiChars);
+                    if (sliceStaticPos > 0)
+                    {
+                        Ldloca(slice);
+                        Ldc(sliceStaticPos);
+                        Call(s_spanSliceIntMethod);
+                    }
+                    else
+                    {
+                        Ldloc(slice);
+                    }
+                    Callvirt(RegexCharClass.IsNegated(node.Str) ? s_indexOfAnyAsciiSearcherIndexOfAny : s_indexOfAnyAsciiSearcherIndexOfAnyExcept);
                     Stloc(iterationLocal);
 
                     // if (i >= 0) goto atomicLoopDoneLabel;
@@ -5777,6 +5863,48 @@ namespace System.Text.RegularExpressions
                 // base.CheckTimeout();
                 Ldthis();
                 Call(s_checkTimeoutMethod);
+            }
+        }
+
+        private void EmitLoadIndexOfAnyAsciiSearcherInstance(char[] asciiChars)
+        {
+            int instanceIndex = GetOrSetInstance(asciiChars);
+
+            _ilg!.Emit(OpCodes.Ldsfld, s_asciiSearchersField);
+            _ilg.Emit(OpCodes.Ldc_I4_S, instanceIndex);
+            _ilg.Emit(OpCodes.Ldelem_Ref);
+
+            static int GetOrSetInstance(char[] asciiChars)
+            {
+                Debug.Assert(RegexCharClass.IsAscii(asciiChars));
+
+                UInt128 set = UInt128.Zero;
+                foreach (char c in asciiChars)
+                {
+                    set |= UInt128.One << c;
+                }
+
+                Debug.Assert(set != 0);
+
+                lock (s_asciiSearchersLock)
+                {
+                    int i = s_asciiSearchersSets.AsSpan().IndexOfAny(UInt128.Zero, set);
+                    if (i < 0)
+                    {
+                        i = s_asciiSearchersSets.Length;
+                        int newSize = Math.Max(4, i * 2);
+                        Array.Resize(ref s_asciiSearchersSets, newSize);
+                        Array.Resize(ref s_asciiSearchers, newSize);
+                    }
+                    else if (s_asciiSearchersSets[i] != UInt128.Zero)
+                    {
+                        return i;
+                    }
+
+                    s_asciiSearchersSets[i] = set;
+                    s_asciiSearchers[i] = new IndexOfAnyAsciiSearcher(asciiChars);
+                    return i;
+                }
             }
         }
     }

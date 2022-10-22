@@ -341,6 +341,34 @@ namespace System.Text.RegularExpressions.Generator
             }
         }
 
+        /// <summary>Adds an IndexOfAnyAsciiSearcher instance declaration to the required helpers collection.</summary>
+        private static string IndexOfAnyAsciiSearcher(char[] asciiChars, Dictionary<string, string[]> requiredHelpers)
+        {
+            Debug.Assert(RegexCharClass.IsAscii(asciiChars));
+
+            // The set of ASCII characters can be represented as a 128-bit bitmap. Use the 16-byte hex string as the key.
+            byte[] bitmap = new byte[16];
+            foreach (char c in asciiChars)
+            {
+                bitmap[c >> 3] |= (byte)(1 << (c & 7));
+            }
+
+            string helperName = "Ascii_" + BitConverter.ToString(bitmap).Replace("-", string.Empty);
+
+            if (!requiredHelpers.ContainsKey(helperName))
+            {
+                Array.Sort(asciiChars);
+
+                requiredHelpers.Add(helperName, new string[]
+                {
+                    $"internal static readonly IndexOfAnyAsciiSearcher {helperName} =",
+                    $"    new({Literal(asciiChars.ToString())})",
+                });
+            }
+
+            return $"{HelpersTypeName}.{helperName}";
+        }
+
         /// <summary>Emits the body of the Scan method override.</summary>
         private static (bool NeedsTryFind, bool NeedsTryMatch) EmitScan(IndentedTextWriter writer, RegexMethod rm)
         {
@@ -784,7 +812,7 @@ namespace System.Text.RegularExpressions.Generator
                 // If we can use IndexOf{Any}, try to accelerate the skip loop via vectorization to match the first prefix.
                 // We can use it if this is a case-sensitive class with a small number of characters in the class.
                 int setIndex = 0;
-                bool canUseIndexOf = primarySet.Chars is not null || primarySet.Range is not null;
+                bool canUseIndexOf = primarySet.Chars is not null || primarySet.Range is not null || primarySet.IndexOfAnyAscii is not null;
                 bool needLoop = !canUseIndexOf || setsToUse > 1;
 
                 FinishEmitBlock loopBlock = default;
@@ -817,12 +845,17 @@ namespace System.Text.RegularExpressions.Generator
                             3 => $"{span}.IndexOfAny({Literal(primarySet.Chars[0])}, {Literal(primarySet.Chars[1])}, {Literal(primarySet.Chars[2])})",
                             _ => $"{span}.IndexOfAny({Literal(new string(primarySet.Chars))})",
                         } :
-                        (primarySet.Range.Value.LowInclusive == primarySet.Range.Value.HighInclusive, primarySet.Range.Value.Negated) switch
+                        primarySet.Range is not null ? (primarySet.Range.Value.LowInclusive == primarySet.Range.Value.HighInclusive, primarySet.Range.Value.Negated) switch
                         {
                             (false, false) => $"{span}.IndexOfAnyInRange({Literal(primarySet.Range.Value.LowInclusive)}, {Literal(primarySet.Range.Value.HighInclusive)})",
                             (true, false) => $"{span}.IndexOf({Literal(primarySet.Range.Value.LowInclusive)})",
                             (false, true) => $"{span}.IndexOfAnyExceptInRange({Literal(primarySet.Range.Value.LowInclusive)}, {Literal(primarySet.Range.Value.HighInclusive)})",
                             (true, true) => $"{span}.IndexOfAnyExcept({Literal(primarySet.Range.Value.LowInclusive)})",
+                        } :
+                        primarySet.IndexOfAnyAscii.Value.Negated switch
+                        {
+                            false => $"{IndexOfAnyAsciiSearcher(primarySet.IndexOfAnyAscii.Value.Chars, requiredHelpers)}.IndexOfAny({span})",
+                            true => $"{IndexOfAnyAsciiSearcher(primarySet.IndexOfAnyAscii.Value.Chars, requiredHelpers)}.IndexOfAnyExcept({span})",
                         };
 
                     if (needLoop)
@@ -2898,22 +2931,34 @@ namespace System.Text.RegularExpressions.Generator
                         ("LastIndexOf", "LastIndexOfAny") :
                         ("LastIndexOfAnyExcept", "LastIndexOfAnyExcept");
 
-                    string setEndingPosCondition = $"    ({endingPos} = inputSpan.Slice({startingPos}, ";
+                    string setEndingPosCondition = $"    ({endingPos} = ";
+                    string inputSpanSlice = $"inputSpan.Slice({startingPos}, ";
+
                     if (literal.String is not null)
                     {
-                        setEndingPosCondition += $"Math.Min(inputSpan.Length, {endingPos} + {literal.String.Length - 1}) - {startingPos}).{lastIndexOfName}({Literal(literal.String)}";
+                        inputSpanSlice += $"Math.Min(inputSpan.Length, {endingPos} + {literal.String.Length - 1})";
+                        setEndingPosCondition += $"{inputSpanSlice}.{lastIndexOfName}({Literal(literal.String)}";
                     }
                     else
                     {
-                        setEndingPosCondition += $"{endingPos} - {startingPos}).";
-                        setEndingPosCondition += literal.SetChars is not null ? literal.SetChars.Length switch
+                        inputSpanSlice += $"{endingPos} - {startingPos})";
+
+                        if (literal.AsciiSetChars is not null)
                         {
-                            2 => $"{lastIndexOfAnyName}({Literal(literal.SetChars[0])}, {Literal(literal.SetChars[1])}",
-                            3 => $"{lastIndexOfAnyName}({Literal(literal.SetChars[0])}, {Literal(literal.SetChars[1])}, {Literal(literal.SetChars[2])}",
-                            _ => $"{lastIndexOfAnyName}({Literal(literal.SetChars)}",
-                        } :
-                        literal.Range.LowInclusive == literal.Range.HighInclusive ? $"{lastIndexOfName}({Literal(literal.Range.LowInclusive)}" :
-                        $"{lastIndexOfAnyName}InRange({Literal(literal.Range.LowInclusive)}, {Literal(literal.Range.HighInclusive)}";
+                            setEndingPosCondition += $"{IndexOfAnyAsciiSearcher(literal.AsciiSetChars, requiredHelpers)}.{lastIndexOfAnyName}({inputSpanSlice}";
+                        }
+                        else
+                        {
+                            setEndingPosCondition += $"{inputSpanSlice}.";
+                            setEndingPosCondition += literal.SetChars is not null ? literal.SetChars.Length switch
+                            {
+                                2 => $"{lastIndexOfAnyName}({Literal(literal.SetChars[0])}, {Literal(literal.SetChars[1])}",
+                                3 => $"{lastIndexOfAnyName}({Literal(literal.SetChars[0])}, {Literal(literal.SetChars[1])}, {Literal(literal.SetChars[2])}",
+                                _ => $"{lastIndexOfAnyName}({Literal(literal.SetChars)}",
+                            } :
+                            literal.Range.LowInclusive == literal.Range.HighInclusive ? $"{lastIndexOfName}({Literal(literal.Range.LowInclusive)}" :
+                            $"{lastIndexOfAnyName}InRange({Literal(literal.Range.LowInclusive)}, {Literal(literal.Range.HighInclusive)}";
+                        }
                     }
                     setEndingPosCondition += ")) < 0)";
 
@@ -3067,6 +3112,7 @@ namespace System.Text.RegularExpressions.Generator
                         !literal.Negated && // not negated; can't search for both the node.Ch and a negated subsequent char with an IndexOf* method
                         (literal.String is not null ||
                          literal.SetChars is not null ||
+                         literal.AsciiSetChars is not null ||
                          literal.Range.LowInclusive == literal.Range.HighInclusive ||
                          (literal.Range.LowInclusive <= node.Ch && node.Ch <= literal.Range.HighInclusive)))
                     {
@@ -3097,6 +3143,11 @@ namespace System.Text.RegularExpressions.Generator
                                 (false, 2) => $"{startingPos} = {sliceSpan}.IndexOfAny({Literal(node.Ch)}, {Literal(literal.SetChars[0])}, {Literal(literal.SetChars[1])});",
                                 (false, _) => $"{startingPos} = {sliceSpan}.IndexOfAny({Literal($"{node.Ch}{literal.SetChars}")});",
                             });
+                        }
+                        else if (literal.AsciiSetChars is not null) // set of only ASCII characters
+                        {
+                            overlap = literal.AsciiSetChars.Contains(node.Ch);
+                            writer.WriteLine($"{startingPos} = {IndexOfAnyAsciiSearcher(literal.AsciiSetChars, requiredHelpers)}.IndexOfAny({sliceSpan});");
                         }
                         else if (literal.Range.LowInclusive == literal.Range.HighInclusive) // single char
                         {
@@ -3139,17 +3190,25 @@ namespace System.Text.RegularExpressions.Generator
                         (string indexOfName, string indexOfAnyName) = !literal2.Negated ?
                             ("IndexOf", "IndexOfAny") :
                             ("IndexOfAnyExcept", "IndexOfAnyExcept");
-                        writer.WriteLine($"{startingPos} = {sliceSpan}.");
-                        writer.WriteLine(
-                            literal2.String is not null ? $"{indexOfName}({Literal(literal2.String)});" :
-                            literal2.SetChars is not null ? literal2.SetChars.Length switch
-                            {
-                                2 => $"{indexOfAnyName}({Literal(literal2.SetChars[0])}, {Literal(literal2.SetChars[1])});",
-                                3 => $"{indexOfAnyName}({Literal(literal2.SetChars[0])}, {Literal(literal2.SetChars[1])}, {Literal(literal2.SetChars[2])});",
-                                _ => $"{indexOfAnyName}({Literal(literal2.SetChars)});",
-                            } :
-                            literal2.Range.LowInclusive == literal2.Range.HighInclusive ? $"{indexOfName}({Literal(literal2.Range.LowInclusive)});" :
-                            $"{indexOfAnyName}({Literal(literal2.Range.LowInclusive)}, {Literal(literal2.Range.HighInclusive)});");
+
+                        if (literal2.AsciiSetChars is not null)
+                        {
+                            writer.WriteLine($"{startingPos} = {IndexOfAnyAsciiSearcher(literal2.AsciiSetChars, requiredHelpers)}.{indexOfAnyName}({sliceSpan});");
+                        }
+                        else
+                        {
+                            writer.WriteLine($"{startingPos} = {sliceSpan}.");
+                            writer.WriteLine(
+                                literal2.String is not null ? $"{indexOfName}({Literal(literal2.String)});" :
+                                literal2.SetChars is not null ? literal2.SetChars.Length switch
+                                {
+                                    2 => $"{indexOfAnyName}({Literal(literal2.SetChars[0])}, {Literal(literal2.SetChars[1])});",
+                                    3 => $"{indexOfAnyName}({Literal(literal2.SetChars[0])}, {Literal(literal2.SetChars[1])}, {Literal(literal2.SetChars[2])});",
+                                    _ => $"{indexOfAnyName}({Literal(literal2.SetChars)});",
+                                } :
+                                literal2.Range.LowInclusive == literal2.Range.HighInclusive ? $"{indexOfName}({Literal(literal2.Range.LowInclusive)});" :
+                                $"{indexOfAnyName}InRange({Literal(literal2.Range.LowInclusive)}, {Literal(literal2.Range.HighInclusive)});");
+                        }
 
                         using (EmitBlock(writer, $"if ({startingPos} < 0)"))
                         {
@@ -3724,7 +3783,7 @@ namespace System.Text.RegularExpressions.Generator
                 {
                     // If the set contains a single range, we can use an IndexOfAny{Except}InRange to find any of the target characters.
                     // As with the cases above, the unbounded constraint is purely for simplicity.
-                    string indexOfMethod = RegexCharClass.IsNegated(node.Str!) ? "IndexOfAnyInRange" : "IndexOfAnyExceptInRange";
+                    string indexOfMethod = RegexCharClass.IsNegated(node.Str) ? "IndexOfAnyInRange" : "IndexOfAnyExceptInRange";
 
                     writer.Write($"int {iterationLocal} = {sliceSpan}");
                     if (sliceStaticPos != 0)
@@ -3732,6 +3791,28 @@ namespace System.Text.RegularExpressions.Generator
                         writer.Write($".Slice({sliceStaticPos})");
                     }
                     writer.WriteLine($".{indexOfMethod}({Literal(rangeLowInclusive)}, {Literal(rangeHighInclusive)});");
+                    using (EmitBlock(writer, $"if ({iterationLocal} < 0)"))
+                    {
+                        writer.WriteLine(sliceStaticPos > 0 ?
+                            $"{iterationLocal} = {sliceSpan}.Length - {sliceStaticPos};" :
+                            $"{iterationLocal} = {sliceSpan}.Length;");
+                    }
+                    writer.WriteLine();
+                }
+                else if (node.IsSetFamily &&
+                    maxIterations == int.MaxValue &&
+                    RegexCharClass.TryGetAsciiSetChars(node.Str, out char[]? asciiChars))
+                {
+                    // If the set contains only ASCII characters, we can use IndexOfAnyAsciiSearcher to find any of the target characters.
+                    // As with the cases above, the unbounded constraint is purely for simplicity.
+                    string indexOfMethod = RegexCharClass.IsNegated(node.Str) ? "IndexOfAny" : "IndexOfAnyExcept";
+
+                    writer.Write($"int {iterationLocal} = {IndexOfAnyAsciiSearcher(asciiChars, requiredHelpers)}.{indexOfMethod}({sliceSpan}");
+                    if (sliceStaticPos != 0)
+                    {
+                        writer.Write($".Slice({sliceStaticPos})");
+                    }
+                    writer.WriteLine(");");
                     using (EmitBlock(writer, $"if ({iterationLocal} < 0)"))
                     {
                         writer.WriteLine(sliceStaticPos > 0 ?

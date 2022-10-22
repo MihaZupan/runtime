@@ -1394,14 +1394,14 @@ namespace System.Text.RegularExpressions
                     {
                         case RegexNodeKind.One:
                         case RegexNodeKind.Oneloop or RegexNodeKind.Oneloopatomic or RegexNodeKind.Onelazy when node.M > 0:
-                            return new StartingLiteralData(range: (node.Ch, node.Ch), @string: null, setChars: null, negated: false);
+                            return new StartingLiteralData(range: (node.Ch, node.Ch), negated: false);
 
                         case RegexNodeKind.Notone:
                         case RegexNodeKind.Notoneloop or RegexNodeKind.Notoneloopatomic or RegexNodeKind.Notonelazy when node.M > 0:
-                            return new StartingLiteralData(range: (node.Ch, node.Ch), @string: null, setChars: null, negated: true);
+                            return new StartingLiteralData(range: (node.Ch, node.Ch), negated: true);
 
                         case RegexNodeKind.Multi:
-                            return new StartingLiteralData(range: default, @string: node.Str, setChars: null, negated: false);
+                            return new StartingLiteralData(@string: node.Str);
 
                         case RegexNodeKind.Set:
                         case RegexNodeKind.Setloop or RegexNodeKind.Setloopatomic or RegexNodeKind.Setlazy when node.M > 0:
@@ -1410,13 +1410,18 @@ namespace System.Text.RegularExpressions
                             if ((numChars = RegexCharClass.GetSetChars(node.Str!, setChars)) != 0)
                             {
                                 setChars = setChars.Slice(0, numChars);
-                                return new StartingLiteralData(range: default, @string: null, setChars: setChars.ToString(), negated: RegexCharClass.IsNegated(node.Str!));
+                                return new StartingLiteralData(setChars: setChars.ToString(), negated: RegexCharClass.IsNegated(node.Str!));
                             }
 
                             if (RegexCharClass.TryGetSingleRange(node.Str!, out char lowInclusive, out char highInclusive))
                             {
                                 Debug.Assert(lowInclusive < highInclusive);
-                                return new StartingLiteralData(range: (lowInclusive, highInclusive), @string: null, setChars: null, negated: RegexCharClass.IsNegated(node.Str!));
+                                return new StartingLiteralData(range: (lowInclusive, highInclusive), negated: RegexCharClass.IsNegated(node.Str!));
+                            }
+
+                            if (RegexCharClass.TryGetAsciiSetChars(node.Str!, out char[]? asciiChars))
+                            {
+                                return new StartingLiteralData(asciiSetChars: asciiChars, negated: RegexCharClass.IsNegated(node.Str!));
                             }
                             break;
 
@@ -1441,13 +1446,20 @@ namespace System.Text.RegularExpressions
             public readonly (char LowInclusive, char HighInclusive) Range;
             public readonly string? String;
             public readonly string? SetChars;
+            public readonly char[]? AsciiSetChars;
             public readonly bool Negated;
 
-            public StartingLiteralData((char LowInclusive, char HighInclusive) range, string? @string, string? setChars, bool negated)
+            public StartingLiteralData(
+                (char LowInclusive, char HighInclusive) range = default,
+                string? @string = null,
+                string? setChars = null,
+                char[]? asciiSetChars = null,
+                bool negated = false)
             {
                 Range = range;
                 String = @string;
                 SetChars = setChars;
+                AsciiSetChars = asciiSetChars;
                 Negated = negated;
             }
         }
