@@ -235,7 +235,7 @@ namespace System.Text.RegularExpressions.Generator
                     writer.WriteLine($"{{");
                     writer.Indent++;
                     bool sawFirst = false;
-                    foreach (KeyValuePair<string, string[]> helper in requiredHelpers)
+                    foreach (KeyValuePair<string, string[]> helper in requiredHelpers.OrderBy(h => h.Key))
                     {
                         if (sawFirst)
                         {

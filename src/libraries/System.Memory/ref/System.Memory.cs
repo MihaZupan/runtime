@@ -190,6 +190,11 @@ namespace System.Text
 #endif // !BUILDING_CORELIB_REFERENCE
 namespace System
 {
+    public readonly struct IndexOfAnyAsciiValues
+    {
+        private readonly object _dummy;
+        private readonly int _dummyPrimitive;
+    }
     public static partial class MemoryExtensions
     {
         public static System.ReadOnlyMemory<char> AsMemory(this string? text) { throw null; }
@@ -234,6 +239,7 @@ namespace System
         public static bool Contains<T>(this System.Span<T> span, T value) where T : System.IEquatable<T>? { throw null; }
         public static void CopyTo<T>(this T[]? source, System.Memory<T> destination) { }
         public static void CopyTo<T>(this T[]? source, System.Span<T> destination) { }
+        public static System.IndexOfAnyAsciiValues CreateIndexOfAnyAsciiValues(System.ReadOnlySpan<char> asciiValues) { throw null; }
         public static bool EndsWith(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> value, System.StringComparison comparisonType) { throw null; }
         public static bool EndsWith<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static bool EndsWith<T>(this System.Span<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
@@ -243,6 +249,14 @@ namespace System
         public static System.Text.SpanRuneEnumerator EnumerateRunes(this System.Span<char> span) { throw null; }
         public static bool Equals(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> other, System.StringComparison comparisonType) { throw null; }
         public static int IndexOf(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> value, System.StringComparison comparisonType) { throw null; }
+        public static int IndexOfAny(this System.ReadOnlySpan<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAny(this System.ReadOnlySpan<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAny(this System.Span<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAny(this System.Span<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAnyExcept(this System.ReadOnlySpan<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAnyExcept(this System.ReadOnlySpan<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAnyExcept(this System.Span<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int IndexOfAnyExcept(this System.Span<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
         public static int IndexOfAny<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> values) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOfAny<T>(this System.ReadOnlySpan<T> span, T value0, T value1) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOfAny<T>(this System.ReadOnlySpan<T> span, T value0, T value1, T value2) where T : System.IEquatable<T>? { throw null; }
@@ -257,12 +271,24 @@ namespace System
         public static int IndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, T value0, T value1) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, T value0, T value1, T value2) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> values) where T : System.IEquatable<T>? { throw null; }
+        public static int IndexOfAnyExceptInRange<T>(this System.ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
+        public static int IndexOfAnyExceptInRange<T>(this System.Span<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
         public static int IndexOf<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOf<T>(this System.ReadOnlySpan<T> span, T value) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOf<T>(this System.Span<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static int IndexOf<T>(this System.Span<T> span, T value) where T : System.IEquatable<T>? { throw null; }
+        public static int IndexOfAnyInRange<T>(this System.ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
+        public static int IndexOfAnyInRange<T>(this System.Span<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
         public static bool IsWhiteSpace(this System.ReadOnlySpan<char> span) { throw null; }
         public static int LastIndexOf(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> value, System.StringComparison comparisonType) { throw null; }
+        public static int LastIndexOfAny(this System.ReadOnlySpan<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAny(this System.ReadOnlySpan<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAny(this System.Span<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAny(this System.Span<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAnyExcept(this System.ReadOnlySpan<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAnyExcept(this System.ReadOnlySpan<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAnyExcept(this System.Span<byte> span, System.IndexOfAnyAsciiValues values) { throw null; }
+        public static int LastIndexOfAnyExcept(this System.Span<char> span, System.IndexOfAnyAsciiValues values) { throw null; }
         public static int LastIndexOfAny<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> values) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOfAny<T>(this System.ReadOnlySpan<T> span, T value0, T value1) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOfAny<T>(this System.ReadOnlySpan<T> span, T value0, T value1, T value2) where T : System.IEquatable<T>? { throw null; }
@@ -277,10 +303,14 @@ namespace System
         public static int LastIndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, T value0, T value1) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, T value0, T value1, T value2) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOfAnyExcept<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> values) where T : System.IEquatable<T>? { throw null; }
+        public static int LastIndexOfAnyExceptInRange<T>(this System.ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
+        public static int LastIndexOfAnyExceptInRange<T>(this System.Span<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
         public static int LastIndexOf<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOf<T>(this System.ReadOnlySpan<T> span, T value) where T : System.IEquatable<T>? { throw null; }
         public static int LastIndexOf<T>(this System.Span<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T?> { throw null; }
         public static int LastIndexOf<T>(this System.Span<T> span, T value) where T : System.IEquatable<T>? { throw null; }
+        public static int LastIndexOfAnyInRange<T>(this System.ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
+        public static int LastIndexOfAnyInRange<T>(this System.Span<T> span, T lowInclusive, T highInclusive) where T : System.IComparable<T> { throw null; }
         public static bool Overlaps<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> other) { throw null; }
         public static bool Overlaps<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> other, out int elementOffset) { throw null; }
         public static bool Overlaps<T>(this System.Span<T> span, System.ReadOnlySpan<T> other) { throw null; }
