@@ -19,6 +19,7 @@ namespace System
     // the string methods perform some type of transformation on the current
     // instance and return the result as a new string.  As with arrays, character
     // positions (indices) are zero-based.
+    // Hi
 
     [Serializable]
     [NonVersionable] // This only applies to field layout
