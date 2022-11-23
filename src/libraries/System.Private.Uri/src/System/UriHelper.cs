@@ -183,8 +183,7 @@ namespace System
                     r.TryEncodeToUtf8(utf8Bytes, out int bytesWritten);
                     foreach (byte b in utf8Bytes.Slice(0, bytesWritten))
                     {
-                        vsb.Append('%');
-                        HexConverter.ToCharsBuffer(b, vsb.AppendSpan(2), 0, HexConverter.Casing.Upper);
+                        PercentEncodeByte(b, ref vsb);
                     }
 
                     continue;
@@ -207,8 +206,7 @@ namespace System
                         }
                     }
 
-                    vsb.Append('%');
-                    HexConverter.ToCharsBuffer((byte)c, vsb.AppendSpan(2), 0, HexConverter.Casing.Upper);
+                    PercentEncodeByte((byte)c, ref vsb);
                     stringToEscape = stringToEscape.Slice(1);
                     continue;
                 }
@@ -413,7 +411,7 @@ namespace System
                 {
                     if (escapeReserved)
                     {
-                        EscapeAsciiChar((byte)pStr[next], ref dest);
+                        PercentEncodeByte((byte)pStr[next], ref dest);
                         escapeReserved = false;
                         next++;
                     }
@@ -441,7 +439,7 @@ namespace System
             }
         }
 
-        internal static void EscapeAsciiChar(byte b, ref ValueStringBuilder to)
+        internal static void PercentEncodeByte(byte b, ref ValueStringBuilder to)
         {
             to.Append('%');
             HexConverter.ToCharsBuffer(b, to.AppendSpan(2), 0, HexConverter.Casing.Upper);
