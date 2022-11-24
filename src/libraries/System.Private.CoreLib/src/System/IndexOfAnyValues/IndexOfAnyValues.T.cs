@@ -28,6 +28,9 @@ namespace System.Buffers
         internal virtual int LastIndexOfAny(ReadOnlySpan<T> span) => throw new UnreachableException();
         internal virtual int LastIndexOfAnyExcept(ReadOnlySpan<T> span) => throw new UnreachableException();
 
+        internal virtual bool ContainsAny(ReadOnlySpan<T> span) => IndexOfAny(span) >= 0;
+        internal virtual bool ContainsAnyExcept(ReadOnlySpan<T> span) => IndexOfAnyExcept(span) >= 0;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int IndexOfAny(ReadOnlySpan<T> span, IndexOfAnyValues<T> values)
         {
@@ -70,6 +73,28 @@ namespace System.Buffers
             }
 
             return values.LastIndexOfAnyExcept(span);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool ContainsAny(ReadOnlySpan<T> span, IndexOfAnyValues<T> values)
+        {
+            if (values is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.values);
+            }
+
+            return values.ContainsAny(span);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool ContainsAnyExcept(ReadOnlySpan<T> span, IndexOfAnyValues<T> values)
+        {
+            if (values is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.values);
+            }
+
+            return values.ContainsAnyExcept(span);
         }
     }
 }

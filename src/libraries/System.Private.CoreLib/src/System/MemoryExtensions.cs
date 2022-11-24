@@ -349,6 +349,42 @@ namespace System
         }
 
         /// <summary>
+        /// Searches for the specified values and returns true if found. If not found, returns false.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAny<T>(this Span<T> span, IndexOfAnyValues<T> values) where T : IEquatable<T>? =>
+            ContainsAny((ReadOnlySpan<T>)span, values);
+
+        /// <summary>
+        /// Searches for the specified values and returns true if found. If not found, returns false.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAny<T>(this ReadOnlySpan<T> span, IndexOfAnyValues<T> values) where T : IEquatable<T>? =>
+            IndexOfAnyValues<T>.ContainsAny(span, values);
+
+        /// <summary>
+        /// Searches for the specified values and returns false if found. If not found, returns true.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAnyExcept<T>(this Span<T> span, IndexOfAnyValues<T> values) where T : IEquatable<T>? =>
+            ContainsAnyExcept((ReadOnlySpan<T>)span, values);
+
+        /// <summary>
+        /// Searches for the specified values and returns false if found. If not found, returns true.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, IndexOfAnyValues<T> values) where T : IEquatable<T>? =>
+            IndexOfAnyValues<T>.ContainsAnyExcept(span, values);
+
+        /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence. If not found, returns -1. Values are compared using IEquatable{T}.Equals(T).
         /// </summary>
         /// <param name="span">The span to search.</param>

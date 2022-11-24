@@ -12,11 +12,11 @@ using System.Runtime.Intrinsics.X86;
 
 namespace System.Buffers
 {
-    internal static class IndexOfAnyAsciiSearcher
+    internal static unsafe class IndexOfAnyAsciiSearcher
     {
         internal static bool IsVectorizationSupported => Ssse3.IsSupported || AdvSimd.Arm64.IsSupported;
 
-        internal static unsafe void ComputeBitmap256(ReadOnlySpan<byte> values, out Vector128<byte> bitmap0, out Vector128<byte> bitmap1, out BitVector256 lookup)
+        internal static void ComputeBitmap256(ReadOnlySpan<byte> values, out Vector128<byte> bitmap0, out Vector128<byte> bitmap1, out BitVector256 lookup)
         {
             // The exact format of these bitmaps differs from the other ComputeBitmap overloads as it's meant for the full [0, 255] range algorithm.
             // See http://0x80.pl/articles/simd-byte-lookup.html#universal-algorithm
@@ -49,7 +49,7 @@ namespace System.Buffers
             lookup = lookupLocal;
         }
 
-        internal static unsafe void ComputeBitmap<T>(ReadOnlySpan<T> values, out Vector128<byte> bitmap, out BitVector256 lookup)
+        internal static void ComputeBitmap<T>(ReadOnlySpan<T> values, out Vector128<byte> bitmap, out BitVector256 lookup)
             where T : struct, IUnsignedNumber<T>
         {
             Debug.Assert(typeof(T) == typeof(byte) || typeof(T) == typeof(char));
@@ -81,7 +81,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool TryComputeBitmap(ReadOnlySpan<char> values, byte* bitmap, out bool needleContainsZero)
+        private static bool TryComputeBitmap(ReadOnlySpan<char> values, byte* bitmap, out bool needleContainsZero)
         {
             byte* bitmapLocal = bitmap; // https://github.com/dotnet/runtime/issues/9040
 
@@ -120,7 +120,7 @@ namespace System.Buffers
             TryLastIndexOfAny<Negate>(ref Unsafe.As<char, short>(ref searchSpace), searchSpaceLength, asciiValues, out index);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool TryIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
+        private static bool TryIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
             Debug.Assert(searchSpaceLength >= Vector128<short>.Count);
@@ -142,7 +142,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool TryLastIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
+        private static bool TryLastIndexOfAny<TNegator>(ref short searchSpace, int searchSpaceLength, ReadOnlySpan<char> asciiValues, out int index)
             where TNegator : struct, INegator
         {
             Debug.Assert(searchSpaceLength >= Vector128<short>.Count);
@@ -165,7 +165,18 @@ namespace System.Buffers
 
         internal static int IndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
             where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyVectorized<int, TNegator, TOptimizations, IndexMapper<short, TNegator>>(ref searchSpace, searchSpaceLength, bitmap);
+
+        internal static bool ContainsAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
+            where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyVectorized<bool, TNegator, TOptimizations, ContainsMapper<short, TNegator>>(ref searchSpace, searchSpaceLength, bitmap);
+
+        private static TResult IndexOfAnyVectorized<TResult, TNegator, TOptimizations, TResultMapper>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
+            where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
+            where TResultMapper : struct, IIndexOfAnyResultMapper<short, TNegator, TResult>
         {
             ref short currentSearchSpace = ref searchSpace;
 
@@ -187,7 +198,7 @@ namespace System.Buffers
                     Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap);
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<short, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -211,11 +222,11 @@ namespace System.Buffers
                 Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap);
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<short, TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                    return TResultMapper.ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFoundResult;
         }
 
         internal static int LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
@@ -275,7 +286,18 @@ namespace System.Buffers
 
         internal static int IndexOfAnyVectorized<TNegator, TOptimizations>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
             where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyVectorized<int, TNegator, TOptimizations, IndexMapper<byte, TNegator>>(ref searchSpace, searchSpaceLength, bitmap);
+
+        internal static bool ContainsAnyVectorized<TNegator, TOptimizations>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
+            where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyVectorized<bool, TNegator, TOptimizations, ContainsMapper<byte, TNegator>>(ref searchSpace, searchSpaceLength, bitmap);
+
+        private static TResult IndexOfAnyVectorized<TResult, TNegator, TOptimizations, TResultMapper>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
+            where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
+            where TResultMapper : struct, IIndexOfAnyResultMapper<byte, TNegator, TResult>
         {
             ref byte currentSearchSpace = ref searchSpace;
 
@@ -294,7 +316,7 @@ namespace System.Buffers
                     Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source, bitmap);
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector128<byte>.Count);
@@ -319,11 +341,11 @@ namespace System.Buffers
                 Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source, bitmap);
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                    return TResultMapper.ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFoundResult;
         }
 
         internal static int LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
@@ -380,7 +402,16 @@ namespace System.Buffers
         }
 
         internal static int IndexOfAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap0, Vector128<byte> bitmap1)
+            where TNegator : struct, INegator =>
+            IndexOfAnyVectorized<int, TNegator, IndexMapper<byte, TNegator>>(ref searchSpace, searchSpaceLength, bitmap0, bitmap1);
+
+        internal static bool ContainsAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap0, Vector128<byte> bitmap1)
+            where TNegator : struct, INegator =>
+            IndexOfAnyVectorized<bool, TNegator, ContainsMapper<byte, TNegator>>(ref searchSpace, searchSpaceLength, bitmap0, bitmap1);
+
+        private static TResult IndexOfAnyVectorized<TResult, TNegator, TResultMapper>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap0, Vector128<byte> bitmap1)
             where TNegator : struct, INegator
+            where TResultMapper : struct, IIndexOfAnyResultMapper<byte, TNegator, TResult>
         {
             ref byte currentSearchSpace = ref searchSpace;
 
@@ -399,7 +430,7 @@ namespace System.Buffers
                     Vector128<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap0, bitmap1);
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector128<byte>.Count);
@@ -424,11 +455,11 @@ namespace System.Buffers
                 Vector128<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap0, bitmap1);
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                    return TResultMapper.ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFoundResult;
         }
 
         internal static int LastIndexOfAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, Vector128<byte> bitmap0, Vector128<byte> bitmap1)
@@ -590,33 +621,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeFirstIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
-            where TNegator : struct, INegator
-        {
-            uint mask = TNegator.ExtractMask(result);
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            return offsetInVector + (int)(Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(T));
-        }
-
-#pragma warning disable IDE0060 // https://github.com/dotnet/roslyn-analyzers/issues/6228
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeFirstIndexOverlapped<T, TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result)
-            where TNegator : struct, INegator
-        {
-            uint mask = TNegator.ExtractMask(result);
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            if (offsetInVector >= Vector128<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector128<short>.Count;
-            }
-            return offsetInVector + (int)(Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(T));
-        }
-#pragma warning restore IDE0060 // https://github.com/dotnet/roslyn-analyzers/issues/6228
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
+        private static int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
             where TNegator : struct, INegator
         {
             uint mask = TNegator.ExtractMask(result) & 0xFFFF;
@@ -625,7 +630,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeLastIndexOverlapped<T, TNegator>(ref T searchSpace, ref T secondVector, Vector128<byte> result)
+        private static int ComputeLastIndexOverlapped<T, TNegator>(ref T searchSpace, ref T secondVector, Vector128<byte> result)
             where TNegator : struct, INegator
         {
             uint mask = TNegator.ExtractMask(result) & 0xFFFF;
@@ -675,6 +680,54 @@ namespace System.Buffers
         internal readonly struct Default : IOptimizations
         {
             public static bool NeedleContainsZero => false;
+        }
+
+        private interface IIndexOfAnyResultMapper<T, TNegator, TResult>
+            where TNegator : struct, INegator
+        {
+            static abstract TResult ComputeFirstIndex(ref T searchSpace, ref T current, Vector128<byte> result);
+            static abstract TResult ComputeFirstIndexOverlapped(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result);
+            static abstract TResult NotFoundResult { get; }
+        }
+
+        private readonly struct IndexMapper<T, TNegator> : IIndexOfAnyResultMapper<T, TNegator, int>
+            where TNegator : struct, INegator
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int ComputeFirstIndex(ref T searchSpace, ref T current, Vector128<byte> result)
+            {
+                uint mask = TNegator.ExtractMask(result);
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                return offsetInVector + (int)(Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(T));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int ComputeFirstIndexOverlapped(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result)
+            {
+                uint mask = TNegator.ExtractMask(result);
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                if (offsetInVector >= Vector128<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector128<short>.Count;
+                }
+                return offsetInVector + (int)(Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(T));
+            }
+
+            public static int NotFoundResult => -1;
+        }
+
+        private readonly struct ContainsMapper<T, TNegator> : IIndexOfAnyResultMapper<T, TNegator, bool>
+            where TNegator : struct, INegator
+        {
+            public static bool ComputeFirstIndex(ref T searchSpace, ref T current, Vector128<byte> result) =>
+                true;
+
+            public static bool ComputeFirstIndexOverlapped(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result) =>
+                true;
+
+            public static bool NotFoundResult => false;
         }
     }
 }

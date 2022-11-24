@@ -63,7 +63,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: IndexOfAnyExceptReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAnyExcept(values));
 
             static int IndexOfAnyExceptReferenceImpl(ReadOnlySpan<byte> searchSpace, ReadOnlySpan<byte> values)
             {
@@ -86,7 +87,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: LastIndexOfAnyExceptReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAnyExcept(values));
 
             static int LastIndexOfAnyExceptReferenceImpl(ReadOnlySpan<byte> searchSpace, ReadOnlySpan<byte> values)
             {
@@ -109,7 +111,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: IndexOfAnyExceptReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAnyExcept(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAnyExcept(values));
 
             static int IndexOfAnyExceptReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<char> values)
             {
@@ -132,7 +135,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: LastIndexOfAnyExceptReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAnyExcept(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAnyExcept(values));
 
             static int LastIndexOfAnyExceptReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<char> values)
             {

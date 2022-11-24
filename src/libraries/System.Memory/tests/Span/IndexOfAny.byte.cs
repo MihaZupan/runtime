@@ -537,7 +537,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: IndexOfAnyReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.IndexOfAny(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAny(values));
 
             static int IndexOfAnyReferenceImpl(ReadOnlySpan<byte> searchSpace, ReadOnlySpan<byte> values)
             {

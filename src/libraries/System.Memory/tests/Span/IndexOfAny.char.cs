@@ -783,7 +783,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: IndexOfAnyReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.IndexOfAny(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAny(values));
 
             static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<char> values)
             {
@@ -935,36 +936,52 @@ namespace System.SpanTests
 
         public delegate int IndexOfAnyValuesSearchDelegate<T>(ReadOnlySpan<T> searchSpace, IndexOfAnyValues<T> values) where T : IEquatable<T>?;
 
-        public static void TestRandomInputs(IndexOfAnySearchDelegate<byte> expected, IndexOfAnySearchDelegate<byte> indexOfAny, IndexOfAnyValuesSearchDelegate<byte> indexOfAnyValues)
+        public delegate bool IndexOfAnyValuesContainsDelegate<T>(ReadOnlySpan<T> searchSpace, IndexOfAnyValues<T> values) where T : IEquatable<T>?;
+
+        public static void TestRandomInputs(
+            IndexOfAnySearchDelegate<byte> expected,
+            IndexOfAnySearchDelegate<byte> indexOfAny,
+            IndexOfAnyValuesSearchDelegate<byte> indexOfAnyValues,
+            IndexOfAnyValuesContainsDelegate<byte> indexOfAnyValuesContains)
         {
             var rng = new Random(42);
 
             for (int iterations = 0; iterations < 1_000_000; iterations++)
             {
                 // There are more interesting corner cases with ASCII needles, test those more.
-                Test(rng, s_randomBytes, s_randomAsciiBytes, expected, indexOfAny, indexOfAnyValues);
+                Test(rng, s_randomBytes, s_randomAsciiBytes, expected, indexOfAny, indexOfAnyValues, indexOfAnyValuesContains);
 
-                Test(rng, s_randomBytes, s_randomBytes, expected, indexOfAny, indexOfAnyValues);
+                Test(rng, s_randomBytes, s_randomBytes, expected, indexOfAny, indexOfAnyValues, indexOfAnyValuesContains);
             }
         }
 
-        public static void TestRandomInputs(IndexOfAnySearchDelegate<char> expected, IndexOfAnySearchDelegate<char> indexOfAny, IndexOfAnyValuesSearchDelegate<char> indexOfAnyValues)
+        public static void TestRandomInputs(
+            IndexOfAnySearchDelegate<char> expected,
+            IndexOfAnySearchDelegate<char> indexOfAny,
+            IndexOfAnyValuesSearchDelegate<char> indexOfAnyValues,
+            IndexOfAnyValuesContainsDelegate<char> indexOfAnyValuesContains)
         {
             var rng = new Random(42);
 
             for (int iterations = 0; iterations < 1_000_000; iterations++)
             {
                 // There are more interesting corner cases with ASCII needles, test those more.
-                Test(rng, s_randomChars, s_randomAsciiChars, expected, indexOfAny, indexOfAnyValues);
+                Test(rng, s_randomChars, s_randomAsciiChars, expected, indexOfAny, indexOfAnyValues, indexOfAnyValuesContains);
 
-                Test(rng, s_randomChars, s_randomLatin1Chars, expected, indexOfAny, indexOfAnyValues);
+                Test(rng, s_randomChars, s_randomLatin1Chars, expected, indexOfAny, indexOfAnyValues, indexOfAnyValuesContains);
 
-                Test(rng, s_randomChars, s_randomChars, expected, indexOfAny, indexOfAnyValues);
+                Test(rng, s_randomChars, s_randomChars, expected, indexOfAny, indexOfAnyValues, indexOfAnyValuesContains);
             }
         }
 
-        private static void Test<T>(Random rng, ReadOnlySpan<T> haystackRandom, ReadOnlySpan<T> needleRandom,
-            IndexOfAnySearchDelegate<T> expected, IndexOfAnySearchDelegate<T> indexOfAny, IndexOfAnyValuesSearchDelegate<T> indexOfAnyValues)
+        private static void Test<T>(
+            Random rng,
+            ReadOnlySpan<T> haystackRandom,
+            ReadOnlySpan<T> needleRandom,
+            IndexOfAnySearchDelegate<T> expected,
+            IndexOfAnySearchDelegate<T> indexOfAny,
+            IndexOfAnyValuesSearchDelegate<T> indexOfAnyValues,
+            IndexOfAnyValuesContainsDelegate<T> indexOfAnyValuesContains)
             where T : INumber<T>
         {
             ReadOnlySpan<T> haystack = GetRandomSlice(rng, haystackRandom, MaxHaystackLength);
@@ -977,6 +994,7 @@ namespace System.SpanTests
             int expectedIndex = expected(haystack, needle);
             int indexOfAnyIndex = indexOfAny(haystack, needle);
             int indexOfAnyValuesIndex = indexOfAnyValues(haystack, indexOfAnyValuesInstance);
+            bool containsActual = indexOfAnyValuesContains(haystack, indexOfAnyValuesInstance);
 
             if (expectedIndex != indexOfAnyIndex)
             {
@@ -986,6 +1004,11 @@ namespace System.SpanTests
             if (expectedIndex != indexOfAnyValuesIndex)
             {
                 AssertionFailed(haystack, needle, expectedIndex, indexOfAnyValuesIndex, nameof(indexOfAnyValues));
+            }
+
+            if ((expectedIndex >= 0) != containsActual)
+            {
+                AssertionFailed(haystack, needle, expectedIndex, containsActual ? 0 : -1, nameof(indexOfAnyValuesContains));
             }
         }
 

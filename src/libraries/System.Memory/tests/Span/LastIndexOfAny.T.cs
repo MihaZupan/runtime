@@ -959,7 +959,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: LastIndexOfAnyReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.LastIndexOfAny(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAny(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAny(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAny(values));
 
             static int LastIndexOfAnyReferenceImpl(ReadOnlySpan<byte> searchSpace, ReadOnlySpan<byte> values)
             {
@@ -982,7 +983,8 @@ namespace System.SpanTests
             IndexOfAnyCharTestHelper.TestRandomInputs(
                 expected: LastIndexOfAnyReferenceImpl,
                 indexOfAny: (searchSpace, values) => searchSpace.LastIndexOfAny(values),
-                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAny(values));
+                indexOfAnyValues: (searchSpace, values) => searchSpace.LastIndexOfAny(values),
+                indexOfAnyValuesContains: (searchSpace, values) => searchSpace.ContainsAny(values));
 
             static int LastIndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<char> values)
             {

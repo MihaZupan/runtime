@@ -38,6 +38,14 @@ namespace System.Buffers
             LastIndexOfAny<IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAny(ReadOnlySpan<byte> span) =>
+            ContainsAny<IndexOfAnyAsciiSearcher.DontNegate>(ref MemoryMarshal.GetReference(span), span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAnyExcept(ReadOnlySpan<byte> span) =>
+            ContainsAny<IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int IndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
@@ -53,6 +61,15 @@ namespace System.Buffers
             return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
                 ? IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref searchSpace, searchSpaceLength, _bitmap)
                 : LastIndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool ContainsAny<TNegator>(ref byte searchSpace, int searchSpaceLength)
+            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
+        {
+            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
+                ? IndexOfAnyAsciiSearcher.ContainsAnyVectorized<TNegator, TOptimizations>(ref searchSpace, searchSpaceLength, _bitmap)
+                : ContainsAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
         }
 
         private int IndexOfAnyScalar<TNegator>(ref byte searchSpace, int searchSpaceLength)
@@ -88,6 +105,26 @@ namespace System.Buffers
             }
 
             return -1;
+        }
+
+        private bool ContainsAnyScalar<TNegator>(ref byte searchSpace, int searchSpaceLength)
+            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
+        {
+            ref byte searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
+            ref byte cur = ref searchSpace;
+
+            while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
+            {
+                byte b = cur;
+                if (TNegator.NegateIfNeeded(_lookup.Contains(b)))
+                {
+                    return true;
+                }
+
+                cur = ref Unsafe.Add(ref cur, 1);
+            }
+
+            return false;
         }
     }
 }
