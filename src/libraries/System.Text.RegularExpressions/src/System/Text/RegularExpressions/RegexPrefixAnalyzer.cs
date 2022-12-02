@@ -200,31 +200,29 @@ namespace System.Text.RegularExpressions
             for (int i = 0; i < results.Count; i++)
             {
                 RegexFindOptimizations.FixedDistanceSet result = results[i];
-                bool negated = RegexCharClass.IsNegated(result.Set);
+                result.Negated = RegexCharClass.IsNegated(result.Set);
 
-                if (!negated)
+                int count = RegexCharClass.GetSetChars(result.Set, scratch);
+                if (count != 0)
                 {
-                    int count = RegexCharClass.GetSetChars(result.Set, scratch);
-                    if (count != 0)
+                    result.Chars = scratch.Slice(0, count).ToArray();
+                }
+
+                if (thorough)
+                {
+                    // Prefer IndexOfAnyInRange over IndexOfAny for sets of 2-5 values that fit in a single range
+                    if (count != 1 && RegexCharClass.TryGetSingleRange(result.Set, out char lowInclusive, out char highInclusive))
                     {
-                        result.Chars = scratch.Slice(0, count).ToArray();
-                        results[i] = result;
+                        result.Chars = null;
+                        result.Range = (lowInclusive, highInclusive);
+                    }
+                    else if (result.Chars is null && RegexCharClass.TryGetAsciiSetChars(result.Set, out char[]? asciiChars))
+                    {
+                        result.AsciiSet = asciiChars;
                     }
                 }
 
-                if (thorough && result.Chars is null)
-                {
-                    if (RegexCharClass.TryGetSingleRange(result.Set, out char lowInclusive, out char highInclusive))
-                    {
-                        result.Range = (lowInclusive, highInclusive, negated);
-                        results[i] = result;
-                    }
-                    else if (RegexCharClass.TryGetAsciiSetChars(result.Set, out char[]? asciiChars))
-                    {
-                        result.AsciiSet = (asciiChars, negated);
-                        results[i] = result;
-                    }
-                }
+                results[i] = result;
             }
 
             return results;
@@ -440,23 +438,25 @@ namespace System.Text.RegularExpressions
         public static void SortFixedDistanceSetsByQuality(List<RegexFindOptimizations.FixedDistanceSet> results) =>
             // Finally, try to move the "best" results to be earlier.  "best" here are ones we're able to search
             // for the fastest and that have the best chance of matching as few false positives as possible.
-            results.Sort((s1, s2) =>
+            results.Sort(static (s1, s2) =>
             {
-                char[]? s1Chars = s1.Chars ?? s1.AsciiSet?.Chars;
-                char[]? s2Chars = s2.Chars ?? s2.AsciiSet?.Chars;
+                char[]? s1Chars = s1.Chars ?? s1.AsciiSet;
+                char[]? s2Chars = s2.Chars ?? s2.AsciiSet;
                 int s1CharsLength = s1Chars?.Length ?? 0;
                 int s2CharsLength = s2Chars?.Length ?? 0;
-                bool s1Negated = s1.AsciiSet.GetValueOrDefault().Negated;
-                bool s2Negated = s2.AsciiSet.GetValueOrDefault().Negated;
+                bool s1Negated = s1.Negated;
+                bool s2Negated = s2.Negated;
+                int s1RangeLength = s1.Range is not null ? GetRangeLength(s1.Range.Value, s1Negated) : 0;
+                int s2RangeLength = s2.Range is not null ? GetRangeLength(s2.Range.Value, s2Negated) : 0;
 
-                if (s1Negated)
+                if (s1Negated && s1CharsLength > 0)
                 {
-                    s1CharsLength = char.MaxValue - s1CharsLength;
+                    s1CharsLength = char.MaxValue + 1 - s1CharsLength;
                 }
 
-                if (s2Negated)
+                if (s2Negated && s2CharsLength > 0)
                 {
-                    s2CharsLength = char.MaxValue - s2CharsLength;
+                    s2CharsLength = char.MaxValue + 1 - s2CharsLength;
                 }
 
                 // If both have chars, prioritize the one with the smaller frequency for those chars.
@@ -476,16 +476,11 @@ namespace System.Text.RegularExpressions
                     float s1Frequency = SumFrequencies(s1Chars);
                     float s2Frequency = SumFrequencies(s2Chars);
 
-                    if (s1Negated)
+                    if (s1Frequency != s2Frequency)
                     {
-                        s1Frequency = -s1Frequency;
-                        s2Frequency = -s2Frequency;
-                    }
-
-                    int c = s1Frequency.CompareTo(s2Frequency);
-                    if (c != 0)
-                    {
-                        return c;
+                        return s1Negated
+                            ? s2Frequency.CompareTo(s1Frequency)
+                            : s1Frequency.CompareTo(s2Frequency);
                     }
 
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -503,36 +498,45 @@ namespace System.Text.RegularExpressions
                     }
                 }
 
-                // If one has chars and the other doesn't, prioritize the one with chars.
-                if ((s1.Chars is not null) != (s2.Chars is not null))
+                // If both have ranges, prefer the one that includes fewer characters.
+                if (s1RangeLength > 0 && s2RangeLength > 0)
                 {
-                    return s1.Chars is not null ? -1 : 1;
+                    return s1RangeLength.CompareTo(s2RangeLength);
+                }
+
+                // If one has chars and the other has a range, prioritize length=1 chars, otherwise the range.
+                if ((s1CharsLength > 0 && s2RangeLength > 0) || (s1RangeLength > 0 && s2CharsLength > 0))
+                {
+                    if (s1CharsLength == 1 || s2CharsLength == 1)
+                    {
+                        return s1CharsLength == 1 ? -1 : 1;
+                    }
+
+                    return s1RangeLength > 0 ? -1 : 1;
+                }
+
+                // If one has chars and the other doesn't, prioritize the one with chars.
+                if ((s1CharsLength > 0) != (s2CharsLength > 0))
+                {
+                    return s1CharsLength > 0 ? -1 : 1;
                 }
 
                 // If one has a range and the other doesn't, prioritize the one with a range.
-                if ((s1.Range is not null) != (s2.Range is not null))
+                if ((s1RangeLength > 0) != (s2RangeLength > 0))
                 {
-                    return s1.Range is not null ? -1 : 1;
-                }
-
-                // If both have ranges, prefer the one that includes fewer characters.
-                if (s1.Range is not null)
-                {
-                    return
-                        GetRangeLength(s1.Range.GetValueOrDefault()).CompareTo(
-                        GetRangeLength(s2.Range.GetValueOrDefault()));
-
-                    static int GetRangeLength((char LowInclusive, char HighInclusive, bool Negated) range)
-                    {
-                        int length = range.HighInclusive - range.LowInclusive + 1;
-                        return range.Negated ?
-                            char.MaxValue + 1 - length :
-                            length;
-                    }
+                    return s1RangeLength > 0 ? -1 : 1;
                 }
 
                 // As a tiebreaker, prioritize the earlier one.
                 return s1.Distance.CompareTo(s2.Distance);
+
+                static int GetRangeLength((char LowInclusive, char HighInclusive) range, bool negated)
+                {
+                    int length = range.HighInclusive - range.LowInclusive + 1;
+                    return negated ?
+                        char.MaxValue + 1 - length :
+                        length;
+                }
             });
 
         /// <summary>

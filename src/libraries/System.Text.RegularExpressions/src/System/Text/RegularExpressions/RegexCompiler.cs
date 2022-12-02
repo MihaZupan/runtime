@@ -893,14 +893,14 @@ namespace System.Text.RegularExpressions
                             case 1:
                                 // tmp = ...IndexOf(setChars[0]);
                                 Ldc(primarySet.Chars[0]);
-                                Call(s_spanIndexOfChar);
+                                Call(primarySet.Negated ? s_spanIndexOfAnyExceptChar : s_spanIndexOfChar);
                                 break;
 
                             case 2:
                                 // tmp = ...IndexOfAny(setChars[0], setChars[1]);
                                 Ldc(primarySet.Chars[0]);
                                 Ldc(primarySet.Chars[1]);
-                                Call(s_spanIndexOfAnyCharChar);
+                                Call(primarySet.Negated ? s_spanIndexOfAnyExceptCharChar : s_spanIndexOfAnyCharChar);
                                 break;
 
                             case 3:
@@ -908,20 +908,20 @@ namespace System.Text.RegularExpressions
                                 Ldc(primarySet.Chars[0]);
                                 Ldc(primarySet.Chars[1]);
                                 Ldc(primarySet.Chars[2]);
-                                Call(s_spanIndexOfAnyCharCharChar);
+                                Call(primarySet.Negated ? s_spanIndexOfAnyExceptCharCharChar : s_spanIndexOfAnyCharCharChar);
                                 break;
 
                             default:
                                 Ldstr(new string(primarySet.Chars));
                                 Call(s_stringAsSpanMethod);
-                                Call(s_spanIndexOfAnySpan);
+                                Call(primarySet.Negated ? s_spanIndexOfAnyExceptSpan : s_spanIndexOfAnySpan);
                                 break;
                         }
                     }
                     else if (primarySet.AsciiSet is not null)
                     {
-                        LoadIndexOfAnyValues(primarySet.AsciiSet.Value.Chars);
-                        Call(primarySet.AsciiSet.Value.Negated ? s_spanIndexOfAnyExceptIndexOfAnyValues : s_spanIndexOfAnyIndexOfAnyValues);
+                        LoadIndexOfAnyValues(primarySet.AsciiSet);
+                        Call(primarySet.Negated ? s_spanIndexOfAnyExceptIndexOfAnyValues : s_spanIndexOfAnyIndexOfAnyValues);
                     }
                     else
                     {
@@ -929,14 +929,14 @@ namespace System.Text.RegularExpressions
                         {
                             // tmp = ...IndexOf{AnyExcept}(low);
                             Ldc(primarySet.Range.Value.LowInclusive);
-                            Call(primarySet.Range.Value.Negated ? s_spanIndexOfAnyExceptChar : s_spanIndexOfChar);
+                            Call(primarySet.Negated ? s_spanIndexOfAnyExceptChar : s_spanIndexOfChar);
                         }
                         else
                         {
                             // tmp = ...IndexOfAny{Except}InRange(low, high);
                             Ldc(primarySet.Range.Value.LowInclusive);
                             Ldc(primarySet.Range.Value.HighInclusive);
-                            Call(primarySet.Range.Value.Negated ? s_spanIndexOfAnyExceptInRange : s_spanIndexOfAnyInRange);
+                            Call(primarySet.Negated ? s_spanIndexOfAnyExceptInRange : s_spanIndexOfAnyInRange);
                         }
                     }
 
@@ -1060,7 +1060,7 @@ namespace System.Text.RegularExpressions
                 RegexFindOptimizations.FixedDistanceSet set = _regexTree.FindOptimizations.FixedDistanceSets![0];
                 Debug.Assert(set.Distance == 0);
 
-                if (set.Chars is { Length: 1 })
+                if (set.Chars is { Length: 1 } && !set.Negated)
                 {
                     // pos = inputSpan.Slice(0, pos).LastIndexOf(set.Chars[0]);
                     Ldloca(inputSpan);
@@ -4969,10 +4969,40 @@ namespace System.Text.RegularExpressions
                 {
                     bool negated = RegexCharClass.IsNegated(node.Str) ^ negate;
 
-                    // IndexOfAny{Except}(ch1, ...)
                     Span<char> setChars = stackalloc char[5]; // current max that's vectorized
-                    int setCharsCount;
-                    if ((setCharsCount = RegexCharClass.GetSetChars(node.Str, setChars)) > 0)
+                    int setCharsCount = RegexCharClass.GetSetChars(node.Str, setChars);
+
+                    // IndexOfAny{Except}InRange
+                    // Prefer IndexOfAnyInRange over IndexOfAny for sets of 2-5 values that fit in a single range
+                    if (setCharsCount != 1 && RegexCharClass.TryGetSingleRange(node.Str, out char lowInclusive, out char highInclusive))
+                    {
+                        if (lowInclusive == highInclusive)
+                        {
+                            Ldc(lowInclusive);
+                            Call((useLast, negated) switch
+                            {
+                                (false, false) => s_spanIndexOfChar,
+                                (false, true) => s_spanIndexOfAnyExceptChar,
+                                (true, false) => s_spanLastIndexOfChar,
+                                (true, true) => s_spanLastIndexOfAnyExceptChar,
+                            });
+                            return;
+                        }
+
+                        Ldc(lowInclusive);
+                        Ldc(highInclusive);
+                        Call((useLast, negated) switch
+                        {
+                            (false, false) => s_spanIndexOfAnyInRange,
+                            (false, true) => s_spanIndexOfAnyExceptInRange,
+                            (true, false) => s_spanLastIndexOfAnyInRange,
+                            (true, true) => s_spanLastIndexOfAnyExceptInRange,
+                        });
+                        return;
+                    }
+
+                    // IndexOfAny{Except}(ch1, ...)
+                    if (setCharsCount > 0)
                     {
                         setChars = setChars.Slice(0, setCharsCount);
                         switch (setChars.Length)
@@ -5025,34 +5055,6 @@ namespace System.Text.RegularExpressions
                                 });
                                 return;
                         }
-                    }
-
-                    // IndexOfAny{Except}InRange
-                    if (RegexCharClass.TryGetSingleRange(node.Str, out char lowInclusive, out char highInclusive))
-                    {
-                        if (lowInclusive == highInclusive)
-                        {
-                            Ldc(lowInclusive);
-                            Call((useLast, negated) switch
-                            {
-                                (false, false) => s_spanIndexOfChar,
-                                (false, true) => s_spanIndexOfAnyExceptChar,
-                                (true, false) => s_spanLastIndexOfChar,
-                                (true, true) => s_spanLastIndexOfAnyExceptChar,
-                            });
-                            return;
-                        }
-
-                        Ldc(lowInclusive);
-                        Ldc(highInclusive);
-                        Call((useLast, negated) switch
-                        {
-                            (false, false) => s_spanIndexOfAnyInRange,
-                            (false, true) => s_spanIndexOfAnyExceptInRange,
-                            (true, false) => s_spanLastIndexOfAnyInRange,
-                            (true, true) => s_spanLastIndexOfAnyExceptInRange,
-                        });
-                        return;
                     }
 
                     // IndexOfAny{Except}(IndexOfAnyValues<char>)
