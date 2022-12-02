@@ -8,6 +8,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace System.Text.RegularExpressions
@@ -96,6 +98,10 @@ namespace System.Text.RegularExpressions
         private static readonly MethodInfo s_stringGetCharsMethod = typeof(string).GetMethod("get_Chars", new Type[] { typeof(int) })!;
         private static readonly MethodInfo s_arrayResize = typeof(Array).GetMethod("Resize")!.MakeGenericMethod(typeof(int));
         private static readonly MethodInfo s_mathMinIntInt = typeof(Math).GetMethod("Min", new Type[] { typeof(int), typeof(int) })!;
+
+        private static readonly MethodInfo s_memoryMarshalGetArrayDataReference = typeof(MemoryMarshal).GetMethod("GetArrayDataReference", new Type[] { Type.MakeGenericMethodParameter(0).MakeArrayType() })!.MakeGenericMethod(typeof(IndexOfAnyValues<char>));
+        private static readonly MethodInfo s_unsafeAdd = typeof(Unsafe).GetMethod("Add", new Type[] { Type.MakeGenericMethodParameter(0).MakeByRefType(), typeof(int) })!.MakeGenericMethod(typeof(IndexOfAnyValues<char>));
+        private static readonly MethodInfo s_unsafeAs = typeof(Unsafe).GetMethod("As", new Type[] { Type.MakeGenericMethodParameter(0).MakeByRefType() })!;
         // Note:
         // Single-range helpers like IsAsciiLetterLower, IsAsciiLetterUpper, IsAsciiDigit, and IsBetween aren't used here, as the IL generated for those
         // single-range checks is as cheap as the method call, and there's no readability issue as with the source generator.
@@ -5904,12 +5910,16 @@ namespace System.Text.RegularExpressions
         {
             List<IndexOfAnyValues<char>> list = _indexOfAnyValues ??= new();
             int index = list.Count;
-            list.Add(IndexOfAnyValues.Create(chars));
+            IndexOfAnyValues<char> values = IndexOfAnyValues.Create(chars);
+            list.Add(values);
 
-            // this._indexOfAnyValues[index]
+            // Unsafe.As<IndexOfAnyValues<char>, ActualImplType>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(this._indexOfAnyValues), index));
             Ldthisfld(s_indexOfAnyValuesArrayField);
+            Call(s_memoryMarshalGetArrayDataReference);
             _ilg!.Emit(OpCodes.Ldc_I4_S, index);
-            _ilg.Emit(OpCodes.Ldelem_Ref);
+            Call(s_unsafeAdd);
+            Call(s_unsafeAs.MakeGenericMethod(typeof(IndexOfAnyValues<char>), values.GetType()));
+            _ilg.Emit(OpCodes.Ldind_Ref);;
         }
     }
 }
