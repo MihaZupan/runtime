@@ -1303,8 +1303,19 @@ namespace System
             return firstLength.CompareTo(secondLength);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static unsafe bool ContainsValueType<T>(ref T searchSpace, T value, int length) where T : struct, INumber<T>
+        {
+            if (PackedSpanHelpers.CanUsePackedIndexOf(value))
+            {
+                return PackedSpanHelpers.PackedContains(ref Unsafe.As<T, short>(ref searchSpace), *(short*)&value, length);
+            }
+
+            return NonPackedContainsValueType(ref searchSpace, value, length);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        internal static bool ContainsValueType<T>(ref T searchSpace, T value, int length) where T : struct, INumber<T>
+        internal static bool NonPackedContainsValueType<T>(ref T searchSpace, T value, int length) where T : struct, INumber<T>
         {
             Debug.Assert(length >= 0, "Expected non-negative length");
             Debug.Assert(value is byte or short or int or long, "Expected caller to normalize to one of these types");
@@ -1439,11 +1450,11 @@ namespace System
             where TValue : struct, INumber<TValue>
             where TNegator : struct, INegator<TValue>
         {
-            if (CanUsePackedIndexOf(value))
+            if (PackedSpanHelpers.CanUsePackedIndexOf(value))
             {
                 return typeof(TNegator) == typeof(DontNegate<short>)
-                    ? PackedIndexOf(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value, length)
-                    : PackedIndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value, length);
+                    ? PackedSpanHelpers.PackedIndexOf(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value, length)
+                    : PackedSpanHelpers.PackedIndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value, length);
             }
 
             return NonPackedIndexOfValueType<TValue, TNegator>(ref searchSpace, value, length);
@@ -1581,11 +1592,11 @@ namespace System
             where TValue : struct, INumber<TValue>
             where TNegator : struct, INegator<TValue>
         {
-            if (CanUsePackedIndexOf(value0) && CanUsePackedIndexOf(value1))
+            if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1))
             {
                 return typeof(TNegator) == typeof(DontNegate<short>)
-                    ? PackedIndexOfAny(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length)
-                    : PackedIndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length);
+                    ? PackedSpanHelpers.PackedIndexOfAny(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length)
+                    : PackedSpanHelpers.PackedIndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length);
             }
 
             return NonPackedIndexOfAnyValueType<TValue, TNegator>(ref searchSpace, value0, value1, length);
@@ -1738,8 +1749,23 @@ namespace System
             => IndexOfAnyValueType<T, Negate<T>>(ref searchSpace, value0, value1, value2, length);
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe int IndexOfAnyValueType<TValue, TNegator>(ref TValue searchSpace, TValue value0, TValue value1, TValue value2, int length)
+            where TValue : struct, INumber<TValue>
+            where TNegator : struct, INegator<TValue>
+        {
+            if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1) && PackedSpanHelpers.CanUsePackedIndexOf(value2))
+            {
+                return typeof(TNegator) == typeof(DontNegate<short>)
+                    ? PackedSpanHelpers.PackedIndexOfAny(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, *(char*)&value2, length)
+                    : PackedSpanHelpers.PackedIndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, *(char*)&value2, length);
+            }
+
+            return NonPackedIndexOfAnyValueType<TValue, TNegator>(ref searchSpace, value0, value1, value2, length);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private static int IndexOfAnyValueType<TValue, TNegator>(ref TValue searchSpace, TValue value0, TValue value1, TValue value2, int length)
+        internal static int NonPackedIndexOfAnyValueType<TValue, TNegator>(ref TValue searchSpace, TValue value0, TValue value1, TValue value2, int length)
             where TValue : struct, INumber<TValue>
             where TNegator : struct, INegator<TValue>
         {
@@ -2945,15 +2971,15 @@ namespace System
             where T : struct, IUnsignedNumber<T>, IComparisonOperators<T, T, bool>
             where TNegator : struct, INegator<T>
         {
-            if (CanUsePackedIndexOf(lowInclusive) && CanUsePackedIndexOf(highInclusive) && highInclusive >= lowInclusive)
+            if (PackedSpanHelpers.CanUsePackedIndexOf(lowInclusive) && PackedSpanHelpers.CanUsePackedIndexOf(highInclusive) && highInclusive >= lowInclusive)
             {
                 ref char charSearchSpace = ref Unsafe.As<T, char>(ref searchSpace);
                 char charLowInclusive = *(char*)&lowInclusive;
                 char charRange = (char)(*(char*)&highInclusive - charLowInclusive);
 
                 return typeof(TNegator) == typeof(DontNegate<ushort>)
-                    ? PackedIndexOfAnyInRange(ref charSearchSpace, charLowInclusive, charRange, length)
-                    : PackedIndexOfAnyExceptInRange(ref charSearchSpace, charLowInclusive, charRange, length);
+                    ? PackedSpanHelpers.PackedIndexOfAnyInRange(ref charSearchSpace, charLowInclusive, charRange, length)
+                    : PackedSpanHelpers.PackedIndexOfAnyExceptInRange(ref charSearchSpace, charLowInclusive, charRange, length);
             }
 
             return NonPackedIndexOfAnyInRangeUnsignedNumber<T, TNegator>(ref searchSpace, lowInclusive, highInclusive, length);
