@@ -484,6 +484,7 @@ namespace System.Globalization
                 message: ((options & CompareOptions.Ordinal) != 0) ? SR.Argument_CompareOptionOrdinal : SR.Argument_InvalidFlag);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe int CompareStringCore(ReadOnlySpan<char> string1, ReadOnlySpan<char> string2, CompareOptions options) =>
             GlobalizationMode.UseNls ?
                 NlsCompareString(string1, string2, options) :
@@ -617,6 +618,7 @@ namespace System.Globalization
             return matched;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe bool StartsWithCore(ReadOnlySpan<char> source, ReadOnlySpan<char> prefix, CompareOptions options, int* matchLengthPtr) =>
             GlobalizationMode.UseNls ?
                 NlsStartsWith(source, prefix, options, matchLengthPtr) :
@@ -760,6 +762,7 @@ namespace System.Globalization
             return IsSuffix(source, suffix, CompareOptions.None);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe bool EndsWithCore(ReadOnlySpan<char> source, ReadOnlySpan<char> suffix, CompareOptions options, int* matchLengthPtr) =>
             GlobalizationMode.UseNls ?
                 NlsEndsWith(source, suffix, options, matchLengthPtr) :
@@ -1093,6 +1096,7 @@ namespace System.Globalization
             return retVal;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe int IndexOfCore(ReadOnlySpan<char> source, ReadOnlySpan<char> target, CompareOptions options, int* matchLengthPtr, bool fromBeginning) =>
             GlobalizationMode.UseNls ?
                 NlsIndexOfCore(source, target, options, matchLengthPtr, fromBeginning) :
@@ -1563,6 +1567,7 @@ namespace System.Globalization
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe int GetHashCodeOfStringCore(ReadOnlySpan<char> source, CompareOptions options) =>
             GlobalizationMode.UseNls ?
                 NlsGetHashCodeOfString(source, options) :
