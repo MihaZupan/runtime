@@ -27,71 +27,18 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAny(ReadOnlySpan<char> span) =>
-            IndexOfAny<IndexOfAnyAsciiSearcher.DontNegate>(ref MemoryMarshal.GetReference(span), span.Length);
+            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            IndexOfAny<IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length);
+            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.Negate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAny(ReadOnlySpan<char> span) =>
-            LastIndexOfAny<IndexOfAnyAsciiSearcher.DontNegate>(ref MemoryMarshal.GetReference(span), span.Length);
+            IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            LastIndexOfAny<IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int IndexOfAny<TNegator>(ref char searchSpace, int searchSpaceLength)
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= Vector128<short>.Count
-                ? IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<TNegator, TOptimizations>(ref Unsafe.As<char, short>(ref searchSpace), searchSpaceLength, _bitmap)
-                : IndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int LastIndexOfAny<TNegator>(ref char searchSpace, int searchSpaceLength)
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= Vector128<short>.Count
-                ? IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref Unsafe.As<char, short>(ref searchSpace), searchSpaceLength, _bitmap)
-                : LastIndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
-        }
-
-        private int IndexOfAnyScalar<TNegator>(ref char searchSpace, int searchSpaceLength)
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            ref char searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
-            ref char cur = ref searchSpace;
-
-            while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
-            {
-                char c = cur;
-                if (TNegator.NegateIfNeeded(_lookup.Contains128(c)))
-                {
-                    return (int)(Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
-                }
-
-                cur = ref Unsafe.Add(ref cur, 1);
-            }
-
-            return -1;
-        }
-
-        private int LastIndexOfAnyScalar<TNegator>(ref char searchSpace, int searchSpaceLength)
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            for (int i = searchSpaceLength - 1; i >= 0; i--)
-            {
-                char c = Unsafe.Add(ref searchSpace, i);
-                if (TNegator.NegateIfNeeded(_lookup.Contains128(c)))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
+            IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorized<IndexOfAnyAsciiSearcher.Negate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
     }
 }
