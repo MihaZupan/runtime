@@ -148,8 +148,8 @@ namespace System.Buffers
                 if (TryComputeBitmap(asciiValues, (byte*)&bitmap, out bool needleContainsZero))
                 {
                     index = Ssse3.IsSupported && needleContainsZero
-                        ? IndexOfAnyVectorized<TNegator, Ssse3HandleZeroInNeedle>(ref searchSpace, searchSpaceLength, bitmap)
-                        : IndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, bitmap);
+                        ? IndexOfAnyVectorized<TNegator, Ssse3HandleZeroInNeedle>(ref searchSpace, searchSpaceLength, bitmap, ref Unsafe.NullRef<BitVector256>())
+                        : IndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, bitmap, ref Unsafe.NullRef<BitVector256>());
                     return true;
                 }
             }
