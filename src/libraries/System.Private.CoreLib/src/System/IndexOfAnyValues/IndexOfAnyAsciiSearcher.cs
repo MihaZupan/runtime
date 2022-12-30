@@ -180,7 +180,7 @@ namespace System.Buffers
             return false;
         }
 
-        internal static int IndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap)
+        internal static int IndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, Vector128<byte> bitmap, ref BitVector256 lookup)
             where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
         {
@@ -203,7 +203,7 @@ namespace System.Buffers
                     for (int i = 0; i < searchSpaceLength; i++)
                     {
                         char c = (char)Unsafe.Add(ref searchSpace, i);
-                        if (TNegator.NegateIfNeeded(Contains(bitmap, c)))
+                        if (TNegator.NegateIfNeeded(lookup.Contains128(c)))
                         {
                             return i;
                         }

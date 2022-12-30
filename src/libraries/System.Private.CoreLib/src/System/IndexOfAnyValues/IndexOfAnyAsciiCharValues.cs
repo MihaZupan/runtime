@@ -11,7 +11,7 @@ namespace System.Buffers
         where TOptimizations : struct, IndexOfAnyAsciiSearcher.IOptimizations
     {
         private readonly Vector128<byte> _bitmap;
-        private readonly BitVector256 _lookup;
+        private BitVector256 _lookup;
 
         public IndexOfAnyAsciiCharValues(Vector128<byte> bitmap, BitVector256 lookup)
         {
@@ -27,11 +27,11 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAny(ReadOnlySpan<char> span) =>
-            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
+            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap, ref _lookup);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.Negate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap);
+            IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.Negate, TOptimizations>(ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, _bitmap, ref _lookup);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAny(ReadOnlySpan<char> span) =>
