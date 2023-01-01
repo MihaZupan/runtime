@@ -23,6 +23,23 @@ namespace System.Text
         private const int MaxInputElementsPerIteration = 1 * 1024 * 1024;
 
         /// <summary>
+        /// The maximum output length estimate before we switch to
+        /// determining the exact length via GetByteCount/GetCharCount.
+        /// </summary>
+        /// <remarks>
+        /// The value used here is a trade off between avoiding potentially expensive O(n) calls to
+        /// GetByteCount/GetCharCount and requesting (and therefore potentially allocating) more
+        /// buffer space than is necessary to complete this individual operation.
+        /// </remarks>
+        private const int MaxOutputLengthForEstimation = 1024;
+
+        // Estimates for some well-known encodings are very accurate already (+/- 1),
+        // so there is no point in paying the O(n) cost to get the exact number.
+        private static bool OutputLengthEstimateIsAccurate(Encoding encoding, bool charCount) =>
+            (charCount && ReferenceEquals(encoding, Encoding.UTF8)) ||
+            ReferenceEquals(encoding, Encoding.Latin1);
+
+        /// <summary>
         /// Encodes the specified <see cref="ReadOnlySpan{Char}"/> to <see langword="byte"/>s using the specified <see cref="Encoding"/>
         /// and writes the result to <paramref name="writer"/>.
         /// </summary>
@@ -40,8 +57,13 @@ namespace System.Text
             {
                 // The input span is small enough where we can one-shot this.
 
-                int byteCount = encoding.GetByteCount(chars);
-                Span<byte> scratchBuffer = writer.GetSpan(byteCount);
+                int byteCountEstimate = encoding.GetMaxByteCount(chars.Length);
+                if (byteCountEstimate > MaxOutputLengthForEstimation && !OutputLengthEstimateIsAccurate(encoding, charCount: false))
+                {
+                    byteCountEstimate = encoding.GetByteCount(chars);
+                }
+
+                Span<byte> scratchBuffer = writer.GetSpan(byteCountEstimate);
 
                 int actualBytesWritten = encoding.GetBytes(chars, scratchBuffer);
 
@@ -231,8 +253,13 @@ namespace System.Text
             {
                 // The input span is small enough where we can one-shot this.
 
-                int charCount = encoding.GetCharCount(bytes);
-                Span<char> scratchBuffer = writer.GetSpan(charCount);
+                int charCountEstimate = encoding.GetMaxCharCount(bytes.Length);
+                if (charCountEstimate > MaxOutputLengthForEstimation && !OutputLengthEstimateIsAccurate(encoding, charCount: true))
+                {
+                    charCountEstimate = encoding.GetCharCount(bytes);
+                }
+
+                Span<char> scratchBuffer = writer.GetSpan(charCountEstimate);
 
                 int actualCharsWritten = encoding.GetChars(bytes, scratchBuffer);
 
