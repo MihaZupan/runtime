@@ -45,7 +45,7 @@ namespace System.Buffers
         private int IndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
-            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
+            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= 4
                 ? IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<TNegator, TOptimizations>(ref searchSpace, searchSpaceLength, _bitmap)
                 : IndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
         }
@@ -54,7 +54,7 @@ namespace System.Buffers
         private int LastIndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
-            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
+            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= 4
                 ? IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref searchSpace, searchSpaceLength, _bitmap)
                 : LastIndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
         }
