@@ -197,6 +197,7 @@ namespace System
             public string? Fragment;
             public string? AbsoluteUri;
             public string? RemoteUrl;
+            public (UriComponents Components, UriFormat Format, string? CompareString) LastCompareString;
         };
 
         private void InterlockedSetFlags(Flags flags)

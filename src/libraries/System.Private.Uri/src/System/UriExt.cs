@@ -364,29 +364,58 @@ namespace System
         //
         // Note that Uri.Equals will get an optimized path but is limited to true/false result only
         //
-        public static int Compare(Uri? uri1, Uri? uri2, UriComponents partsToCompare, UriFormat compareFormat,
-            StringComparison comparisonType)
+        public static int Compare(Uri? uri1, Uri? uri2, UriComponents partsToCompare, UriFormat compareFormat, StringComparison comparisonType)
         {
+            // non-null > null
             if (uri1 is null)
             {
-                if (uri2 is null)
-                    return 0; // Equal
-                return -1;    // null < non-null
+                return uri2 is null ? 0 : -1;
             }
 
             if (uri2 is null)
-                return 1;     // non-null > null
+            {
+                return 1;
+            }
 
-            // a relative uri is always less than an absolute one
-            if (!uri1.IsAbsoluteUri || !uri2.IsAbsoluteUri)
-                return uri1.IsAbsoluteUri ? 1 : uri2.IsAbsoluteUri ? -1 : string.Compare(uri1.OriginalString,
-                    uri2.OriginalString, comparisonType);
+            // a relative uri is less than an absolute one
+            if (uri1.IsNotAbsoluteUri)
+            {
+                return uri2.IsAbsoluteUri ? -1 : string.Compare(uri1.OriginalString, uri2.OriginalString, comparisonType);
+            }
 
-            return string.Compare(
-                                    uri1.GetParts(partsToCompare, compareFormat),
-                                    uri2.GetParts(partsToCompare, compareFormat),
-                                    comparisonType
-                                  );
+            if (uri2.IsNotAbsoluteUri)
+            {
+                return 1;
+            }
+
+            string compare1 = GetCompareParts(uri1, partsToCompare, compareFormat);
+            string compare2 = GetCompareParts(uri2, partsToCompare, compareFormat);
+
+            return string.Compare(compare1, compare2, comparisonType);
+
+            static string GetCompareParts(Uri uri, UriComponents partsToCompare, UriFormat compareFormat)
+            {
+                MoreInfo info = uri.EnsureUriInfo().MoreInfo;
+
+                lock (info)
+                {
+                    (UriComponents components, UriFormat format, string? compareString) = info.LastCompareString;
+
+                    if (compareString is not null && components == partsToCompare && format == compareFormat)
+                    {
+                        return compareString;
+                    }
+                }
+
+                string parts = uri.GetParts(partsToCompare, compareFormat);
+
+                lock (info)
+                {
+                    info.LastCompareString = (partsToCompare, compareFormat, parts);
+                }
+
+                return parts;
+            }
         }
 
         public bool IsWellFormedOriginalString()
