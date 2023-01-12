@@ -10,6 +10,10 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Threading;
 
+#pragma warning disable CA1823
+#pragma warning disable CS0649
+#pragma warning disable IDE0060
+
 namespace System.Text.RegularExpressions
 {
     /// <summary>
@@ -18,6 +22,10 @@ namespace System.Text.RegularExpressions
     [RequiresDynamicCode("Compiling a RegEx requires dynamic code.")]
     internal abstract class RegexCompiler
     {
+        private static readonly IndexOfAnyValues<char> s_indexOfAny = IndexOfAnyValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+        private static readonly FieldInfo s_tempIndexOfAnyField = typeof(RegexCompiler).GetField("s_indexOfAny", BindingFlags.NonPublic | BindingFlags.Static)!;
+
         private static readonly FieldInfo s_runtextstartField = RegexRunnerField("runtextstart");
         private static readonly FieldInfo s_runtextposField = RegexRunnerField("runtextpos");
         private static readonly FieldInfo s_runtrackposField = RegexRunnerField("runtrackpos");
@@ -6010,14 +6018,7 @@ namespace System.Text.RegularExpressions
         /// </summary>
         private void LoadIndexOfAnyValues(char[] chars)
         {
-            List<IndexOfAnyValues<char>> list = _indexOfAnyValues ??= new();
-            int index = list.Count;
-            list.Add(IndexOfAnyValues.Create(chars));
-
-            // this._indexOfAnyValues[index]
-            Ldthisfld(s_indexOfAnyValuesArrayField);
-            Ldc(index);
-            _ilg!.Emit(OpCodes.Ldelem_Ref);
+            _ilg!.Emit(OpCodes.Ldsfld, s_tempIndexOfAnyField);
         }
     }
 }
