@@ -260,7 +260,7 @@ namespace System.Buffers
                 : LastIndexOfAny<IndexOfAnyAsciiSearcher.Negate>(ref charMap, ref searchSpace, searchSpaceLength, valuesSpan);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int IndexOfAny<TNegator>(ref uint charMap, ref char searchSpace, int searchSpaceLength, ReadOnlySpan<char> values)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
@@ -295,7 +295,7 @@ namespace System.Buffers
                         while (mask != 0);
                     }
 
-                    cur = ref Unsafe.Add(ref cur, Vector128<short>.Count);
+                    cur = ref Unsafe.Add(ref cur, 2 * Vector128<short>.Count);
                 }
                 while (!Unsafe.IsAddressGreaterThan(ref cur, ref oneVectorAwayFromEnd));
             }
