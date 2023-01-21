@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 #pragma warning disable IDE0060 // https://github.com/dotnet/roslyn-analyzers/issues/6228
@@ -26,8 +27,10 @@ namespace System.Buffers
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct ProbabilisticMap
     {
-        private const int IndexMask = 0x7;
-        private const int IndexShift = 0x3;
+        private static bool IsVectorizationSupported => Sse41.IsSupported || AdvSimd.Arm64.IsSupported;
+
+        private static uint IndexMask => IsVectorizationSupported ? 31u : 7u;
+        private static int IndexShift => IsVectorizationSupported ? 5 : 3;
 
         private readonly uint _e0, _e1, _e2, _e3, _e4, _e5, _e6, _e7;
 
@@ -59,17 +62,27 @@ namespace System.Buffers
             if (hasAscii)
             {
                 // Common to search for ASCII symbols. Just set the high value once.
-                charMap |= 1u;
+                SetCharBit(ref charMap, 0);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void SetCharBit(ref uint charMap, byte value) =>
-            Unsafe.Add(ref charMap, (uint)value & IndexMask) |= 1u << (value >> IndexShift);
+        private static void SetCharBit(ref uint charMap, byte value)
+        {
+            if (IsVectorizationSupported)
+            {
+                Unsafe.Add(ref Unsafe.As<uint, byte>(ref charMap), value & IndexMask) |= (byte)(1u << (value >> IndexShift));
+            }
+            else
+            {
+                Unsafe.Add(ref charMap, value & IndexMask) |= 1u << (value >> IndexShift);
+            }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool IsCharBitSet(ref uint charMap, byte value) =>
-            (Unsafe.Add(ref charMap, (uint)value & IndexMask) & (1u << (value >> IndexShift))) != 0;
+        private static bool IsCharBitSet(ref uint charMap, byte value) => IsVectorizationSupported
+            ? (Unsafe.Add(ref Unsafe.As<uint, byte>(ref charMap), value & IndexMask) & (1u << (value >> IndexShift))) != 0
+            : (Unsafe.Add(ref charMap, value & IndexMask) & (1u << (value >> IndexShift))) != 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool Contains(ref uint charMap, ReadOnlySpan<char> values, int ch) =>
@@ -85,23 +98,46 @@ namespace System.Buffers
                 values.Length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Vector256<uint> ContainsMaskAvx2(Vector256<uint> charMap, ref char searchSpace)
+        private static Vector128<byte> ContainsMask16Chars(Vector128<byte> charMapLower, Vector128<byte> charMapUpper, ref char searchSpace)
         {
-            Debug.Assert(Avx2.IsSupported);
-            Vector256<uint> source = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref Unsafe.As<char, short>(ref searchSpace))).AsUInt32();
-            Vector256<uint> resultLow = IsCharBitNotSetAvx2(charMap, source & Vector256.Create(255u));
-            Vector256<uint> resultHigh = IsCharBitNotSetAvx2(charMap, Vector256.ShiftRightLogical(source, 8));
-            return ~(resultLow | resultHigh);
+            Vector128<ushort> source0 = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref searchSpace));
+            Vector128<ushort> source1 = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref searchSpace), (nuint)Vector128<ushort>.Count);
+
+            Vector128<byte> sourceLower = Sse2.IsSupported
+                ? Sse2.PackUnsignedSaturate((source0 & Vector128.Create((ushort)255)).AsInt16(), (source1 & Vector128.Create((ushort)255)).AsInt16())
+                : AdvSimd.Arm64.UnzipEven(source0.AsByte(), source1.AsByte());
+
+            Vector128<byte> sourceUpper = Sse2.IsSupported
+                ? Sse2.PackUnsignedSaturate(Vector128.ShiftRightLogical(source0, 8).AsInt16(), Vector128.ShiftRightLogical(source1, 8).AsInt16())
+                : AdvSimd.Arm64.UnzipOdd(source0.AsByte(), source1.AsByte());
+
+            Vector128<byte> resultLower = IsCharBitNotSet(charMapLower, charMapUpper, sourceLower);
+            Vector128<byte> resultUpper = IsCharBitNotSet(charMapLower, charMapUpper, sourceUpper);
+
+            return ~(resultLower | resultUpper);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Vector256<uint> IsCharBitNotSetAvx2(Vector256<uint> charMap, Vector256<uint> values)
+        private static Vector128<byte> IsCharBitNotSet(Vector128<byte> charMapLower, Vector128<byte> charMapUpper, Vector128<byte> values)
         {
-            Debug.Assert(Avx2.IsSupported);
-            Vector256<uint> index = values & Vector256.Create((uint)IndexMask);
-            Vector256<uint> bitPositions = Avx2.ShiftLeftLogicalVariable(Vector256<uint>.One, Vector256.ShiftRightLogical(values, IndexShift));
-            Vector256<uint> bitMask = Avx2.PermuteVar8x32(charMap, index);
-            return Vector256.Equals(bitMask & bitPositions, Vector256<uint>.Zero);
+            Vector128<byte> bitPositions = Shuffle(Vector128.Create(0x8040201008040201).AsByte(), Vector128.ShiftRightLogical(values, IndexShift));
+
+            Vector128<byte> index = values & Vector128.Create((byte)IndexMask);
+            Vector128<byte> bitMaskLower = Shuffle(charMapLower, index);
+            Vector128<byte> bitMaskUpper = Shuffle(charMapUpper, index - Vector128.Create((byte)16));
+            Vector128<byte> mask = Vector128.GreaterThan(index, Vector128.Create((byte)15));
+            Vector128<byte> bitMask = Vector128.ConditionalSelect(mask, bitMaskUpper, bitMaskLower);
+
+            return Vector128.Equals(bitMask & bitPositions, Vector128<byte>.Zero);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<byte> Shuffle(Vector128<byte> vector, Vector128<byte> indices)
+        {
+            // We're not using Vector128.Shuffle as the caller already accounts for and relies on differences in behavior between platforms.
+            return Ssse3.IsSupported
+                ? Ssse3.Shuffle(vector, indices)
+                : AdvSimd.Arm64.VectorTableLookup(vector, indices);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -231,38 +267,30 @@ namespace System.Buffers
             ref char searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
             ref char cur = ref searchSpace;
 
-            if (Avx2.IsSupported && typeof(TNegator) == typeof(IndexOfAnyAsciiSearcher.DontNegate) && searchSpaceLength >= Vector128<short>.Count)
+            if (IsVectorizationSupported && typeof(TNegator) == typeof(IndexOfAnyAsciiSearcher.DontNegate) && searchSpaceLength >= 2 * Vector128<short>.Count)
             {
-                Vector256<uint> charMap256 = Vector256.LoadUnsafe(ref charMap);
+                Vector128<byte> charMap0 = Vector128.LoadUnsafe(ref Unsafe.As<uint, byte>(ref charMap));
+                Vector128<byte> charMap1 = Vector128.LoadUnsafe(ref Unsafe.As<uint, byte>(ref charMap), (nuint)Vector128<byte>.Count);
 
-                ref char oneVectorAwayFromEnd = ref Unsafe.Subtract(ref searchSpaceEnd, Vector128<short>.Count);
+                ref char oneVectorAwayFromEnd = ref Unsafe.Subtract(ref searchSpaceEnd, 2 * Vector128<short>.Count);
 
                 do
                 {
-                    Vector256<uint> result = ContainsMaskAvx2(charMap256, ref cur);
+                    Vector128<byte> result = ContainsMask16Chars(charMap0, charMap1, ref cur);
 
-                    if (result != Vector256<uint>.Zero)
+                    if (result != Vector128<byte>.Zero)
                     {
                         uint mask = result.ExtractMostSignificantBits();
                         do
                         {
-                            int charPos = BitOperations.TrailingZeroCount(mask);
-
-                            ref char candidatePos = ref Unsafe.Add(ref cur, charPos);
+                            ref char candidatePos = ref Unsafe.Add(ref cur, BitOperations.TrailingZeroCount(mask));
 
                             if (Contains(values, candidatePos))
                             {
                                 return (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref candidatePos) / sizeof(char));
                             }
 
-                            if (Bmi1.IsSupported)
-                            {
-                                mask = Bmi1.ResetLowestSetBit(mask);
-                            }
-                            else
-                            {
-                                mask &= ~(uint)(1 << charPos);
-                            }
+                            mask = BitOperations.ResetLowestSetBit(mask);
                         }
                         while (mask != 0);
                     }
