@@ -1380,7 +1380,7 @@ namespace System
             // Early-exit: do we need to do anything at all?
             // If not, return this string as-is.
 
-            int idxOfFirstNewlineChar = IndexOfNewlineChar(this, out int stride);
+            int idxOfFirstNewlineChar = IndexOfNewlineChar(this, replacementText, out int stride);
             if (idxOfFirstNewlineChar < 0)
             {
                 return this;
@@ -1397,7 +1397,7 @@ namespace System
             ValueStringBuilder builder = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
             while (true)
             {
-                int idx = IndexOfNewlineChar(remaining, out stride);
+                int idx = IndexOfNewlineChar(remaining, replacementText, out stride);
                 if (idx < 0) { break; } // no more newline chars
                 builder.Append(replacementText);
                 builder.Append(remaining.Slice(0, idx));
@@ -1411,7 +1411,7 @@ namespace System
 
         // Scans the input text, returning the index of the first newline char.
         // Newline chars are given by the Unicode Standard, Sec. 5.8.
-        internal static int IndexOfNewlineChar(ReadOnlySpan<char> text, out int stride)
+        internal static int IndexOfNewlineChar(ReadOnlySpan<char> text, string replacementText, out int stride)
         {
             // !! IMPORTANT !!
             //
@@ -1423,9 +1423,18 @@ namespace System
             // O(n^2), where n is the length of the input text.
 
             stride = default;
-            int idx = text.IndexOfAny(IndexOfAnyValuesStorage.NewLineChars);
-            if ((uint)idx < (uint)text.Length)
+            int offset = 0;
+
+            while (true)
             {
+                int idx = text.IndexOfAny(IndexOfAnyValuesStorage.NewLineChars);
+
+                if ((uint)idx >= (uint)text.Length)
+                {
+                    return -1;
+                }
+
+                offset += idx;
                 stride = 1; // needle found
 
                 // Did we match CR? If so, and if it's followed by LF, then we need
@@ -1437,11 +1446,25 @@ namespace System
                     if ((uint)nextCharIdx < (uint)text.Length && text[nextCharIdx] == '\n')
                     {
                         stride = 2;
+
+                        if (replacementText != "\r\n")
+                        {
+                            return offset;
+                        }
+                    }
+                    else if (replacementText != "\r")
+                    {
+                        return offset;
                     }
                 }
-            }
+                else if (replacementText.Length != 1 || replacementText[0] != text[idx])
+                {
+                    return offset;
+                }
 
-            return idx;
+                offset += stride;
+                text = text.Slice(idx + stride);
+            }
         }
 
         public string[] Split(char separator, StringSplitOptions options = StringSplitOptions.None)

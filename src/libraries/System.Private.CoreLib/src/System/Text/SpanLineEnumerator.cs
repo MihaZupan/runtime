@@ -46,7 +46,7 @@ namespace System.Text
                 return false; // EOF previously reached or enumerator was never initialized
             }
 
-            int idx = string.IndexOfNewlineChar(_remaining, out int stride);
+            int idx = string.IndexOfNewlineChar(_remaining, string.Empty, out int stride);
             if (idx >= 0)
             {
                 _current = _remaining.Slice(0, idx);
