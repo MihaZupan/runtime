@@ -37,21 +37,35 @@ namespace System.Buffers
             }
 
             // IndexOfAnyValuesInRange is slower than IndexOfAny1Value, but faster than IndexOfAny2Values
-            if (TryGetSingleRange(values, out byte maxInclusive) is IndexOfAnyValues<byte> range)
+            if (TryGetSingleRange(values, out byte minInclusive, out byte maxInclusive) is IndexOfAnyValues<byte> range)
             {
                 return range;
             }
 
-            if (values.Length <= 5)
+            if (values.Length == 2)
             {
-                Debug.Assert(values.Length is 2 or 3 or 4 or 5);
-                return values.Length switch
-                {
-                    2 => new IndexOfAny2ByteValues(values),
-                    3 => new IndexOfAny3ByteValues(values),
-                    4 => new IndexOfAny4Values<byte, byte>(values),
-                    _ => new IndexOfAny5Values<byte, byte>(values),
-                };
+                return new IndexOfAny2ByteValues(values);
+            }
+
+            if (values.Length == 3)
+            {
+                return new IndexOfAny3ByteValues(values);
+            }
+
+            // IndexOfAnyLessThanOr2SpecialByteValues performs 3 comparisons, so it's faster than IndexOfAny4Values.
+            if (TryGetIndexOfAnyLessThanOr2SpecialByteValues(values, minInclusive) is { } lessThanOr2Special)
+            {
+                return lessThanOr2Special;
+            }
+
+            if (values.Length == 4)
+            {
+                return new IndexOfAny4Values<byte, byte>(values);
+            }
+
+            if (values.Length == 5)
+            {
+                return new IndexOfAny5Values<byte, byte>(values);
             }
 
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && maxInclusive < 128)
@@ -86,7 +100,7 @@ namespace System.Buffers
             }
 
             // IndexOfAnyValuesInRange is slower than IndexOfAny1Value, but faster than IndexOfAny2Values
-            if (TryGetSingleRange(values, out char maxInclusive) is IndexOfAnyValues<char> charRange)
+            if (TryGetSingleRange(values, out _, out char maxInclusive) is IndexOfAnyValues<char> charRange)
             {
                 return charRange;
             }
@@ -144,7 +158,7 @@ namespace System.Buffers
             return new IndexOfAnyCharValuesProbabilistic(values);
         }
 
-        private static unsafe IndexOfAnyValues<T>? TryGetSingleRange<T>(ReadOnlySpan<T> values, out T maxInclusive)
+        private static unsafe IndexOfAnyValues<T>? TryGetSingleRange<T>(ReadOnlySpan<T> values, out T minInclusive, out T maxInclusive)
             where T : struct, INumber<T>, IMinMaxValue<T>
         {
             T min = T.MaxValue;
@@ -156,6 +170,7 @@ namespace System.Buffers
                 max = T.Max(max, value);
             }
 
+            minInclusive = min;
             maxInclusive = max;
 
             uint range = uint.CreateChecked(max - min) + 1;
@@ -188,6 +203,34 @@ namespace System.Buffers
             return (IndexOfAnyValues<T>)(object)(PackedSpanHelpers.PackedIndexOfIsSupported && PackedSpanHelpers.CanUsePackedIndexOf(min) && PackedSpanHelpers.CanUsePackedIndexOf(max)
                 ? new IndexOfAnyCharValuesInRange<TrueConst>(*(char*)&min, *(char*)&max)
                 : new IndexOfAnyCharValuesInRange<FalseConst>(*(char*)&min, *(char*)&max));
+        }
+
+        private static unsafe IndexOfAnyLessThanOr2SpecialByteValues? TryGetIndexOfAnyLessThanOr2SpecialByteValues(ReadOnlySpan<byte> values, byte minInclusive)
+        {
+            Debug.Assert(values.Length > 3);
+
+            if (minInclusive != 0 || values.Length > byte.MaxValue)
+            {
+                return null;
+            }
+
+            Span<byte> sortedValues = stackalloc byte[256].Slice(0, values.Length);
+            values.CopyTo(sortedValues);
+            sortedValues.Sort();
+
+            byte value0 = sortedValues[^1];
+            byte value1 = sortedValues[^2];
+            sortedValues = sortedValues.Slice(0, sortedValues.Length - 2);
+
+            for (int i = 1; i < sortedValues.Length; i++)
+            {
+                if (sortedValues[i] - sortedValues[i - 1] > 1)
+                {
+                    return null;
+                }
+            }
+
+            return new IndexOfAnyLessThanOr2SpecialByteValues(sortedValues[^1], value0, value1);
         }
 
         internal interface IRuntimeConst

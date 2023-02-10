@@ -16,9 +16,9 @@ namespace System.Buffers
     {
         private readonly TImpl _e0, _e1, _e2, _e3;
 
-        public IndexOfAny4Values(ReadOnlySpan<TImpl> values)
+        public unsafe IndexOfAny4Values(ReadOnlySpan<TImpl> values)
         {
-            Debug.Assert(Unsafe.SizeOf<T>() == Unsafe.SizeOf<TImpl>());
+            Debug.Assert(sizeof(T) == sizeof(TImpl));
             Debug.Assert(values.Length == 4);
             (_e0, _e1, _e2, _e3) = (values[0], values[1], values[2], values[3]);
         }
