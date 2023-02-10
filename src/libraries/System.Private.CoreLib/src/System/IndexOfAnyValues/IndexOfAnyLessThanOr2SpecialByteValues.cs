@@ -32,14 +32,14 @@ namespace System.Buffers
                 values.Add((byte)i);
             }
 
-            if (_value0 > _lessThan)
-            {
-                values.Add(_value0);
-            }
-
-            if (_value1 > _lessThan)
+            if (_value1 >= _lessThan)
             {
                 values.Add(_value1);
+            }
+
+            if (_value0 >= _lessThan)
+            {
+                values.Add(_value0);
             }
 
             return values.ToArray();
