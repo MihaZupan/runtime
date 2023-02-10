@@ -230,7 +230,10 @@ namespace System.Buffers
                 }
             }
 
-            return new IndexOfAnyLessThanOr2SpecialByteValues(sortedValues[^1], value0, value1);
+            // sortedValues[^1] can't be 255, or TryGetSingleRange would have matched this set of values already.
+            Debug.Assert(sortedValues[^1] < 255);
+
+            return new IndexOfAnyLessThanOr2SpecialByteValues((byte)(sortedValues[^1] + 1), value0, value1);
         }
 
         internal interface IRuntimeConst
