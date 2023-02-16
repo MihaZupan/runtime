@@ -133,13 +133,13 @@ namespace System.Buffers
                 return new IndexOfAny5Values<char, short>(shortValues);
             }
 
-            if (maxInclusive < 256)
+            if (maxInclusive < 256 && (!Vector128.IsHardwareAccelerated || values.Length > 2 * Vector128<ushort>.Count))
             {
                 // This will also match ASCII values when IndexOfAnyAsciiSearcher is not supported
                 return new IndexOfAnyLatin1CharValues(values);
             }
 
-            return new IndexOfAnyCharValuesProbabilistic(values);
+            return IndexOfAnyCharValuesProbabilistic.Create(values);
         }
 
         private static bool TryGetSingleRange<T>(ReadOnlySpan<T> values, out T minInclusive, out T maxInclusive)
