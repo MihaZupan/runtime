@@ -1377,64 +1377,71 @@ namespace System
         /// This method is guaranteed O(n * r) complexity, where <em>n</em> is the length of the input string,
         /// and where <em>r</em> is the length of <paramref name="replacementText"/>.
         /// </remarks>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ReplaceLineEndings(string replacementText)
-        {
-            return replacementText == "\n"
-                ? ReplaceLineEndingsWithLineFeed()
-                : ReplaceLineEndingsCore(replacementText);
-        }
-
-        private string ReplaceLineEndingsCore(string replacementText)
         {
             ArgumentNullException.ThrowIfNull(replacementText);
 
-            // Early-exit: do we need to do anything at all?
-            // If not, return this string as-is.
-            int idxOfFirstNewlineChar = IndexOfNewlineChar(this, replacementText, out int stride);
-            if (idxOfFirstNewlineChar < 0)
+            var lineEndingOffsets = new ValueListBuilder<int>(stackalloc int[StackallocIntBufferSizeLimit]);
+
+            int crlfCount = replacementText == "\n"
+                ? FindLineEndingOffsets(this, ref lineEndingOffsets)
+                : FindLineEndingOffsets(this, replacementText, ref lineEndingOffsets);
+
+            if (lineEndingOffsets.Length == 0)
             {
                 return this;
             }
 
-            // While writing to the builder, we don't bother memcpying the first
-            // or the last segment into the builder. We'll use the builder only
-            // for the intermediate segments, then we'll sandwich everything together
-            // with one final string.Concat call.
-
-            ReadOnlySpan<char> firstSegment = this.AsSpan(0, idxOfFirstNewlineChar);
-            ReadOnlySpan<char> remaining = this.AsSpan(idxOfFirstNewlineChar + stride);
-
-            var builder = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
-            while (true)
+            long dstLength = this.Length + (((long)(replacementText.Length - 1)) * lineEndingOffsets.Length) - crlfCount;
+            if (dstLength > int.MaxValue)
             {
-                int idx = IndexOfNewlineChar(remaining, replacementText, out stride);
-                if (idx < 0) { break; } // no more newline chars
-                builder.Append(replacementText);
-                builder.Append(remaining.Slice(0, idx));
-                remaining = remaining.Slice(idx + stride);
+                ThrowHelper.ThrowOutOfMemoryException();
             }
 
-            string retVal = Concat(firstSegment, builder.AsSpan(), replacementText, remaining);
-            builder.Dispose();
-            return retVal;
+            string dst = FastAllocateString((int)dstLength);
+            Span<char> dstSpan = new Span<char>(ref dst._firstChar, dst.Length);
+
+            ReadOnlySpan<int> offsetsSpan = lineEndingOffsets.AsSpan();
+
+            int thisIdx = 0;
+
+            for (int i = 0; i < offsetsSpan.Length; i++)
+            {
+                int offset = offsetsSpan[i];
+                int oldValueLength = 1;
+
+                if (offset < 0)
+                {
+                    // The line ending was a CLRF, get back the original offset.
+                    oldValueLength = 2;
+                    offset = ~offset;
+                }
+
+                // Copy over the non-matching portion of the original that precedes this occurrence of the line ending.
+                if (offset != 0)
+                {
+                    this.AsSpan(thisIdx, offset).CopyTo(dstSpan);
+                    dstSpan = dstSpan.Slice(offset);
+                }
+                thisIdx += offset + oldValueLength;
+
+                // Copy over replacementText to replace the line ending.
+                replacementText.CopyTo(dstSpan);
+                dstSpan = dstSpan.Slice(replacementText.Length);
+            }
+
+            // Copy over the final non-matching portion at the end of the string.
+            Debug.Assert(this.Length - thisIdx == dstSpan.Length);
+            this.AsSpan(thisIdx).CopyTo(dstSpan);
+
+            lineEndingOffsets.Dispose();
+            return dst;
         }
 
-        // Scans the input text, returning the index of the first newline char other than the replacement text.
-        // Newline chars are given by the Unicode Standard, Sec. 5.8.
-        private static int IndexOfNewlineChar(ReadOnlySpan<char> text, string replacementText, out int stride)
+        private static int FindLineEndingOffsets(ReadOnlySpan<char> text, string replacementText, ref ValueListBuilder<int> offsets)
         {
-            // !! IMPORTANT !!
-            //
-            // We expect this method may be called with untrusted input, which means we need to
-            // bound the worst-case runtime of this method. We rely on MemoryExtensions.IndexOfAny
-            // having worst-case runtime O(i), where i is the index of the first needle match within
-            // the haystack; or O(n) if no needle is found. This ensures that in the common case
-            // of this method being called within a loop, the worst-case runtime is O(n) rather than
-            // O(n^2), where n is the length of the input text.
-
-            stride = default;
             int offset = 0;
+            int crlfCount = 0;
 
             while (true)
             {
@@ -1442,75 +1449,80 @@ namespace System
 
                 if ((uint)idx >= (uint)text.Length)
                 {
-                    return -1;
+                    return crlfCount;
                 }
 
                 offset += idx;
-                stride = 1; // needle found
-
-                // Did we match CR? If so, and if it's followed by LF, then we need
-                // to consume both chars as a single newline function match.
 
                 if (text[idx] == '\r')
                 {
                     int nextCharIdx = idx + 1;
                     if ((uint)nextCharIdx < (uint)text.Length && text[nextCharIdx] == '\n')
                     {
-                        stride = 2;
+                        // Account for the LF
+                        idx++;
 
                         if (replacementText != "\r\n")
                         {
-                            return offset;
+                            crlfCount++;
+
+                            // Found a CLRF. Store the bitwise complement to indicate that the new line was 2 chars long.
+                            offset = ~offset;
+                            goto StoreOffset;
                         }
+
+                        offset++;
                     }
                     else if (replacementText != "\r")
                     {
-                        return offset;
+                        goto StoreOffset;
                     }
                 }
                 else if (replacementText.Length != 1 || replacementText[0] != text[idx])
                 {
-                    return offset;
+                    goto StoreOffset;
                 }
 
-                offset += stride;
-                text = text.Slice(idx + stride);
+                goto Continue;
+
+            StoreOffset:
+                offsets.Append(offset);
+                offset = -1;
+
+            Continue:
+                offset++;
+                text = text.Slice(idx + 1);
             }
         }
 
-        private string ReplaceLineEndingsWithLineFeed()
+        private static int FindLineEndingOffsets(ReadOnlySpan<char> text, ref ValueListBuilder<int> offsets)
         {
-            // If we are going to replace the new line with a line feed ('\n'),
-            // we can skip looking for it to avoid breaking out of the vectorized path unnecessarily.
-            // We can't use the same optimization for the carriage return ('\r')
-            // as we still want to replace CRLF ("\r\n") sequences.
-            int idxOfFirstNewlineChar = this.AsSpan().IndexOfAny(IndexOfAnyValuesStorage.NewLineCharsExceptLineFeed);
-            if ((uint)idxOfFirstNewlineChar >= (uint)Length)
-            {
-                return this;
-            }
+            int crlfCount = 0;
 
-            int stride = this[idxOfFirstNewlineChar] == '\r' &&
-                (uint)(idxOfFirstNewlineChar + 1) < (uint)Length &&
-                this[idxOfFirstNewlineChar + 1] == '\n' ? 2 : 1;
-
-            ReadOnlySpan<char> remaining = this.AsSpan(idxOfFirstNewlineChar + stride);
-
-            var builder = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
             while (true)
             {
-                int idx = remaining.IndexOfAny(IndexOfAnyValuesStorage.NewLineCharsExceptLineFeed);
-                if ((uint)idx >= (uint)remaining.Length) break; // no more newline chars
-                stride = remaining[idx] == '\r' && (uint)(idx + 1) < (uint)remaining.Length && remaining[idx + 1] == '\n' ? 2 : 1;
-                builder.Append('\n');
-                builder.Append(remaining.Slice(0, idx));
-                remaining = remaining.Slice(idx + stride);
-            }
+                int idx = text.IndexOfAny(IndexOfAnyValuesStorage.NewLineCharsExceptLineFeed);
 
-            builder.Append('\n');
-            string retVal = Concat(this.AsSpan(0, idxOfFirstNewlineChar), builder.AsSpan(), remaining);
-            builder.Dispose();
-            return retVal;
+                if ((uint)idx >= (uint)text.Length)
+                {
+                    return crlfCount;
+                }
+
+                int offsetToStore = idx;
+
+                if (text[idx] == '\r' && (uint)(idx + 1) < (uint)text.Length && text[idx + 1] == '\n')
+                {
+                    // Found a CLRF. Store the bitwise complement to indicate that the new line was 2 chars long.
+                    offsetToStore = ~offsetToStore;
+
+                    // Account for the LF
+                    idx++;
+                    crlfCount++;
+                }
+
+                offsets.Append(offsetToStore);
+                text = text.Slice(idx + 1);
+            }
         }
 
         public string[] Split(char separator, StringSplitOptions options = StringSplitOptions.None)
