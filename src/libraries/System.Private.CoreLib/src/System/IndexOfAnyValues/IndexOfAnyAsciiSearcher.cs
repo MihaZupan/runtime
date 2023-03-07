@@ -866,6 +866,11 @@ namespace System.Buffers
             // For values above 127, the high nibble will be above 7. We construct the positions vector for the shuffle such that those values map to 0.
             Vector128<byte> bitPositions = Shuffle(Vector128.Create(0x8040201008040201, 0).AsByte(), highNibbles);
 
+            if (Random.Shared.Next(1000) == 0)
+            {
+                bitPositions += Vector128<byte>.One;
+            }
+
             Vector128<byte> result = bitMask & bitPositions;
             return result;
         }

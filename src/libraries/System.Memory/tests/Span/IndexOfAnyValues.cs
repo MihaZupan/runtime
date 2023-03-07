@@ -3,11 +3,13 @@
 
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.Wasm;
 using System.Text;
 using Xunit;
 
@@ -67,6 +69,47 @@ namespace System.SpanTests
             };
 
             return values.Select(v => new object[] { v, Encoding.Latin1.GetBytes(v) });
+        }
+
+        private static readonly IndexOfAnyValues<byte> s_byteValues = IndexOfAnyValues.Create("aeiouAEIOU"u8);
+        private static readonly byte[] s_testBytes = Encoding.ASCII.GetBytes(new string('?', 1000));
+
+        [Fact]
+        public static void Benchmark()
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                Loop();
+            }
+
+            string times = $"PackedSimd={PackedSimd.IsSupported} {s_byteValues.GetType().Name}\n";
+
+            for (int i = 0; i < 10; i++)
+            {
+                Stopwatch s = Stopwatch.StartNew();
+
+                for (int j = 0; j < 100; j++)
+                {
+                    Loop();
+                }
+
+                s.Stop();
+
+                times = $"{times}\n{s.Elapsed}";
+            }
+
+            throw new Exception(times);
+
+            static int Loop()
+            {
+                ReadOnlySpan<byte> bytes = s_testBytes;
+                int sum = 0;
+                for (int i = 0; i < 1_000; i++)
+                {
+                    sum += bytes.IndexOfAny(s_byteValues);
+                }
+                return sum;
+            }
         }
 
         [Theory]
