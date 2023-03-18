@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using static System.HexConverter;
 
 namespace System.Net.Http.Headers
 {
@@ -65,7 +64,7 @@ namespace System.Net.Http.Headers
         [DisallowNull]
         public string? MediaType
         {
-            get { return _mediaType; }
+            get => _mediaType;
             set
             {
                 CheckMediaTypeFormat(value, nameof(value));
@@ -284,7 +283,7 @@ namespace System.Net.Http.Headers
             int mediaTypeLength = GetMediaTypeExpressionLength(mediaType, 0, out string? tempMediaType);
             if ((mediaTypeLength == 0) || (tempMediaType!.Length != mediaType.Length))
             {
-                throw new FormatException(SR.Format(System.Globalization.CultureInfo.InvariantCulture, SR.net_http_headers_invalid_value, mediaType));
+                throw new FormatException(SR.Format(SR.net_http_headers_invalid_value, mediaType));
             }
         }
 

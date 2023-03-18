@@ -41,43 +41,15 @@ namespace System.Net.Http.Headers
             _comment = source._comment;
         }
 
-        public override string ToString()
-        {
-            if (_product == null)
-            {
-                Debug.Assert(_comment != null);
-                return _comment;
-            }
-            return _product.ToString();
-        }
+        public override string ToString() => _product?.ToString() ?? _comment!;
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            ProductInfoHeaderValue? other = obj as ProductInfoHeaderValue;
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is ProductInfoHeaderValue other &&
+            (_product is null
+                ? string.Equals(_comment, other._comment, StringComparison.Ordinal)
+                : _product.Equals(other._product));
 
-            if (other == null)
-            {
-                return false;
-            }
-
-            if (_product == null)
-            {
-                // We compare comments using case-sensitive comparison.
-                return string.Equals(_comment, other._comment, StringComparison.Ordinal);
-            }
-
-            return _product.Equals(other._product);
-        }
-
-        public override int GetHashCode()
-        {
-            if (_product == null)
-            {
-                Debug.Assert(_comment != null);
-                return _comment.GetHashCode();
-            }
-            return _product.GetHashCode();
-        }
+        public override int GetHashCode() => _product?.GetHashCode() ?? _comment!.GetHashCode();
 
         public static ProductInfoHeaderValue Parse(string input)
         {
@@ -88,7 +60,7 @@ namespace System.Net.Http.Headers
             {
                 // There is some invalid leftover data. Normally BaseHeaderParser.TryParseValue would
                 // handle this, but ProductInfoHeaderValue does not derive from BaseHeaderParser.
-                throw new FormatException(SR.Format(System.Globalization.CultureInfo.InvariantCulture, SR.net_http_headers_invalid_value, input.Substring(index)));
+                throw new FormatException(SR.Format(SR.net_http_headers_invalid_value, input.Substring(index)));
             }
             return (ProductInfoHeaderValue)result;
         }

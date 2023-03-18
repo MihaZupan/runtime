@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -15,25 +14,13 @@ namespace System.Net.Http.Headers
         private readonly string _receivedBy;
         private readonly string? _comment;
 
-        public string? ProtocolName
-        {
-            get { return _protocolName; }
-        }
+        public string? ProtocolName => _protocolName;
 
-        public string ProtocolVersion
-        {
-            get { return _protocolVersion; }
-        }
+        public string ProtocolVersion => _protocolVersion;
 
-        public string ReceivedBy
-        {
-            get { return _receivedBy; }
-        }
+        public string ReceivedBy => _receivedBy;
 
-        public string? Comment
-        {
-            get { return _comment; }
-        }
+        public string? Comment => _comment;
 
         public ViaHeaderValue(string protocolVersion, string receivedBy)
             : this(protocolVersion, receivedBy, null, null)
@@ -99,40 +86,21 @@ namespace System.Net.Http.Headers
             return sb.ToString();
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            ViaHeaderValue? other = obj as ViaHeaderValue;
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is ViaHeaderValue other &&
+            // Note that for token and host case-insensitive comparison is used.
+            // Comments are compared using case-sensitive comparison.
+            string.Equals(_protocolVersion, other._protocolVersion, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(_receivedBy, other._receivedBy, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(_protocolName, other._protocolName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(_comment, other._comment, StringComparison.Ordinal);
 
-            if (other == null)
-            {
-                return false;
-            }
-
-            // Note that for token and host case-insensitive comparison is used. Comments are compared using case-
-            // sensitive comparison.
-            return string.Equals(_protocolVersion, other._protocolVersion, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_receivedBy, other._receivedBy, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_protocolName, other._protocolName, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_comment, other._comment, StringComparison.Ordinal);
-        }
-
-        public override int GetHashCode()
-        {
-            int result = StringComparer.OrdinalIgnoreCase.GetHashCode(_protocolVersion) ^
-                StringComparer.OrdinalIgnoreCase.GetHashCode(_receivedBy);
-
-            if (!string.IsNullOrEmpty(_protocolName))
-            {
-                result ^= StringComparer.OrdinalIgnoreCase.GetHashCode(_protocolName);
-            }
-
-            if (!string.IsNullOrEmpty(_comment))
-            {
-                result ^= _comment.GetHashCode();
-            }
-
-            return result;
-        }
+        public override int GetHashCode() =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(_protocolVersion),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(_receivedBy),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(_protocolName ?? string.Empty),
+                _comment);
 
         public static ViaHeaderValue Parse(string input)
         {

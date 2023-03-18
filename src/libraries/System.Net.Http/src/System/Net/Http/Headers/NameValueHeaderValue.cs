@@ -17,14 +17,11 @@ namespace System.Net.Http.Headers
         private string _name = null!; // Name always set after default constructor used
         private string? _value;
 
-        public string Name
-        {
-            get { return _name; }
-        }
+        public string Name => _name;
 
         public string? Value
         {
-            get { return _value; }
+            get => _value;
             set
             {
                 CheckValueFormat(value);
@@ -172,7 +169,7 @@ namespace System.Net.Http.Headers
                 return;
             }
 
-            foreach (var value in values)
+            foreach (NameValueHeaderValue value in values)
             {
                 if (leadingSeparator || (destination.Length > 0))
                 {
@@ -191,7 +188,7 @@ namespace System.Net.Http.Headers
             }
 
             int result = 0;
-            foreach (var value in values)
+            foreach (NameValueHeaderValue value in values)
             {
                 result ^= value.GetHashCode();
             }
@@ -310,7 +307,7 @@ namespace System.Net.Http.Headers
                 return null;
             }
 
-            foreach (var value in values)
+            foreach (NameValueHeaderValue value in values)
             {
                 if (string.Equals(value.Name, name, StringComparison.OrdinalIgnoreCase))
                 {

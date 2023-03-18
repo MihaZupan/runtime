@@ -8,20 +8,14 @@ namespace System.Net.Http.Headers
 {
     public class EntityTagHeaderValue : ICloneable
     {
+        public static EntityTagHeaderValue Any { get; } = new EntityTagHeaderValue();
+
         private readonly string _tag;
         private readonly bool _isWeak;
 
-        public string Tag
-        {
-            get { return _tag; }
-        }
+        public string Tag => _tag;
 
-        public bool IsWeak
-        {
-            get { return _isWeak; }
-        }
-
-        public static EntityTagHeaderValue Any { get; } = new EntityTagHeaderValue();
+        public bool IsWeak => _isWeak;
 
         private EntityTagHeaderValue()
         {
@@ -69,24 +63,14 @@ namespace System.Net.Http.Headers
             return _tag;
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            EntityTagHeaderValue? other = obj as EntityTagHeaderValue;
-
-            if (other == null)
-            {
-                return false;
-            }
-
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is EntityTagHeaderValue other &&
+            _isWeak == other._isWeak &&
             // Since the tag is a quoted-string we treat it case-sensitive.
-            return ((_isWeak == other._isWeak) && string.Equals(_tag, other._tag, StringComparison.Ordinal));
-        }
+            string.Equals(_tag, other._tag, StringComparison.Ordinal);
 
-        public override int GetHashCode()
-        {
-            // Since the tag is a quoted-string we treat it case-sensitive.
-            return _tag.GetHashCode() ^ _isWeak.GetHashCode();
-        }
+        public override int GetHashCode() =>
+            HashCode.Combine(_tag, _isWeak);
 
         public static EntityTagHeaderValue Parse(string input)
         {

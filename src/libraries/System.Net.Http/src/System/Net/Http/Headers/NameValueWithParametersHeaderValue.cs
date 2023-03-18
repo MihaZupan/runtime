@@ -4,7 +4,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -40,23 +39,10 @@ namespace System.Net.Http.Headers
             _parameters = source._parameters.Clone();
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            bool result = base.Equals(obj);
-
-            if (result)
-            {
-                NameValueWithParametersHeaderValue? other = obj as NameValueWithParametersHeaderValue;
-
-                if (other == null)
-                {
-                    return false;
-                }
-                return HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
-            }
-
-            return false;
-        }
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            base.Equals(obj) &&
+            obj is NameValueWithParametersHeaderValue other &&
+            HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
 
         public override int GetHashCode()
         {

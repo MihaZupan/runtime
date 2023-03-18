@@ -4,7 +4,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -117,18 +116,10 @@ namespace System.Net.Http.Headers
             return StringBuilderCache.GetStringAndRelease(sb);
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            TransferCodingHeaderValue? other = obj as TransferCodingHeaderValue;
-
-            if (other == null)
-            {
-                return false;
-            }
-
-            return string.Equals(_value, other._value, StringComparison.OrdinalIgnoreCase) &&
-                HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
-        }
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is TransferCodingHeaderValue other &&
+            string.Equals(_value, other._value, StringComparison.OrdinalIgnoreCase) &&
+            HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
 
         public override int GetHashCode()
         {

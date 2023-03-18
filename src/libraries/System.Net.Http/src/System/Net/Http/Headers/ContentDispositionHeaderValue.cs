@@ -31,7 +31,7 @@ namespace System.Net.Http.Headers
 
         public string DispositionType
         {
-            get { return _dispositionType; }
+            get => _dispositionType;
             set
             {
                 CheckDispositionTypeFormat(value, nameof(value));
@@ -43,38 +43,38 @@ namespace System.Net.Http.Headers
 
         public string? Name
         {
-            get { return GetName(name); }
-            set { SetName(name, value); }
+            get => GetName(name);
+            set => SetName(name, value);
         }
 
         public string? FileName
         {
-            get { return GetName(fileName); }
-            set { SetName(fileName, value); }
+            get => GetName(fileName);
+            set => SetName(fileName, value);
         }
 
         public string? FileNameStar
         {
-            get { return GetName(fileNameStar); }
-            set { SetName(fileNameStar, value); }
+            get => GetName(fileNameStar);
+            set => SetName(fileNameStar, value);
         }
 
         public DateTimeOffset? CreationDate
         {
-            get { return GetDate(creationDate); }
-            set { SetDate(creationDate, value); }
+            get => GetDate(creationDate);
+            set => SetDate(creationDate, value);
         }
 
         public DateTimeOffset? ModificationDate
         {
-            get { return GetDate(modificationDate); }
-            set { SetDate(modificationDate, value); }
+            get => GetDate(modificationDate);
+            set => SetDate(modificationDate, value);
         }
 
         public DateTimeOffset? ReadDate
         {
-            get { return GetDate(readDate); }
-            set { SetDate(readDate, value); }
+            get => GetDate(readDate);
+            set => SetDate(readDate, value);
         }
 
         public long? Size
@@ -155,18 +155,10 @@ namespace System.Net.Http.Headers
             return StringBuilderCache.GetStringAndRelease(sb);
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            ContentDispositionHeaderValue? other = obj as ContentDispositionHeaderValue;
-
-            if (other == null)
-            {
-                return false;
-            }
-
-            return string.Equals(_dispositionType, other._dispositionType, StringComparison.OrdinalIgnoreCase) &&
-                HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
-        }
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is ContentDispositionHeaderValue other &&
+            string.Equals(_dispositionType, other._dispositionType, StringComparison.OrdinalIgnoreCase) &&
+            HeaderUtilities.AreEqualCollections(_parameters, other._parameters);
 
         public override int GetHashCode()
         {

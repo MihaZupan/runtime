@@ -11,16 +11,10 @@ namespace System.Net.Http.Headers
         private readonly string _name;
         private readonly string? _version;
 
-        public string Name
-        {
-            get { return _name; }
-        }
+        public string Name => _name;
 
         // We can't use the System.Version type, since a version can be e.g. "x11".
-        public string? Version
-        {
-            get { return _version; }
-        }
+        public string? Version => _version;
 
         public ProductHeaderValue(string name)
             : this(name, null)
@@ -57,30 +51,15 @@ namespace System.Net.Http.Headers
             return _name + "/" + _version;
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            ProductHeaderValue? other = obj as ProductHeaderValue;
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is ProductHeaderValue other &&
+            string.Equals(_name, other._name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(_version, other._version, StringComparison.OrdinalIgnoreCase);
 
-            if (other == null)
-            {
-                return false;
-            }
-
-            return string.Equals(_name, other._name, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(_version, other._version, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public override int GetHashCode()
-        {
-            int result = StringComparer.OrdinalIgnoreCase.GetHashCode(_name);
-
-            if (!string.IsNullOrEmpty(_version))
-            {
-                result ^= StringComparer.OrdinalIgnoreCase.GetHashCode(_version);
-            }
-
-            return result;
-        }
+        public override int GetHashCode() =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(_name),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(_version ?? string.Empty));
 
         public static ProductHeaderValue Parse(string input)
         {

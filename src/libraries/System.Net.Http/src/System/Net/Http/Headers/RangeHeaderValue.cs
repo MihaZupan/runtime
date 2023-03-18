@@ -4,7 +4,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -16,7 +15,7 @@ namespace System.Net.Http.Headers
 
         public string Unit
         {
-            get { return _unit; }
+            get => _unit;
             set
             {
                 HeaderUtilities.CheckValidToken(value, nameof(value));
@@ -47,7 +46,7 @@ namespace System.Net.Http.Headers
             {
                 foreach (RangeItemHeaderValue range in source._ranges)
                 {
-                    this.Ranges.Add(new RangeItemHeaderValue(range));
+                    Ranges.Add(new RangeItemHeaderValue(range));
                 }
             }
         }
@@ -81,18 +80,10 @@ namespace System.Net.Http.Headers
             return sb.ToString();
         }
 
-        public override bool Equals([NotNullWhen(true)] object? obj)
-        {
-            RangeHeaderValue? other = obj as RangeHeaderValue;
-
-            if (other == null)
-            {
-                return false;
-            }
-
-            return string.Equals(_unit, other._unit, StringComparison.OrdinalIgnoreCase) &&
-                HeaderUtilities.AreEqualCollections(_ranges, other._ranges);
-        }
+        public override bool Equals([NotNullWhen(true)] object? obj) =>
+            obj is RangeHeaderValue other &&
+            string.Equals(_unit, other._unit, StringComparison.OrdinalIgnoreCase) &&
+            HeaderUtilities.AreEqualCollections(_ranges, other._ranges);
 
         public override int GetHashCode()
         {
@@ -118,7 +109,7 @@ namespace System.Net.Http.Headers
         public static bool TryParse([NotNullWhen(true)] string? input, [NotNullWhen(true)] out RangeHeaderValue? parsedValue)
         {
             int index = 0;
-             parsedValue = null;
+            parsedValue = null;
 
             if (GenericHeaderParser.RangeParser.TryParseValue(input, null, ref index, out object? output))
             {
