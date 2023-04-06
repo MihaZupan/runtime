@@ -432,6 +432,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyAsciiByteValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyAsciiCharValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyAsciiSearcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyAsciiWithNonAsciiFallbackCharValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyByteValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyByteValuesInRange.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyCharValuesInRange.cs" />

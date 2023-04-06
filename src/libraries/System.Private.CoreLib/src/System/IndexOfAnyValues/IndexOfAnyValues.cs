@@ -134,6 +134,24 @@ namespace System.Buffers
                 return new IndexOfAny5Values<char, short>(shortValues);
             }
 
+            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && minInclusive < 128)
+            {
+                // We saw both ASCII and non-ASCII chars.
+                IndexOfAnyAsciiSearcher.ComputeBitmap(values, out Vector128<byte> bitmap, out BitVector256 lookup);
+
+                Vector128<byte> inverseBitmap = ~bitmap;
+                uint[] charBitmap = new uint[65536 / 32];
+
+                foreach (char c in values)
+                {
+                    charBitmap[(uint)c >> 5] |= 1u << c;
+                }
+
+                return (Ssse3.IsSupported || PackedSimd.IsSupported) && !lookup.Contains(0)
+                    ? new IndexOfAnyAsciiWithNonAsciiFallbackCharValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(inverseBitmap, charBitmap)
+                    : new IndexOfAnyAsciiWithNonAsciiFallbackCharValues<IndexOfAnyAsciiSearcher.Default>(inverseBitmap, charBitmap);
+            }
+
             if (maxInclusive < 256)
             {
                 // This will also match ASCII values when IndexOfAnyAsciiSearcher is not supported
