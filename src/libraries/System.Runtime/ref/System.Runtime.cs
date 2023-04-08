@@ -7293,6 +7293,7 @@ namespace System.Buffers
     {
         public static System.Buffers.IndexOfAnyValues<byte> Create(System.ReadOnlySpan<byte> values) { throw null; }
         public static System.Buffers.IndexOfAnyValues<char> Create(System.ReadOnlySpan<char> values) { throw null; }
+        public static System.Buffers.IndexOfAnyValues<string> Create(System.StringComparison comparisonType, params string[] values) { throw null; }
     }
     public partial interface IPinnable
     {

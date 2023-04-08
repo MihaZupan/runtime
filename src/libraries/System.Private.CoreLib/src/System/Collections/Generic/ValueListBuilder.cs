@@ -143,6 +143,11 @@ namespace System.Collections.Generic
             return _span.Slice(0, _pos);
         }
 
+        public Span<T> RawSpan()
+        {
+            return _span.Slice(0, _pos);
+        }
+
         public bool TryCopyTo(Span<T> destination, out int itemsWritten)
         {
             if (_span.Slice(0, _pos).TryCopyTo(destination))
@@ -153,7 +158,7 @@ namespace System.Collections.Generic
 
             itemsWritten = 0;
             return false;
-        }
+	    }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
