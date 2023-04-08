@@ -143,6 +143,17 @@ namespace System.Buffers
             return new IndexOfAnyCharValuesProbabilistic(values);
         }
 
+        public static IndexOfAnyValues<string> Create(StringComparison comparisonType, params string[] values)
+        {
+            if (comparisonType is not (StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase))
+            {
+                // TODO: Should the API just accept 'bool ignoreCase' instead?
+                throw new NotSupportedException("Only Ordinal and OrdinalIgnoreCase are supported.");
+            }
+
+            return IndexOfAnyStringValues.Create(values, ignoreCase: comparisonType == StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool TryGetSingleRange<T>(ReadOnlySpan<T> values, out T minInclusive, out T maxInclusive)
             where T : struct, INumber<T>, IMinMaxValue<T>
         {

@@ -1,0 +1,413 @@
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Buffers;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace System.Memory.Tests.Span
+{
+    public static class IndexOfAnyStringValuesTests
+    {
+        [Theory]
+        [InlineData(StringComparison.Ordinal, "a", "ab", "abc", "bc")]
+        [InlineData(StringComparison.Ordinal, "A", "ab", "aBc", "Bc")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, "a", "Ab", "abc", "bC")]
+        public static void Values_ImplementsIndexOfAnyValuesBase(StringComparison comparisonType, params string[] values)
+        {
+            const string ValueNotInSet = "Hello world";
+
+            IndexOfAnyValues<string> stringValues = IndexOfAnyValues.Create(comparisonType, values);
+
+            Assert.False(stringValues.Contains(ValueNotInSet));
+
+            AssertIndexOfAnyAndFriends(Span<string>.Empty, -1, -1, -1, -1);
+            AssertIndexOfAnyAndFriends(new[] { ValueNotInSet }, -1, 0, -1, 0);
+            AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, ValueNotInSet }, -1, 0, -1, 1);
+
+            foreach (string value in values)
+            {
+                string differentCase = value.ToLowerInvariant();
+                if (value == differentCase)
+                {
+                    differentCase = value.ToUpperInvariant();
+                    Assert.NotEqual(value, differentCase);
+                }
+
+                Assert.True(stringValues.Contains(value));
+                Assert.Equal(comparisonType == StringComparison.OrdinalIgnoreCase, stringValues.Contains(differentCase));
+
+                AssertIndexOfAnyAndFriends(new[] { value }, 0, -1, 0, -1);
+                AssertIndexOfAnyAndFriends(new[] { value, value }, 0, -1, 1, -1);
+                AssertIndexOfAnyAndFriends(new[] { value, ValueNotInSet }, 0, 1, 0, 1);
+                AssertIndexOfAnyAndFriends(new[] { value, ValueNotInSet, ValueNotInSet }, 0, 1, 0, 2);
+                AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, value }, 1, 0, 1, 0);
+                AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, ValueNotInSet, value }, 2, 0, 2, 1);
+                AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, value, ValueNotInSet }, 1, 0, 1, 2);
+                AssertIndexOfAnyAndFriends(new[] { value, ValueNotInSet, value }, 0, 1, 2, 1);
+
+                if (comparisonType == StringComparison.OrdinalIgnoreCase)
+                {
+                    AssertIndexOfAnyAndFriends(new[] { differentCase }, 0, -1, 0, -1);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, differentCase }, 0, -1, 1, -1);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, ValueNotInSet }, 0, 1, 0, 1);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, ValueNotInSet, ValueNotInSet }, 0, 1, 0, 2);
+                    AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, differentCase }, 1, 0, 1, 0);
+                    AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, ValueNotInSet, differentCase }, 2, 0, 2, 1);
+                    AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, differentCase, ValueNotInSet }, 1, 0, 1, 2);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, ValueNotInSet, differentCase }, 0, 1, 2, 1);
+                }
+                else
+                {
+                    AssertIndexOfAnyAndFriends(new[] { differentCase }, -1, 0, -1, 0);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, differentCase }, -1, 0, -1, 1);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, ValueNotInSet }, -1, 0, -1, 1);
+                    AssertIndexOfAnyAndFriends(new[] { ValueNotInSet, differentCase }, -1, 0, -1, 1);
+                    AssertIndexOfAnyAndFriends(new[] { differentCase, ValueNotInSet, ValueNotInSet }, -1, 0, -1, 2);
+                }
+            }
+
+            void AssertIndexOfAnyAndFriends(ReadOnlySpan<string> values, int any, int anyExcept, int last, int lastExcept)
+            {
+                Assert.Equal(any, values.IndexOfAny(stringValues));
+                Assert.Equal(anyExcept, values.IndexOfAnyExcept(stringValues));
+                Assert.Equal(last, values.LastIndexOfAny(stringValues));
+                Assert.Equal(lastExcept, values.LastIndexOfAnyExcept(stringValues));
+            }
+        }
+
+        [Theory]
+        // Sets with empty values
+        [InlineData(StringComparison.Ordinal, 0, " ", "abc, ")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 0, " ", "abc, ")]
+        [InlineData(StringComparison.Ordinal, -1, "", "")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, -1, "", "abc, ")]
+        // Empty sets
+        [InlineData(StringComparison.Ordinal, -1, " ", null)]
+        [InlineData(StringComparison.OrdinalIgnoreCase, -1, " ", null)]
+        [InlineData(StringComparison.Ordinal, -1, "", null)]
+        [InlineData(StringComparison.OrdinalIgnoreCase, -1, "", null)]
+        // Multiple potential matches - we want the first one
+        [InlineData(StringComparison.Ordinal, 1, "abcd", "bc, cd")]
+        // Simple case sensitivity
+        [InlineData(StringComparison.Ordinal, -1, " ABC", "abc")]
+        [InlineData(StringComparison.Ordinal, 1, " abc", "abc")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 1, " ABC", "abc")]
+        // A few more complex cases that test the Aho-Corasick implementation
+        [InlineData(StringComparison.Ordinal, 3, "RyrIGEdt2S9", "IGEdt2, G, rIGm6i")]
+        [InlineData(StringComparison.Ordinal, 2, "Npww1HtmO", "NVOhQu, w, XeR")]
+        [InlineData(StringComparison.Ordinal, 1, "08Qq6", "8, vx, BFA4s, aLP2, hm, lmT, y, CNTB, Q, vd")]
+        [InlineData(StringComparison.Ordinal, 3, "A4sRYUhKZR1Vn8N", "F, scsx, nWBhrx, Q, 7Of, BX, huoJ, R")]
+        [InlineData(StringComparison.Ordinal, 9, "40sufu3TdzcKQfK", "3MXvo26, zPd6t, zc, c5, ypUCK3A9, K, YlX")]
+        [InlineData(StringComparison.Ordinal, 0, "111KtTGeWuV", "11, B51tJ, Z, j0DWudC, kuJRbcovn, 0T2vnT9")]
+        [InlineData(StringComparison.Ordinal, 5, "Uykbt1zWw7wylEgC", "1zWw7, Bh, 7qDgAY, w, Z, dP, V, W, Hiols, T")]
+        [InlineData(StringComparison.Ordinal, 6, "PI9yZx9AOWrUR", "4, A, MLbg, jACE, x9AZEYPbLr, 4bYTzw, W, 9AOW, O")]
+        [InlineData(StringComparison.Ordinal, 7, "KV4cRyrIGEdt2S9kbXVK", "e64, 10Yw7k, IGEdt2, G, brL, rIGm6i, Z3, FHoVN, 7P2s")]
+        // TODO: Is this correct?
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u212ABKBkBBCCCC", "\u212A")]
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAAKB\u212ABkBBCCCC", "\u212A")]
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAAkB\u212ABKBBCCCC", "\u212A")]
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u017FBSBsBBCCCC", "\u017F")]
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAASB\u017FBsBBCCCC", "\u017F")]
+        //[InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAsB\u017FBSBBCCCC", "\u017F")]
+        // TODO: 'a.ToLowerInvariant() == b.ToLowerInvariant()' often doesn't match 'a.Equals(b, OrdinalIgnoreCase)'
+        // What should we do about that?
+        public static void IndexOfAny(StringComparison comparisonType, int expected, string text, string? values)
+        {
+            string[] valuesArray = values is null ? Array.Empty<string>() : values.Split(", ");
+
+            IndexOfAnyValues<string> stringValues = IndexOfAnyValues.Create(comparisonType, valuesArray);
+
+            Assert.Equal(expected, text.AsSpan().IndexOfAny(stringValues));
+        }
+
+        [Fact]
+        public static void Create_OnlyOrdinalComparisonIsSupported()
+        {
+            foreach (StringComparison comparisonType in Enum.GetValues<StringComparison>())
+            {
+                if (comparisonType is StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase)
+                {
+                    _ = IndexOfAnyValues.Create(comparisonType, "abc");
+                }
+                else
+                {
+                    Assert.Throws<NotSupportedException>(() => IndexOfAnyValues.Create(comparisonType, "abc"));
+                }
+            }
+        }
+
+        [Fact]
+        public static void TestIndexOfAny_RandomInputs()
+        {
+            var helper = new IndexOfAnyStringValuesTestHelper(
+                expected: IndexOfAnyReferenceImpl,
+                preciseExpected: IndexOfAnyPreciseReferenceImpl,
+                indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values));
+
+            helper.TestRandomInputs();
+        }
+
+        [Fact]
+        [ActiveIssue("Manual execution only. Worth running any time IndexOfAnyValues<string> logic is modified.")]
+        public static void TestIndexOfAny_RandomInputs_Stress()
+        {
+            foreach (int maxNeedleCount in new[] { 8, 20, 70 })
+            {
+                foreach (int maxNeedleValueLength in new[] { 8, 40 })
+                {
+                    var helper = new IndexOfAnyStringValuesTestHelper(
+                        expected: IndexOfAnyReferenceImpl,
+                        preciseExpected: IndexOfAnyPreciseReferenceImpl,
+                        indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values))
+                    {
+                        MaxNeedleCount = maxNeedleCount,
+                        MaxNeedleValueLength = maxNeedleValueLength,
+                        MaxHaystackLength = 256,
+                        HaystackIterationsPerNeedle = 1_000,
+                    };
+
+                    helper.StressRandomInputs(TimeSpan.FromSeconds(60));
+                }
+            }
+        }
+
+        private static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
+        {
+            int minIndex = int.MaxValue;
+
+            foreach (string value in values)
+            {
+                int i = searchSpace.IndexOf(value, comparisonType);
+                if ((uint)i < minIndex)
+                {
+                    minIndex = i;
+                }
+            }
+
+            return minIndex == int.MaxValue ? -1 : minIndex;
+        }
+
+        private static int IndexOfAnyPreciseReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
+        {
+            // OrdinalIgnoreCase and char.ToLowerInvariant aren't exactly the same.
+            Assert.Equal(StringComparison.OrdinalIgnoreCase, comparisonType);
+
+            Assert.True(searchSpace.Length <= 512);
+            Span<char> lowerCased = stackalloc char[512];
+            Span<char> lowerCasedValue = stackalloc char[512];
+
+            int newLength = searchSpace.ToLowerInvariant(lowerCased);
+            Assert.Equal(searchSpace.Length, newLength);
+            lowerCased = lowerCased.Slice(0, newLength);
+
+            int minIndex = int.MaxValue;
+            foreach (string value in values)
+            {
+                int newValueLength = value.AsSpan().ToLowerInvariant(lowerCasedValue);
+                Assert.Equal(value.Length, newValueLength);
+                ReadOnlySpan<char> valueSlice = lowerCasedValue.Slice(0, newValueLength);
+
+                int index = lowerCased.IndexOf(valueSlice);
+                if (index >= 0)
+                {
+                    minIndex = Math.Min(minIndex, index);
+                }
+            }
+
+            return minIndex == int.MaxValue ? -1 : minIndex;
+        }
+
+        private sealed class IndexOfAnyStringValuesTestHelper
+        {
+            public int MaxNeedleCount = 20;
+            public int MaxNeedleValueLength = 10;
+            public int MaxHaystackLength = 100;
+            public int HaystackIterationsPerNeedle = 50;
+            public int MinValueLength = 1;
+
+            private static readonly char[] s_randomAsciiChars;
+            private static readonly char[] s_randomSimpleAsciiChars;
+            private static readonly char[] s_randomChars;
+
+            static IndexOfAnyStringValuesTestHelper()
+            {
+                s_randomAsciiChars = new char[100 * 1024];
+                s_randomSimpleAsciiChars = new char[100 * 1024];
+                s_randomChars = new char[1024 * 1024];
+
+                var rng = new Random(42);
+
+                for (int i = 0; i < s_randomAsciiChars.Length; i++)
+                {
+                    s_randomAsciiChars[i] = (char)rng.Next(0, 128);
+                }
+
+                for (int i = 0; i < s_randomSimpleAsciiChars.Length; i++)
+                {
+                    int random = rng.Next(26 * 2 + 10);
+
+                    s_randomSimpleAsciiChars[i] = (char)(random + (random switch
+                    {
+                        < 10 => '0',
+                        < 36 => 'a' - 10,
+                        _ => 'A' - 36,
+                    }));
+                }
+
+                rng.NextBytes(MemoryMarshal.Cast<char, byte>(s_randomChars));
+            }
+
+            private readonly IndexOfAnySearchDelegate _expectedDelegate;
+            private readonly IndexOfAnySearchDelegate _preciseExpectedDelegate;
+            private readonly IndexOfAnyValuesSearchDelegate _indexOfAnyValuesDelegate;
+
+            public IndexOfAnyStringValuesTestHelper(IndexOfAnySearchDelegate expected, IndexOfAnySearchDelegate preciseExpected, IndexOfAnyValuesSearchDelegate indexOfAnyValues)
+            {
+                _expectedDelegate = expected;
+                _preciseExpectedDelegate = preciseExpected;
+                _indexOfAnyValuesDelegate = indexOfAnyValues;
+            }
+
+            public delegate int IndexOfAnySearchDelegate(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType);
+
+            public delegate int IndexOfAnyValuesSearchDelegate(ReadOnlySpan<char> searchSpace, IndexOfAnyValues<string> values);
+
+            public void StressRandomInputs(TimeSpan duration)
+            {
+                Exception? exception = null;
+                Stopwatch s = Stopwatch.StartNew();
+
+                Parallel.For(0, Environment.ProcessorCount - 1, _ =>
+                {
+                    while (s.Elapsed < duration && Volatile.Read(ref exception) is null)
+                    {
+                        try
+                        {
+                            TestRandomInputs(iterationCount: 10, rng: new Random());
+                        }
+                        catch (Exception ex)
+                        {
+                            exception = ex;
+                        }
+                    }
+                });
+
+                if (exception is not null)
+                {
+                    throw exception;
+                }
+            }
+
+            public void TestRandomInputs(int iterationCount = 1_000, Random? rng = null)
+            {
+                string[][] stringArrays = new string[MaxNeedleCount][];
+                for (int i = 0; i <  stringArrays.Length; i++)
+                {
+                    stringArrays[i] = new string[i + 1];
+                }
+
+                rng ??= new Random(42);
+
+                for (int iterations = 0; iterations < iterationCount; iterations++)
+                {
+                    // There are more interesting corner cases with ASCII needles, test those more.
+                    Test(rng, stringArrays, s_randomSimpleAsciiChars, s_randomSimpleAsciiChars);
+                    Test(rng, stringArrays, s_randomAsciiChars, s_randomSimpleAsciiChars);
+                    Test(rng, stringArrays, s_randomSimpleAsciiChars, s_randomAsciiChars);
+                    Test(rng, stringArrays, s_randomAsciiChars, s_randomAsciiChars);
+                    Test(rng, stringArrays, s_randomChars, s_randomSimpleAsciiChars);
+                    Test(rng, stringArrays, s_randomChars, s_randomAsciiChars);
+
+                    Test(rng, stringArrays, s_randomChars, s_randomChars);
+                }
+            }
+
+            private void Test(Random rng, string[][] stringArrays, ReadOnlySpan<char> haystackRandom, ReadOnlySpan<char> needleRandom)
+            {
+                string[] values = stringArrays[rng.Next(stringArrays.Length)];
+
+                for (int i = 0; i < values.Length; i++)
+                {
+                    ReadOnlySpan<char> valueSpan;
+                    do
+                    {
+                        valueSpan = GetRandomSlice(rng, needleRandom, MaxNeedleValueLength);
+                    }
+                    while (valueSpan.Length < MinValueLength);
+
+                    values[i] = valueSpan.ToString();
+                }
+
+                IndexOfAnyValues<string> valuesOrdinal = IndexOfAnyValues.Create(StringComparison.Ordinal, values);
+                IndexOfAnyValues<string> valuesOrdinalIgnoreCase = IndexOfAnyValues.Create(StringComparison.OrdinalIgnoreCase, values);
+
+                for (int i = 0; i < HaystackIterationsPerNeedle; i++)
+                {
+                    Test(rng, StringComparison.Ordinal, haystackRandom, values, valuesOrdinal);
+                    Test(rng, StringComparison.OrdinalIgnoreCase, haystackRandom, values, valuesOrdinalIgnoreCase);
+                }
+            }
+
+            private void Test(Random rng, StringComparison comparisonType, ReadOnlySpan<char> haystackRandom,
+                string[] needle, IndexOfAnyValues<string> indexOfAnyValuesInstance)
+            {
+                ReadOnlySpan<char> haystack = GetRandomSlice(rng, haystackRandom, MaxHaystackLength);
+
+                int expectedIndex = _expectedDelegate(haystack, needle, comparisonType);
+                int indexOfAnyValuesIndex = _indexOfAnyValuesDelegate(haystack, indexOfAnyValuesInstance);
+
+                if (expectedIndex != indexOfAnyValuesIndex)
+                {
+                    if (!Ascii.IsValid(haystack) && comparisonType == StringComparison.OrdinalIgnoreCase)
+                    {
+                        // OrdinalIgnoreCase and char.ToLowerInvariant aren't exactly the same.
+                        int preciseExpected = _preciseExpectedDelegate(haystack, needle, comparisonType);
+                        if (preciseExpected == indexOfAnyValuesIndex)
+                        {
+                            return;
+                        }
+
+                        Assert.Equal(expectedIndex, preciseExpected);
+                    }
+
+                    Type implType = indexOfAnyValuesInstance.GetType();
+                    string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
+
+                    string readableHaystack = ReadableAsciiOrSerialized(haystack.ToString());
+                    string readableNeedle = string.Join(", ", needle.Select(ReadableAsciiOrSerialized));
+
+                    Assert.True(false, $"Expected {expectedIndex}, got {indexOfAnyValuesIndex} for impl='{impl}' comparison={comparisonType} needle='{readableNeedle}', haystack='{readableHaystack}'");
+
+                    Debugger.Launch();
+                    indexOfAnyValuesInstance = IndexOfAnyValues.Create(comparisonType, needle);
+                    _ = _indexOfAnyValuesDelegate(haystack, indexOfAnyValuesInstance);
+                }
+
+                static string ReadableAsciiOrSerialized(string value)
+                {
+                    foreach (char c in value)
+                    {
+                        if (!char.IsAsciiLetterOrDigit(c))
+                        {
+                            return $"[ {string.Join(", ", value.Select(c => int.CreateChecked(c)))} ]";
+                        }
+                    }
+
+                    return value;
+                }
+            }
+
+            private static ReadOnlySpan<T> GetRandomSlice<T>(Random rng, ReadOnlySpan<T> span, int maxLength)
+            {
+                ReadOnlySpan<T> slice = span.Slice(rng.Next(span.Length + 1));
+                return slice.Slice(0, Math.Min(slice.Length, rng.Next(maxLength + 1)));
+            }
+        }
+    }
+}
