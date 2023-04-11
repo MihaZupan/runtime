@@ -93,6 +93,7 @@ namespace System.Buffers
         public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span, ref char current)
             where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
         {
+            Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
             Debug.Assert(!Unsafe.IsAddressLessThan(ref current, ref MemoryMarshal.GetReference(span)));
             Debug.Assert(Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / 2 <= span.Length);
 
@@ -118,27 +119,13 @@ namespace System.Buffers
                     if (Unsafe.Add(ref bucketFlags, hash % BucketFlagsCount))
                     {
                         string[] bucket = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_buckets), hash % BucketCount);
+                        Debug.Assert(bucket is not null);
 
-                        for (int i = 0; i < bucket.Length; i++)
+                        int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
+
+                        if (TeddyHelper.StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket))
                         {
-                            string value = bucket[i];
-
-                            int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
-
-                            if (span.Length - startOffset >= value.Length)
-                            {
-                                for (int j = 0; j < value.Length; j++)
-                                {
-                                    if (!TCaseSensitivity.Equals(Unsafe.Add(ref current, j), value[j]))
-                                    {
-                                        goto NoMatch;
-                                    }
-                                }
-
-                                return startOffset;
-
-                            NoMatch:;
-                            }
+                            return startOffset;
                         }
                     }
 

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -11,7 +10,8 @@ using static System.Buffers.TeddyHelper;
 
 namespace System.Buffers
 {
-    internal sealed class IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TCaseSensitivity> : IndexOfAnyStringValuesRabinKarp<TCaseSensitivity>
+    internal sealed class IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity> : IndexOfAnyStringValuesRabinKarp<TCaseSensitivity>
+        where TStartCaseSensitivity : struct, ICaseSensitivity
         where TCaseSensitivity : struct, ICaseSensitivity
     {
         private const int MatchStartOffset = 2;
@@ -59,7 +59,7 @@ namespace System.Buffers
                     }
 
                     Vector128<byte> input = LoadAndPack16AsciiChars(ref searchSpace);
-                    input = TCaseSensitivity.TransformInput(input);
+                    input = TStartCaseSensitivity.TransformInput(input);
 
                     (Vector128<byte> result, prev0, prev1) = ProcessInputN3(input, prev0, prev1, n0Low, n0High, n1Low, n1High, n2Low, n2High);
 
@@ -80,17 +80,14 @@ namespace System.Buffers
                         int offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref matchRef) / 2);
                         int lengthRemaining = span.Length - offsetFromStart;
 
-                        uint candidateMask = result.GetElement(matchOffset);
+                        uint candidateMask = result.GetElementUnsafe(matchOffset);
 
                         do
                         {
                             int candidateOffset = BitOperations.TrailingZeroCount(candidateMask);
                             candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
 
-                            Debug.Assert(candidateOffset is >= 0 and < 8);
-                            string candidate = _values[candidateOffset];
-
-                            if (TeddyHelper.StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, candidate))
+                            if (StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, _values[candidateOffset]))
                             {
                                 return offsetFromStart;
                             }
@@ -105,7 +102,7 @@ namespace System.Buffers
                 searchSpace = ref Unsafe.Subtract(ref searchSpace, MatchStartOffset);
             }
 
-            return ShortInputRabinKarpFallback(span, ref searchSpace);
+            return ShortInputFallback(span, ref searchSpace);
         }
     }
 }

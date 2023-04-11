@@ -327,7 +327,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareInfo.Icu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareInfo.Invariant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareInfo.Nls.cs" />
+<<<<<<< HEAD
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareInfo.WebAssembly.cs" Condition="'$(TargetsBrowser)' == 'true'" />
+=======
+    <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareInfo.WebAssembly.cs" Condition="'$(TargetsWasi)' == 'true' or '$(TargetsBrowser)' == 'true'" />
+>>>>>>> 907b6e3112c (Match OrdinalIgnoreCase semantics, allow different start case sensitivity with Teddy)
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CompareOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CultureData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\CultureData.Icu.cs" />
@@ -385,7 +389,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TextInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TextInfo.Icu.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TextInfo.Nls.cs" />
+<<<<<<< HEAD
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TextInfo.WebAssembly.cs" Condition="'$(TargetsBrowser)' == 'true'" />
+=======
+    <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TextInfo.WebAssembly.cs" Condition="'$(TargetsWasi)' == 'true' or '$(TargetsBrowser)' == 'true'" />
+>>>>>>> 907b6e3112c (Match OrdinalIgnoreCase semantics, allow different start case sensitivity with Teddy)
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\ThaiBuddhistCalendar.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TimeSpanFormat.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Globalization\TimeSpanParse.cs" />
@@ -428,9 +436,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfAnyValuesDebugView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\IndexOfEmptyValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\ProbabilisticMap.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Helpers\AhoCorasick.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Helpers\EightPackedReferences.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Helpers\RabinKarp.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\Helpers\AhoCorasick.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\Helpers\EightPackedReferences.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\Helpers\RabinKarp.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\Helpers\TeddyHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddy128BucketizedN2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddy128BucketizedN3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddy256BucketizedN2.cs" />
@@ -444,7 +453,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringValuesBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringValuesAhoCorasick.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringValuesRabinKarp.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\TeddyHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOutOfRangeException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\InsufficientExecutionStackException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\InsufficientMemoryException.cs" />
