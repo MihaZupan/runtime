@@ -4,6 +4,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -108,15 +109,13 @@ namespace System.Memory.Tests.Span
         [InlineData(StringComparison.Ordinal, 5, "Uykbt1zWw7wylEgC", "1zWw7, Bh, 7qDgAY, w, Z, dP, V, W, Hiols, T")]
         [InlineData(StringComparison.Ordinal, 6, "PI9yZx9AOWrUR", "4, A, MLbg, jACE, x9AZEYPbLr, 4bYTzw, W, 9AOW, O")]
         [InlineData(StringComparison.Ordinal, 7, "KV4cRyrIGEdt2S9kbXVK", "e64, 10Yw7k, IGEdt2, G, brL, rIGm6i, Z3, FHoVN, 7P2s")]
-        // TODO: Is this correct?
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u212ABKBkBBCCCC", "\u212A")]
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAAKB\u212ABkBBCCCC", "\u212A")]
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAAkB\u212ABKBBCCCC", "\u212A")]
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u017FBSBsBBCCCC", "\u017F")]
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAASB\u017FBsBBCCCC", "\u017F")]
-        //[InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAsB\u017FBSBBCCCC", "\u017F")]
-        // TODO: 'a.ToLowerInvariant() == b.ToLowerInvariant()' often doesn't match 'a.Equals(b, OrdinalIgnoreCase)'
-        // What should we do about that?
+        // OrdinalIgnoreCase does not match ASCII chars with non-ASCII ones
+        [InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u212ABKBkBBCCCC", "\u212A")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAKB\u212ABkBBCCCC", "\u212A")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAkB\u212ABKBBCCCC", "\u212A")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 4, "AAAA\u017FBSBsBBCCCC", "\u017F")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAASB\u017FBsBBCCCC", "\u017F")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAsB\u017FBSBBCCCC", "\u017F")]
         public static void IndexOfAny(StringComparison comparisonType, int expected, string text, string? values)
         {
             string[] valuesArray = values is null ? Array.Empty<string>() : values.Split(", ");
@@ -147,7 +146,6 @@ namespace System.Memory.Tests.Span
         {
             var helper = new IndexOfAnyStringValuesTestHelper(
                 expected: IndexOfAnyReferenceImpl,
-                preciseExpected: IndexOfAnyPreciseReferenceImpl,
                 indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values));
 
             helper.TestRandomInputs();
@@ -161,18 +159,20 @@ namespace System.Memory.Tests.Span
             {
                 foreach (int maxNeedleValueLength in new[] { 8, 40 })
                 {
-                    var helper = new IndexOfAnyStringValuesTestHelper(
-                        expected: IndexOfAnyReferenceImpl,
-                        preciseExpected: IndexOfAnyPreciseReferenceImpl,
-                        indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values))
+                    foreach (int haystackLength in new[] { 100, 1024 })
                     {
-                        MaxNeedleCount = maxNeedleCount,
-                        MaxNeedleValueLength = maxNeedleValueLength,
-                        MaxHaystackLength = 256,
-                        HaystackIterationsPerNeedle = 1_000,
-                    };
+                        var helper = new IndexOfAnyStringValuesTestHelper(
+                            expected: IndexOfAnyReferenceImpl,
+                            indexOfAnyValues: (searchSpace, values) => searchSpace.IndexOfAny(values))
+                        {
+                            MaxNeedleCount = maxNeedleCount,
+                            MaxNeedleValueLength = maxNeedleValueLength,
+                            MaxHaystackLength = haystackLength,
+                            HaystackIterationsPerNeedle = 1_000,
+                        };
 
-                    helper.StressRandomInputs(TimeSpan.FromSeconds(60));
+                        helper.StressRandomInputs(TimeSpan.FromSeconds(15));
+                    }
                 }
             }
         }
@@ -187,36 +187,6 @@ namespace System.Memory.Tests.Span
                 if ((uint)i < minIndex)
                 {
                     minIndex = i;
-                }
-            }
-
-            return minIndex == int.MaxValue ? -1 : minIndex;
-        }
-
-        private static int IndexOfAnyPreciseReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
-        {
-            // OrdinalIgnoreCase and char.ToLowerInvariant aren't exactly the same.
-            Assert.Equal(StringComparison.OrdinalIgnoreCase, comparisonType);
-
-            Assert.True(searchSpace.Length <= 512);
-            Span<char> lowerCased = stackalloc char[512];
-            Span<char> lowerCasedValue = stackalloc char[512];
-
-            int newLength = searchSpace.ToLowerInvariant(lowerCased);
-            Assert.Equal(searchSpace.Length, newLength);
-            lowerCased = lowerCased.Slice(0, newLength);
-
-            int minIndex = int.MaxValue;
-            foreach (string value in values)
-            {
-                int newValueLength = value.AsSpan().ToLowerInvariant(lowerCasedValue);
-                Assert.Equal(value.Length, newValueLength);
-                ReadOnlySpan<char> valueSlice = lowerCasedValue.Slice(0, newValueLength);
-
-                int index = lowerCased.IndexOf(valueSlice);
-                if (index >= 0)
-                {
-                    minIndex = Math.Min(minIndex, index);
                 }
             }
 
@@ -264,13 +234,11 @@ namespace System.Memory.Tests.Span
             }
 
             private readonly IndexOfAnySearchDelegate _expectedDelegate;
-            private readonly IndexOfAnySearchDelegate _preciseExpectedDelegate;
             private readonly IndexOfAnyValuesSearchDelegate _indexOfAnyValuesDelegate;
 
-            public IndexOfAnyStringValuesTestHelper(IndexOfAnySearchDelegate expected, IndexOfAnySearchDelegate preciseExpected, IndexOfAnyValuesSearchDelegate indexOfAnyValues)
+            public IndexOfAnyStringValuesTestHelper(IndexOfAnySearchDelegate expected, IndexOfAnyValuesSearchDelegate indexOfAnyValues)
             {
                 _expectedDelegate = expected;
-                _preciseExpectedDelegate = preciseExpected;
                 _indexOfAnyValuesDelegate = indexOfAnyValues;
             }
 
@@ -280,7 +248,7 @@ namespace System.Memory.Tests.Span
 
             public void StressRandomInputs(TimeSpan duration)
             {
-                Exception? exception = null;
+                ExceptionDispatchInfo? exception = null;
                 Stopwatch s = Stopwatch.StartNew();
 
                 Parallel.For(0, Environment.ProcessorCount - 1, _ =>
@@ -293,15 +261,12 @@ namespace System.Memory.Tests.Span
                         }
                         catch (Exception ex)
                         {
-                            exception = ex;
+                            exception = ExceptionDispatchInfo.Capture(ex);
                         }
                     }
                 });
 
-                if (exception is not null)
-                {
-                    throw exception;
-                }
+                exception?.Throw();
             }
 
             public void TestRandomInputs(int iterationCount = 1_000, Random? rng = null)
@@ -364,18 +329,6 @@ namespace System.Memory.Tests.Span
 
                 if (expectedIndex != indexOfAnyValuesIndex)
                 {
-                    if (!Ascii.IsValid(haystack) && comparisonType == StringComparison.OrdinalIgnoreCase)
-                    {
-                        // OrdinalIgnoreCase and char.ToLowerInvariant aren't exactly the same.
-                        int preciseExpected = _preciseExpectedDelegate(haystack, needle, comparisonType);
-                        if (preciseExpected == indexOfAnyValuesIndex)
-                        {
-                            return;
-                        }
-
-                        Assert.Equal(expectedIndex, preciseExpected);
-                    }
-
                     Type implType = indexOfAnyValuesInstance.GetType();
                     string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
 

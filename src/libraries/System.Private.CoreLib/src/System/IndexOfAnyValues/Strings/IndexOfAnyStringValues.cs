@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
@@ -23,18 +24,12 @@ namespace System.Buffers
             }
 
             var uniqueValues = new HashSet<string>(values.Length, ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-            bool allAscii = true;
-            bool asciiLettersOnly = true;
-            int minLength = int.MaxValue;
 
             foreach (string value in values)
             {
                 ArgumentNullException.ThrowIfNull(value, nameof(values));
 
                 uniqueValues.Add(value);
-                allAscii = allAscii && Ascii.IsValid(value);
-                asciiLettersOnly = asciiLettersOnly && value.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
-                minLength = Math.Min(minLength, value.Length);
             }
 
             if (uniqueValues.Contains(string.Empty))
@@ -42,33 +37,52 @@ namespace System.Buffers
                 return new IndexOfAnyStringEmptyValues(uniqueValues);
             }
 
-            string[] valuesCopy = new string[uniqueValues.Count];
+            bool allAscii = true;
+            bool asciiLettersOnly = true;
+            int minLength = int.MaxValue;
+
+            string[] valuesNormalized = new string[uniqueValues.Count];
             int i = 0;
             foreach (string value in uniqueValues)
             {
-                valuesCopy[i++] = ignoreCase ? value.ToLowerInvariant() : value;
-            }
-            Debug.Assert(i == valuesCopy.Length);
+                string normalized = value;
 
-            Array.Sort(valuesCopy, static (a, b) => a.Length.CompareTo(b.Length));
+                if (ignoreCase && (value.AsSpan().IndexOfAnyInRange('a', 'z') >= 0 || !Ascii.IsValid(value)))
+                {
+                    string upperCase = string.FastAllocateString(value.Length);
+                    int charsWritten = Ordinal.ToUpperOrdinal(value, new Span<char>(ref upperCase.GetRawStringData(), upperCase.Length));
+                    Debug.Assert(charsWritten == upperCase.Length);
+                    normalized = upperCase;
+                }
+
+                allAscii = allAscii && Ascii.IsValid(normalized);
+                asciiLettersOnly = asciiLettersOnly && normalized.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
+                minLength = Math.Min(minLength, normalized.Length);
+
+                valuesNormalized[i++] = normalized;
+            }
+            Debug.Assert(i == valuesNormalized.Length);
+
+            // Aho-Corasick's ctor expects values to be sorted by length.
+            Array.Sort(valuesNormalized, static (a, b) => a.Length.CompareTo(b.Length));
 
             // We may not end up choosing Aho-Corasick as the implementation, but it has a nice property of
             // finding all the unreachable values during the construction stage, so we build the trie early.
             List<string>? unreachableValues = null;
-            var ahoCorasick = new AhoCorasick(valuesCopy, ignoreCase, ref unreachableValues, out bool asciiOnlyStartChars);
+            var ahoCorasick = new AhoCorasick(valuesNormalized, ignoreCase, ref unreachableValues);
 
             if (unreachableValues is not null)
             {
                 // Some values are exact prefixes of other values.
                 // Exclude those values now to reduce the number of buckets and make verification steps cheaper during searching.
-                string[] newValues = new string[valuesCopy.Length - unreachableValues.Count];
+                string[] newValues = new string[valuesNormalized.Length - unreachableValues.Count];
                 Debug.Assert(newValues.Length > 0);
 
                 // We've already normalized the values, so we can do ordinal comparisons here.
                 var unreachableValuesSet = new HashSet<string>(unreachableValues, StringComparer.Ordinal);
 
                 int newCount = 0;
-                foreach (string value in valuesCopy)
+                foreach (string value in valuesNormalized)
                 {
                     if (!unreachableValuesSet.Contains(value))
                     {
@@ -77,27 +91,59 @@ namespace System.Buffers
                 }
                 Debug.Assert(newCount == newValues.Length);
 
-                valuesCopy = newValues;
+                valuesNormalized = newValues;
+
+                // We removed some values, so it's possible we can use ASCII-specific optimizations now.
+                if (!allAscii || !asciiLettersOnly)
+                {
+                    allAscii = true;
+                    asciiLettersOnly = true;
+
+                    foreach (string value in values)
+                    {
+                        allAscii = allAscii && Ascii.IsValid(value);
+                        asciiLettersOnly = asciiLettersOnly && value.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
+                    }
+                }
+            }
+
+            // TODO: Not all characters participate in Unicode case conversion.
+            // If we can determine that none of the non-ASCII characters do, we can make searching faster
+            // by using the same paths as we do for ASCII-only values.
+            // We should be able to get that answer as long as we're not using NLS.
+            bool nonAsciiAffectedByCaseConversion = !allAscii;
+
+            // If all the characters in values are unaffected by casing, we can avoid the ignorecase overhead.
+            if (ignoreCase && !nonAsciiAffectedByCaseConversion && !asciiLettersOnly)
+            {
+                ignoreCase = false;
+
+                foreach (string value in values)
+                {
+                    if (value.AsSpan().IndexOfAny(s_asciiLetters) >= 0)
+                    {
+                        ignoreCase = true;
+                        break;
+                    }
+                }
             }
 
             // TODO: Should this be supported anywhere else?
-            // It may be too niche and too much code for WASM
+            // It may be too niche and too much code for WASM, but AOT with just Vector128 may be interesting.
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
-                TryGetTeddyAcceleratedValues(valuesCopy, uniqueValues, allAscii, ignoreCase, asciiLettersOnly, minLength) is { } indexOfAnyValues)
+                TryGetTeddyAcceleratedValues(valuesNormalized, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } indexOfAnyValues)
             {
                 return indexOfAnyValues;
             }
 
-            // The Kelvin sign character maps to a lowercase ASCII 'k', so we may incorrectly consider all starting chars to be ASCII.
-            // In such cases, we can't use the IndexOfAnyAsciiFastScan optimization, or we may skip over actual matching characters.
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && asciiOnlyStartChars && ignoreCase && !allAscii)
+            bool asciiOnlyStartChars = true;
+
+            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
             {
-                // Note that we are enumerating uniqueValues and not valuesCopy to get the original values (before ToLowerInvariant).
-                foreach (string value in uniqueValues)
+                foreach (string value in valuesNormalized)
                 {
                     if (!char.IsAscii(value[0]))
                     {
-                        Debug.Assert(value[0] == '\u212A'); // Kelvin sign
                         asciiOnlyStartChars = false;
                         break;
                     }
@@ -106,17 +152,17 @@ namespace System.Buffers
 
             if (ignoreCase)
             {
-                if (allAscii)
-                {
-                    return asciiLettersOnly
-                        ? new IndexOfAnyStringValuesAhoCorasick<CaseInensitiveAsciiLetters, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
-                        : new IndexOfAnyStringValuesAhoCorasick<CaseInensitiveAscii, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues);
-                }
-                else
+                if (nonAsciiAffectedByCaseConversion)
                 {
                     return asciiOnlyStartChars
                         ? new IndexOfAnyStringValuesAhoCorasick<CaseInsensitiveUnicode, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
                         : new IndexOfAnyStringValuesAhoCorasick<CaseInsensitiveUnicode, AhoCorasick.NoFastScan>(ahoCorasick, uniqueValues);
+                }
+                else
+                {
+                    return asciiLettersOnly
+                        ? new IndexOfAnyStringValuesAhoCorasick<CaseInensitiveAsciiLetters, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
+                        : new IndexOfAnyStringValuesAhoCorasick<CaseInensitiveAscii, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues);
                 }
             }
 
@@ -128,36 +174,18 @@ namespace System.Buffers
         private static IndexOfAnyValues<string>? TryGetTeddyAcceleratedValues(
             string[] values,
             HashSet<string> uniqueValues,
-            bool allAscii,
             bool ignoreCase,
+            bool allAscii,
             bool asciiLettersOnly,
+            bool nonAsciiAffectedByCaseConversion,
             int minLength)
         {
             if (minLength == 1)
             {
-                // An 'N=1' implementation is possible, but callers should likely
-                // prefer using IndexOfAnyValues<char> instead in such cases.
+                // An 'N=1' implementation is possible, but callers should
+                // consider using IndexOfAnyValues<char> instead in such cases.
+                // It can be added if Regex ends up running into this case.
                 return null;
-            }
-
-            if (!allAscii)
-            {
-                // A vectorized implementation for non-ASCII values is possible.
-                // It can be added if it turns out to be a common enough scenario.
-                return null;
-            }
-
-            if (Ssse3.IsSupported)
-            {
-                foreach (string value in values)
-                {
-                    if (value.Contains('\0'))
-                    {
-                        // Supporting null chars would just complicate the vectorized implementation.
-                        // We don't expect substrings to contain 0, so we don't bother.
-                        return null;
-                    }
-                }
             }
 
             if (values.Length > RabinKarp.MaxValues)
@@ -166,6 +194,40 @@ namespace System.Buffers
                 // If it turns out that this limit is commonly exceeded, we can tweak the number of buckets
                 // in the implementation, or use different variants depending on input.
                 return null;
+            }
+
+            // TODO: We could pick N=2 even if minLength >= 3 to speed up the vectorized search
+            // while increasing the time spent in the verification step.
+            int n = minLength == 2 ? 2 : 3;
+
+            if (Ssse3.IsSupported)
+            {
+                foreach (string value in values)
+                {
+                    if (value.AsSpan(0, n).Contains('\0'))
+                    {
+                        // If we let null chars through here, Teddy would still work correctly, but it
+                        // would hit more false positives that the verification step would have to rule out.
+                        // While we could flow a generic flag like Ssse3AndWasmHandleZeroInNeedle through,
+                        // we expect such values to be rare enough that introducing more code is not worth it.
+                        return null;
+                    }
+                }
+            }
+
+            // Even if the values contain non-ASCII chars, we may be able to use Teddy as long as the
+            // first N characters are ASCII.
+            if (!allAscii)
+            {
+                foreach (string value in values)
+                {
+                    if (!Ascii.IsValid(value.AsSpan(0, n)))
+                    {
+                        // A vectorized implementation for non-ASCII values is possible.
+                        // It can be added if it turns out to be a common enough scenario.
+                        return null;
+                    }
+                }
             }
 
             var rabinKarp = new RabinKarp(values);
@@ -179,57 +241,92 @@ namespace System.Buffers
                 return null;
             }
 
-            if (ignoreCase)
+            if (!ignoreCase)
             {
-                return asciiLettersOnly
-                    ? PickImplementation<CaseInensitiveAsciiLetters>(rabinKarp, values, uniqueValues, minLength)
-                    : PickImplementation<CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength);
+                return PickTeddyImplementation<CaseSensitive, CaseSensitive>(rabinKarp, values, uniqueValues, minLength);
             }
 
-            return PickImplementation<CaseSensitive>(rabinKarp, values, uniqueValues, minLength);
+            if (asciiLettersOnly)
+            {
+                return PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAsciiLetters>(rabinKarp, values, uniqueValues, minLength);
+            }
 
-            static IndexOfAnyValues<string> PickImplementation<TCaseSensitivity>(RabinKarp rabinKarp, string[] values, HashSet<string> uniqueValues, int minLength)
+            // Even if the whole value isn't ASCII letters only, we can still use a faster approach
+            // for the vectorized part as long as the first N characters are.
+            bool asciiStartLettersOnly = true;
+            bool asciiStartUnaffectedByCaseConversion = true;
+
+            foreach (string value in values)
+            {
+                ReadOnlySpan<char> slice = value.AsSpan(0, n);
+                asciiStartLettersOnly = asciiStartLettersOnly && slice.IndexOfAnyExcept(s_asciiLetters) < 0;
+                asciiStartUnaffectedByCaseConversion = asciiStartUnaffectedByCaseConversion && slice.IndexOfAny(s_asciiLetters) < 0;
+            }
+
+            Debug.Assert(!(asciiStartLettersOnly && asciiStartUnaffectedByCaseConversion));
+
+            if (asciiStartUnaffectedByCaseConversion)
+            {
+                return nonAsciiAffectedByCaseConversion
+                    ? PickTeddyImplementation<CaseSensitive, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength)
+                    : PickTeddyImplementation<CaseSensitive, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength);
+            }
+
+            if (nonAsciiAffectedByCaseConversion)
+            {
+                return asciiStartLettersOnly
+                    ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength)
+                    : PickTeddyImplementation<CaseInensitiveAscii, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength);
+            }
+
+            return asciiStartLettersOnly
+                ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength)
+                : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength);
+
+            static IndexOfAnyValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(RabinKarp rabinKarp, string[] values, HashSet<string> uniqueValues, int n)
+                where TStartCaseSensitivity : struct, ICaseSensitivity
                 where TCaseSensitivity : struct, ICaseSensitivity
             {
+                Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
                 Debug.Assert(values.Length > 0);
-                Debug.Assert(minLength >= 2);
+                Debug.Assert(n >= 2);
 
                 if (values.Length > 8)
                 {
                     // TODO: Should we bother with "Fat Teddy" (16 buckets)? It's limited to Avx2
-                    string[][] buckets = Bucketize(values, bucketCount: 8, n: minLength == 2 ? 2 : 3);
+                    string[][] buckets = Bucketize(values, bucketCount: 8, n);
 
                     // TODO: Should we bail if we encounter a bad bucket distributions?
 
                     // TODO: We don't have to pick the first N characters for the fingerprint.
                     // Would smarter offset selection help here to improve bucket distribution?
 
-                    if (minLength == 2)
+                    if (n == 2)
                     {
                         return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN2<TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN2<TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
+                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
+                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
                     }
                     else
                     {
                         return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN3<TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN3<TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
+                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
+                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
                     }
                 }
                 else
                 {
-                    if (minLength == 2)
+                    if (n == 2)
                     {
                         return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN2<TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2<TCaseSensitivity>(values, rabinKarp, uniqueValues);
+                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
+                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
                     }
                     else
                     {
                         return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN3<TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TCaseSensitivity>(values, rabinKarp, uniqueValues);
+                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
+                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
                     }
                 }
             }

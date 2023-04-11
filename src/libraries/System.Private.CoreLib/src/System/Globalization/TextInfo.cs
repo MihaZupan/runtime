@@ -378,7 +378,7 @@ namespace System.Globalization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static char ToLowerAsciiInvariant(char c)
+        private static char ToLowerAsciiInvariant(char c)
         {
             if (char.IsAsciiLetterUpper(c))
             {
@@ -436,7 +436,7 @@ namespace System.Globalization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static char ToUpperAsciiInvariant(char c)
+        internal static char ToUpperAsciiInvariant(char c)
         {
             if (char.IsAsciiLetterLower(c))
             {

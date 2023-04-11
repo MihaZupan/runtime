@@ -209,17 +209,7 @@ namespace System.Buffers
                 return false;
             }
 
-            // We expect to be dealing with mostly short values, and we want to keep the initial scan loop as fast as possible,
-            // so we try not to introduce calls here, even if it means that the verification step isn't vectorized.
-            for (int i = 0; i < candidate.Length; i++)
-            {
-                if (!TCaseSensitivity.Equals(Unsafe.Add(ref matchStart, i), Unsafe.Add(ref Unsafe.AsRef(candidate.GetPinnableReference()), i)))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return TCaseSensitivity.Equals(ref matchStart, candidate);
         }
 
         // TODO: When we're dealing with ASCII-only patterns, can we get any use out of the spare bits (e.g. more buckets)?
@@ -237,12 +227,13 @@ namespace System.Buffers
                 int bit = 1 << i;
 
                 char c = value[offset];
+                Debug.Assert(char.IsAscii(c));
 
                 int lowNibble = c & 0xF;
                 int highNibble = c >> 4;
 
-                low = low.WithElement(lowNibble, (byte)(low.GetElement(lowNibble) | bit));
-                high = high.WithElement(highNibble, (byte)(high.GetElement(highNibble) | bit));
+                low.SetElementUnsafe(lowNibble, (byte)(low.GetElementUnsafe(lowNibble) | bit));
+                high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
             }
 
             return (low, high);
@@ -269,12 +260,13 @@ namespace System.Buffers
                 foreach (string value in valueBuckets[i])
                 {
                     char c = value[offset];
+                    Debug.Assert(char.IsAscii(c));
 
                     int lowNibble = c & 0xF;
                     int highNibble = c >> 4;
 
-                    low = low.WithElement(lowNibble, (byte)(low.GetElement(lowNibble) | bit));
-                    high = high.WithElement(highNibble, (byte)(high.GetElement(highNibble) | bit));
+                    low.SetElementUnsafe(lowNibble, (byte)(low.GetElementUnsafe(lowNibble) | bit));
+                    high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
                 }
             }
 
@@ -493,58 +485,100 @@ namespace System.Buffers
 
         public interface ICaseSensitivity
         {
-            static abstract bool IgnoreCase { get; }
             static abstract char TransformInput(char input);
             static abstract Vector128<byte> TransformInput(Vector128<byte> input);
             static abstract Vector256<byte> TransformInput(Vector256<byte> input);
-            static abstract bool Equals(char input, char lowercaseCandidate);
+            static abstract bool Equals(ref char matchStart, string candidate);
         }
 
         public readonly struct CaseSensitive : ICaseSensitivity
         {
-            public static bool IgnoreCase => false;
             public static char TransformInput(char input) => input;
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input;
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input;
-            public static bool Equals(char input, char lowercaseCandidate) => input == lowercaseCandidate;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(ref char matchStart, string candidate)
+            {
+                for (int i = 0; i < candidate.Length; i++)
+                {
+                    if (Unsafe.Add(ref matchStart, i) != candidate[i])
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
 
         public readonly struct CaseInensitiveAsciiLetters : ICaseSensitivity
         {
-            public static bool IgnoreCase => true;
-            public static char TransformInput(char input) => (char)(input | 0x20);
-            public static Vector128<byte> TransformInput(Vector128<byte> input) => input | Vector128.Create((byte)0x20);
-            public static Vector256<byte> TransformInput(Vector256<byte> input) => input | Vector256.Create((byte)0x20);
-            public static bool Equals(char input, char lowercaseCandidate) => (input | 0x20) == lowercaseCandidate;
+            public static char TransformInput(char input) => (char)(input & ~0x20);
+            public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
+            public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(ref char matchStart, string candidate)
+            {
+                for (int i = 0; i < candidate.Length; i++)
+                {
+                    if ((Unsafe.Add(ref matchStart, i) & ~0x20) != candidate[i])
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
 
         public readonly struct CaseInensitiveAscii : ICaseSensitivity
         {
-            public static bool IgnoreCase => true;
-            public static char TransformInput(char input) => TextInfo.ToLowerAsciiInvariant(input);
+            public static char TransformInput(char input) => TextInfo.ToUpperAsciiInvariant(input);
+
             public static Vector128<byte> TransformInput(Vector128<byte> input)
             {
                 // TODO: Can we save an instruction here?
-                Vector128<byte> mask = Vector128.GreaterThan(input - Vector128.Create((byte)'A'), Vector128.Create((byte)('Z' - 'A')));
-                Vector128<byte> lowerCase = input | Vector128.Create((byte)0x20);
-                return Vector128.ConditionalSelect(mask, input, lowerCase);
+                Vector128<byte> mask = Vector128.GreaterThan(input - Vector128.Create((byte)'a'), Vector128.Create((byte)('z' - 'a')));
+                Vector128<byte> upperCase = input & Vector128.Create(unchecked((byte)~0x20));
+                return Vector128.ConditionalSelect(mask, input, upperCase);
             }
+
             public static Vector256<byte> TransformInput(Vector256<byte> input)
             {
-                Vector256<byte> mask = Vector256.GreaterThan(input - Vector256.Create((byte)'A'), Vector256.Create((byte)('Z' - 'A')));
-                Vector256<byte> lowerCase = input | Vector256.Create((byte)0x20);
-                return Vector256.ConditionalSelect(mask, input, lowerCase);
+                Vector256<byte> mask = Vector256.GreaterThan(input - Vector256.Create((byte)'a'), Vector256.Create((byte)('z' - 'a')));
+                Vector256<byte> upperCase = input & Vector256.Create(unchecked((byte)~0x20));
+                return Vector256.ConditionalSelect(mask, input, upperCase);
             }
-            public static bool Equals(char input, char lowercaseCandidate) => char.IsAscii(input) && TextInfo.ToLowerAsciiInvariant(input) == lowercaseCandidate;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(ref char matchStart, string candidate)
+            {
+                for (int i = 0; i < candidate.Length; i++)
+                {
+                    if (TextInfo.ToUpperAsciiInvariant(Unsafe.Add(ref matchStart, i)) != candidate[i])
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
 
         public readonly struct CaseInsensitiveUnicode : ICaseSensitivity
         {
-            public static bool IgnoreCase => true;
-            public static char TransformInput(char input) => char.ToLowerInvariant(input);
+            public static char TransformInput(char input) => throw new UnreachableException();
             public static Vector128<byte> TransformInput(Vector128<byte> input) => throw new UnreachableException();
             public static Vector256<byte> TransformInput(Vector256<byte> input) => throw new UnreachableException();
-            public static bool Equals(char input, char lowercaseCandidate) => char.ToLowerInvariant(input) == lowercaseCandidate;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(ref char matchStart, string candidate)
+            {
+                // TODO: Would Ordinal.CompareStringIgnoreCaseNonAscii == 0 be better?
+                return Ordinal.EqualsIgnoreCase(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
+            }
         }
     }
 }

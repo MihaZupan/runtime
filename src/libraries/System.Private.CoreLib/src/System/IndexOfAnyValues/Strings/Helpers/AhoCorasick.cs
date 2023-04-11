@@ -15,7 +15,7 @@ namespace System.Buffers
         private readonly Node[] _nodes;
         private readonly Vector128<byte> _startingCharsAsciiBitmap;
 
-        public AhoCorasick(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues, out bool asciiStartChars)
+        public AhoCorasick(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues)
         {
             Debug.Assert(!values.IsEmpty);
             Debug.Assert(!string.IsNullOrEmpty(values[0]));
@@ -49,11 +49,9 @@ namespace System.Buffers
             nodesBuilder.Dispose();
             parents.Dispose();
 
-            asciiStartChars = false;
-
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
             {
-                GenerateStartingAsciiCharsBitmap(values, ignoreCase, out _startingCharsAsciiBitmap, out asciiStartChars);
+                GenerateStartingAsciiCharsBitmap(values, ignoreCase, out _startingCharsAsciiBitmap);
             }
         }
 
@@ -153,7 +151,7 @@ namespace System.Buffers
             }
         }
 
-        private static void GenerateStartingAsciiCharsBitmap(ReadOnlySpan<string> values, bool ignoreCase, out Vector128<byte> bitmap, out bool asciiStartChars)
+        private static void GenerateStartingAsciiCharsBitmap(ReadOnlySpan<string> values, bool ignoreCase, out Vector128<byte> bitmap)
         {
             scoped ValueListBuilder<char> startingChars = new ValueListBuilder<char>(stackalloc char[128]);
             foreach (string value in values)
@@ -171,6 +169,8 @@ namespace System.Buffers
                 }
             }
 
+            bitmap = default;
+
             if (Ascii.IsValid(startingChars.AsSpan()))
             {
                 IndexOfAnyAsciiSearcher.ComputeBitmap(startingChars.AsSpan(), out bitmap, out _);
@@ -179,13 +179,6 @@ namespace System.Buffers
                 //int uniqueStartingChars =
                 //    BitOperations.PopCount(bitmap.AsUInt64()[0]) +
                 //    BitOperations.PopCount(bitmap.AsUInt64()[1]);
-
-                asciiStartChars = true;
-            }
-            else
-            {
-                bitmap = default;
-                asciiStartChars = false;
             }
 
             startingChars.Dispose();
@@ -195,6 +188,8 @@ namespace System.Buffers
             where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
+            Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
+
             ref Node nodes = ref MemoryMarshal.GetArrayDataReference(_nodes);
             int nodeIndex = 0;
             int result = -1;
@@ -207,6 +202,9 @@ namespace System.Buffers
 
                 if (remainingLength >= Vector128<ushort>.Count)
                 {
+                    // If '\0' is one of the starting chars and we're running on Ssse3 hardware, this may return false-positives.
+                    // False-positives here are okay, we'll just rule them out below. While we could flow the Ssse3AndWasmHandleZeroInNeedle
+                    // generic through, we expect such values to be rare enough that introducing more code is not worth it.
                     int offset = IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, IndexOfAnyAsciiSearcher.Default>(
                         ref Unsafe.As<char, short>(ref Unsafe.Add(ref MemoryMarshal.GetReference(span), i)),
                         remainingLength,
