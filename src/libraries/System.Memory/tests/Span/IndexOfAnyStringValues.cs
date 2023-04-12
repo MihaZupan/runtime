@@ -3,18 +3,22 @@
 
 using System.Buffers;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.DotNet.RemoteExecutor;
 using Xunit;
 
 namespace System.Memory.Tests.Span
 {
     public static class IndexOfAnyStringValuesTests
     {
+        public static bool CanTestInvariantCulture => RemoteExecutor.IsSupported;
+        public static bool CanTestNls => RemoteExecutor.IsSupported && OperatingSystem.IsWindows();
+
         [Theory]
         [InlineData(StringComparison.Ordinal, "a", "ab", "abc", "bc")]
         [InlineData(StringComparison.Ordinal, "A", "ab", "aBc", "Bc")]
@@ -151,6 +155,28 @@ namespace System.Memory.Tests.Span
             helper.TestRandomInputs();
         }
 
+        [ConditionalFact(nameof(CanTestInvariantCulture))]
+        public static void TestIndexOfAny_RandomInputs_InvariantCulture()
+        {
+            RunUsingInvariantCulture(static () =>
+            {
+                Assert.Equal("Invariant Language (Invariant Country)", CultureInfo.CurrentCulture.NativeName);
+
+                TestIndexOfAny_RandomInputs();
+            });
+        }
+
+        [ConditionalFact(nameof(CanTestNls))]
+        public static void TestIndexOfAny_RandomInputs_Nls()
+        {
+            RunUsingNLS(static () =>
+            {
+                Assert.NotEqual("Invariant Language (Invariant Country)", CultureInfo.CurrentCulture.NativeName);
+
+                TestIndexOfAny_RandomInputs();
+            });
+        }
+
         [Fact]
         [ActiveIssue("Manual execution only. Worth running any time IndexOfAnyValues<string> logic is modified.")]
         public static void TestIndexOfAny_RandomInputs_Stress()
@@ -177,6 +203,26 @@ namespace System.Memory.Tests.Span
             }
         }
 
+        [ConditionalFact(nameof(CanTestInvariantCulture))]
+        [ActiveIssue("Manual execution only. Worth running any time IndexOfAnyValues<string> logic is modified.")]
+        public static void TestIndexOfAny_RandomInputs_Stress_InvariantCulture()
+        {
+            RunUsingInvariantCulture(static () =>
+            {
+                TestIndexOfAny_RandomInputs_Stress();
+            }, timeout: 10 * 60);
+        }
+
+        [ConditionalFact(nameof(CanTestNls))]
+        [ActiveIssue("Manual execution only. Worth running any time IndexOfAnyValues<string> logic is modified.")]
+        public static void TestIndexOfAny_RandomInputs_Stress_Nls()
+        {
+            RunUsingNLS(static () =>
+            {
+                TestIndexOfAny_RandomInputs_Stress();
+            }, timeout: 10 * 60);
+        }
+
         private static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
         {
             int minIndex = int.MaxValue;
@@ -191,6 +237,28 @@ namespace System.Memory.Tests.Span
             }
 
             return minIndex == int.MaxValue ? -1 : minIndex;
+        }
+
+        private static void RunUsingInvariantCulture(Action action, int timeout = 60)
+        {
+            Assert.True(CanTestInvariantCulture);
+
+            var psi = new ProcessStartInfo();
+            psi.Environment.Clear();
+            psi.Environment.Add("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "true");
+
+            RemoteExecutor.Invoke(action, new RemoteInvokeOptions { StartInfo = psi, TimeOut = timeout * 1000 }).Dispose();
+        }
+
+        private static void RunUsingNLS(Action action, int timeout = 60)
+        {
+            Assert.True(CanTestNls);
+
+            var psi = new ProcessStartInfo();
+            psi.Environment.Clear();
+            psi.Environment.Add("DOTNET_SYSTEM_GLOBALIZATION_USENLS", "true");
+
+            RemoteExecutor.Invoke(action, new RemoteInvokeOptions { StartInfo = psi, TimeOut = timeout * 1000 }).Dispose();
         }
 
         private sealed class IndexOfAnyStringValuesTestHelper
