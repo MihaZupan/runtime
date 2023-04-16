@@ -37,11 +37,7 @@ namespace System.Buffers
                 return new IndexOfAnyStringEmptyValues(uniqueValues);
             }
 
-            bool allAscii = true;
-            bool asciiLettersOnly = true;
-            int minLength = int.MaxValue;
-
-            string[] valuesNormalized = new string[uniqueValues.Count];
+            Span<string> normalizedValues = new string[uniqueValues.Count];
             int i = 0;
             foreach (string value in uniqueValues)
             {
@@ -55,66 +51,73 @@ namespace System.Buffers
                     normalized = upperCase;
                 }
 
-                allAscii = allAscii && Ascii.IsValid(normalized);
-                asciiLettersOnly = asciiLettersOnly && normalized.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
-                minLength = Math.Min(minLength, normalized.Length);
-
-                valuesNormalized[i++] = normalized;
+                normalizedValues[i++] = normalized;
             }
-            Debug.Assert(i == valuesNormalized.Length);
+            Debug.Assert(i == normalizedValues.Length);
 
             // Aho-Corasick's ctor expects values to be sorted by length.
-            Array.Sort(valuesNormalized, static (a, b) => a.Length.CompareTo(b.Length));
+            normalizedValues.Sort(static (a, b) => a.Length.CompareTo(b.Length));
 
             // We may not end up choosing Aho-Corasick as the implementation, but it has a nice property of
             // finding all the unreachable values during the construction stage, so we build the trie early.
             List<string>? unreachableValues = null;
-            var ahoCorasick = new AhoCorasick(valuesNormalized, ignoreCase, ref unreachableValues);
+            var ahoCorasick = new AhoCorasick(normalizedValues, ignoreCase, ref unreachableValues);
 
             if (unreachableValues is not null)
             {
                 // Some values are exact prefixes of other values.
                 // Exclude those values now to reduce the number of buckets and make verification steps cheaper during searching.
-                string[] newValues = new string[valuesNormalized.Length - unreachableValues.Count];
-                Debug.Assert(newValues.Length > 0);
+                normalizedValues = RemoveUnreachableValues(normalizedValues, unreachableValues);
+            }
 
+            return CreateFromNormalizedValues(normalizedValues, uniqueValues, ignoreCase, ahoCorasick);
+
+            static Span<string> RemoveUnreachableValues(Span<string> values, List<string> unreachableValues)
+            {
                 // We've already normalized the values, so we can do ordinal comparisons here.
                 var unreachableValuesSet = new HashSet<string>(unreachableValues, StringComparer.Ordinal);
 
                 int newCount = 0;
-                foreach (string value in valuesNormalized)
+                foreach (string value in values)
                 {
                     if (!unreachableValuesSet.Contains(value))
                     {
-                        newValues[newCount++] = value;
+                        values[newCount++] = value;
                     }
                 }
-                Debug.Assert(newCount == newValues.Length);
 
-                valuesNormalized = newValues;
+                Debug.Assert(newCount == values.Length - unreachableValues.Count);
+                Debug.Assert(newCount > 0);
 
-                // We removed some values, so it's possible we can use ASCII-specific optimizations now.
-                if (!allAscii || !asciiLettersOnly)
-                {
-                    allAscii = true;
-                    asciiLettersOnly = true;
+                return values.Slice(0, newCount);
+            }
+        }
 
-                    foreach (string value in values)
-                    {
-                        allAscii = allAscii && Ascii.IsValid(value);
-                        asciiLettersOnly = asciiLettersOnly && value.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
-                    }
-                }
+        private static IndexOfAnyValues<string> CreateFromNormalizedValues(
+            ReadOnlySpan<string> values,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            AhoCorasick ahoCorasick)
+        {
+            bool allAscii = true;
+            bool asciiLettersOnly = true;
+            int minLength = int.MaxValue;
+
+            foreach (string value in values)
+            {
+                allAscii = allAscii && Ascii.IsValid(value);
+                asciiLettersOnly = asciiLettersOnly && value.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
+                minLength = Math.Min(minLength, value.Length);
             }
 
             // TODO: Not all characters participate in Unicode case conversion.
             // If we can determine that none of the non-ASCII characters do, we can make searching faster
             // by using the same paths as we do for ASCII-only values.
             // We should be able to get that answer as long as we're not using NLS.
-            bool nonAsciiAffectedByCaseConversion = !allAscii;
+            bool nonAsciiAffectedByCaseConversion = ignoreCase && !allAscii;
 
-            // If all the characters in values are unaffected by casing, we can avoid the ignorecase overhead.
-            if (ignoreCase && !nonAsciiAffectedByCaseConversion && !asciiLettersOnly)
+            // If all the characters in values are unaffected by casing, we can avoid the ignoreCase overhead.
+            if (ignoreCase && !nonAsciiAffectedByCaseConversion)
             {
                 ignoreCase = false;
 
@@ -131,16 +134,16 @@ namespace System.Buffers
             // TODO: Should this be supported anywhere else?
             // It may be too niche and too much code for WASM, but AOT with just Vector128 may be interesting.
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
-                TryGetTeddyAcceleratedValues(valuesNormalized, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } indexOfAnyValues)
+                TryGetTeddyAcceleratedValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } indexOfAnyValues)
             {
                 return indexOfAnyValues;
             }
 
             bool asciiOnlyStartChars = true;
 
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
+            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && !allAscii)
             {
-                foreach (string value in valuesNormalized)
+                foreach (string value in values)
                 {
                     if (!char.IsAscii(value[0]))
                     {
@@ -172,7 +175,7 @@ namespace System.Buffers
         }
 
         private static IndexOfAnyValues<string>? TryGetTeddyAcceleratedValues(
-            string[] values,
+            ReadOnlySpan<string> values,
             HashSet<string> uniqueValues,
             bool ignoreCase,
             bool allAscii,
@@ -243,12 +246,12 @@ namespace System.Buffers
 
             if (!ignoreCase)
             {
-                return PickTeddyImplementation<CaseSensitive, CaseSensitive>(rabinKarp, values, uniqueValues, minLength);
+                return PickTeddyImplementation<CaseSensitive, CaseSensitive>(values, uniqueValues, rabinKarp, minLength);
             }
 
             if (asciiLettersOnly)
             {
-                return PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAsciiLetters>(rabinKarp, values, uniqueValues, minLength);
+                return PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAsciiLetters>(values, uniqueValues, rabinKarp, minLength);
             }
 
             // Even if the whole value isn't ASCII letters only, we can still use a faster approach
@@ -268,66 +271,70 @@ namespace System.Buffers
             if (asciiStartUnaffectedByCaseConversion)
             {
                 return nonAsciiAffectedByCaseConversion
-                    ? PickTeddyImplementation<CaseSensitive, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength)
-                    : PickTeddyImplementation<CaseSensitive, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength);
+                    ? PickTeddyImplementation<CaseSensitive, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength)
+                    : PickTeddyImplementation<CaseSensitive, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength);
             }
 
             if (nonAsciiAffectedByCaseConversion)
             {
                 return asciiStartLettersOnly
-                    ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength)
-                    : PickTeddyImplementation<CaseInensitiveAscii, CaseInsensitiveUnicode>(rabinKarp, values, uniqueValues, minLength);
+                    ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength)
+                    : PickTeddyImplementation<CaseInensitiveAscii, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength);
             }
 
             return asciiStartLettersOnly
-                ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength)
-                : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(rabinKarp, values, uniqueValues, minLength);
+                ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength)
+                : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength);
+        }
 
-            static IndexOfAnyValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(RabinKarp rabinKarp, string[] values, HashSet<string> uniqueValues, int n)
-                where TStartCaseSensitivity : struct, ICaseSensitivity
-                where TCaseSensitivity : struct, ICaseSensitivity
+        private static IndexOfAnyValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(
+            ReadOnlySpan<string> values,
+            HashSet<string> uniqueValues,
+            RabinKarp rabinKarp,
+            int n)
+            where TStartCaseSensitivity : struct, ICaseSensitivity
+            where TCaseSensitivity : struct, ICaseSensitivity
+        {
+            Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
+            Debug.Assert(values.Length > 0);
+            Debug.Assert(n >= 2);
+
+            if (values.Length > 8)
             {
-                Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
-                Debug.Assert(values.Length > 0);
-                Debug.Assert(n >= 2);
+                // TODO: Should we bother with "Fat Teddy" (16 buckets)? It's limited to Avx2
+                string[][] buckets = Bucketize(values, bucketCount: 8, n);
 
-                if (values.Length > 8)
+                // TODO: Should we bail if we encounter a bad bucket distributions?
+
+                // TODO: We don't have to pick the first N characters for the fingerprint.
+                // Would smarter offset selection help here to improve bucket distribution?
+
+                if (n == 2)
                 {
-                    // TODO: Should we bother with "Fat Teddy" (16 buckets)? It's limited to Avx2
-                    string[][] buckets = Bucketize(values, bucketCount: 8, n);
-
-                    // TODO: Should we bail if we encounter a bad bucket distributions?
-
-                    // TODO: We don't have to pick the first N characters for the fingerprint.
-                    // Would smarter offset selection help here to improve bucket distribution?
-
-                    if (n == 2)
-                    {
-                        return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
-                    }
-                    else
-                    {
-                        return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
-                    }
+                    return Avx2.IsSupported
+                        ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
+                        : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
                 }
                 else
                 {
-                    if (n == 2)
-                    {
-                        return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
-                    }
-                    else
-                    {
-                        return Avx2.IsSupported
-                            ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                            : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
-                    }
+                    return Avx2.IsSupported
+                        ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
+                        : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
+                }
+            }
+            else
+            {
+                if (n == 2)
+                {
+                    return Avx2.IsSupported
+                        ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
+                        : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
+                }
+                else
+                {
+                    return Avx2.IsSupported
+                        ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
+                        : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
                 }
             }
         }

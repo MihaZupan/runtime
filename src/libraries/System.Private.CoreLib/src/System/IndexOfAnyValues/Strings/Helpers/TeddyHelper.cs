@@ -76,11 +76,11 @@ namespace System.Buffers
                 }
             }
 
-            private sealed record Bucket(List<string> Patterns, Fingerprint Fingerprint)
+            private sealed record Bucket(List<string> Values, Fingerprint Fingerprint)
             {
                 public void AddString(string s)
                 {
-                    Patterns.Add(s);
+                    Values.Add(s);
                     Fingerprint.AddString(s);
                 }
 
@@ -93,7 +93,7 @@ namespace System.Buffers
 
                 public void Merge(Bucket other)
                 {
-                    Patterns.AddRange(other.Patterns);
+                    Values.AddRange(other.Values);
                     Fingerprint.Include(other.Fingerprint);
                 }
             }
@@ -125,11 +125,11 @@ namespace System.Buffers
                 buckets[bestPair.i].Merge(b2);
             }
 
-            public static string[][] GatherBuckets(string[] patterns, int bucketCount, int n)
+            public static string[][] GatherBuckets(ReadOnlySpan<string> values, int bucketCount, int n)
             {
                 Dictionary<long, List<string>> initialBuckets = new();
 
-                foreach (string value in patterns)
+                foreach (string value in values)
                 {
                     long fingerprint = 0;
                     for (int i = 0; i < n; i++)
@@ -164,14 +164,14 @@ namespace System.Buffers
                 string[][] finalBuckets = new string[buckets.Count][];
                 for (int i = 0; i < finalBuckets.Length; i++)
                 {
-                    finalBuckets[i] = buckets[i].Patterns.ToArray();
+                    finalBuckets[i] = buckets[i].Values.ToArray();
                 }
 
                 return finalBuckets;
             }
         }
 
-        public static string[][] Bucketize(string[] values, int bucketCount, int n)
+        public static string[][] Bucketize(ReadOnlySpan<string> values, int bucketCount, int n)
         {
             Debug.Assert(bucketCount == 8, "This may change if we end up supporting the 'fat Teddy' variant.");
             Debug.Assert(values.Length > bucketCount, "Should be using a non-bucketized implementation.");

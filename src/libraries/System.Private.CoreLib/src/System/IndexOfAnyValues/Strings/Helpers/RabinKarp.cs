@@ -28,7 +28,7 @@ namespace System.Buffers
         private readonly int _hashLength;
         private readonly nuint _hashUpdateMultiplier;
 
-        public RabinKarp(string[] values)
+        public RabinKarp(ReadOnlySpan<string> values)
         {
             Debug.Assert(values.Length <= MaxValues);
 
