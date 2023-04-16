@@ -24,7 +24,7 @@ namespace System.Buffers
 
         private readonly EightPackedReferences<string> _values;
 
-        public IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2(string[] values, RabinKarp rabinKarp, HashSet<string> uniqueValues) : base(rabinKarp, uniqueValues)
+        public IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2(ReadOnlySpan<string> values, RabinKarp rabinKarp, HashSet<string> uniqueValues) : base(rabinKarp, uniqueValues)
         {
             _values = new EightPackedReferences<string>(values);
 
