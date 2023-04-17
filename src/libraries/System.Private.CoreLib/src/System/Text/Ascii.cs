@@ -128,27 +128,9 @@ namespace System.Text
                 // Process long inputs 128 bytes at a time.
                 if (length > 4 * Vector256<T>.Count)
                 {
-                    // Process the first 128 bytes.
-                    if (!AllCharsInVectorAreAscii(
-                        Vector256.LoadUnsafe(ref searchSpace) |
-                        Vector256.LoadUnsafe(ref searchSpace, (nuint)Vector256<T>.Count) |
-                        Vector256.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector256<T>.Count) |
-                        Vector256.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector256<T>.Count)))
-                    {
-                        return false;
-                    }
-
-                    searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector256<T>.Count);
-
-                    // Try to opportunistically align the reads below. The input isn't pinned, so the GC
-                    // is free to move the references. We're therefore assuming that reads may still be unaligned.
-                    // They may also be unaligned if the input chars aren't 2-byte aligned.
-                    nuint misalignedElements = ((nuint)Unsafe.AsPointer(ref searchSpace) & (nuint)(Vector256<byte>.Count - 1)) / (nuint)sizeof(T);
-                    searchSpace = ref Unsafe.Subtract(ref searchSpace, misalignedElements);
-
                     ref T finalStart = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector256<T>.Count);
 
-                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart))
+                    do
                     {
                         if (!AllCharsInVectorAreAscii(
                             Vector256.LoadUnsafe(ref searchSpace) |
@@ -161,6 +143,7 @@ namespace System.Text
 
                         searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector256<T>.Count);
                     }
+                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart));
 
                     searchSpace = ref finalStart;
                 }
@@ -179,27 +162,9 @@ namespace System.Text
                 // Process long inputs 64 bytes at a time.
                 if (length > 4 * Vector128<T>.Count)
                 {
-                    // Process the first 64 bytes.
-                    if (!AllCharsInVectorAreAscii(
-                        Vector128.LoadUnsafe(ref searchSpace) |
-                        Vector128.LoadUnsafe(ref searchSpace, (nuint)Vector128<T>.Count) |
-                        Vector128.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector128<T>.Count) |
-                        Vector128.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector128<T>.Count)))
-                    {
-                        return false;
-                    }
-
-                    searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector128<T>.Count);
-
-                    // Try to opportunistically align the reads below. The input isn't pinned, so the GC
-                    // is free to move the references. We're therefore assuming that reads may still be unaligned.
-                    // They may also be unaligned if the input chars aren't 2-byte aligned.
-                    nuint misalignedElements = ((nuint)Unsafe.AsPointer(ref searchSpace) & (nuint)(Vector128<byte>.Count - 1)) / (nuint)sizeof(T);
-                    searchSpace = ref Unsafe.Subtract(ref searchSpace, misalignedElements);
-
                     ref T finalStart = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector128<T>.Count);
 
-                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart))
+                    do
                     {
                         if (!AllCharsInVectorAreAscii(
                             Vector128.LoadUnsafe(ref searchSpace) |
@@ -212,6 +177,7 @@ namespace System.Text
 
                         searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector128<T>.Count);
                     }
+                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart));
 
                     searchSpace = ref finalStart;
                 }
