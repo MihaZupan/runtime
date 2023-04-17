@@ -83,22 +83,17 @@ namespace System.Text
                 // If vectorization isn't supported, process 16 bytes at a time.
                 if (!Vector128.IsHardwareAccelerated && length > 2 * elementsPerUlong)
                 {
-                    ref T finalStart = ref Unsafe.Subtract(ref searchSpaceEnd, 2 * elementsPerUlong);
-
-                    do
+                    for (int i = 0; i + 2 * elementsPerUlong < length; i += 2 * elementsPerUlong)
                     {
                         if (!AllCharsInUInt64AreAscii<T>(
-                            Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<T, byte>(ref searchSpace)) |
-                            Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref Unsafe.As<T, byte>(ref searchSpace), sizeof(ulong)))))
+                            Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<T, byte>(ref Unsafe.Add(ref searchSpace, i))) |
+                            Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref Unsafe.As<T, byte>(ref Unsafe.Add(ref searchSpace, i)), sizeof(ulong)))))
                         {
                             return false;
                         }
-
-                        searchSpace = ref Unsafe.Add(ref searchSpace, 2 * elementsPerUlong);
                     }
-                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart));
 
-                    searchSpace = ref finalStart;
+                    searchSpace = ref Unsafe.Subtract(ref searchSpaceEnd, 2 * elementsPerUlong);
                 }
 
                 // Process the last [8, 16] bytes.
@@ -128,24 +123,19 @@ namespace System.Text
                 // Process long inputs 128 bytes at a time.
                 if (length > 4 * Vector256<T>.Count)
                 {
-                    ref T finalStart = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector256<T>.Count);
-
-                    do
+                    for (int i = 0; i + 4 * Vector256<T>.Count < length; i += 4 * Vector256<T>.Count)
                     {
                         if (!AllCharsInVectorAreAscii(
-                            Vector256.LoadUnsafe(ref searchSpace) |
-                            Vector256.LoadUnsafe(ref searchSpace, (nuint)Vector256<T>.Count) |
-                            Vector256.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector256<T>.Count) |
-                            Vector256.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector256<T>.Count)))
+                            Vector256.LoadUnsafe(ref searchSpace, (nuint)i) |
+                            Vector256.LoadUnsafe(ref searchSpace, (nuint)i + (nuint)Vector256<T>.Count) |
+                            Vector256.LoadUnsafe(ref searchSpace, (nuint)i + 2 * (nuint)Vector256<T>.Count) |
+                            Vector256.LoadUnsafe(ref searchSpace, (nuint)i + 3 * (nuint)Vector256<T>.Count)))
                         {
                             return false;
                         }
-
-                        searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector256<T>.Count);
                     }
-                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart));
 
-                    searchSpace = ref finalStart;
+                    searchSpace = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector256<T>.Count);
                 }
 
                 // Process the last [1, 128] bytes.
@@ -162,24 +152,19 @@ namespace System.Text
                 // Process long inputs 64 bytes at a time.
                 if (length > 4 * Vector128<T>.Count)
                 {
-                    ref T finalStart = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector128<T>.Count);
-
-                    do
+                    for (int i = 0; i + 4 * Vector128<T>.Count < length; i += 4 * Vector128<T>.Count)
                     {
                         if (!AllCharsInVectorAreAscii(
-                            Vector128.LoadUnsafe(ref searchSpace) |
-                            Vector128.LoadUnsafe(ref searchSpace, (nuint)Vector128<T>.Count) |
-                            Vector128.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector128<T>.Count) |
-                            Vector128.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector128<T>.Count)))
+                            Vector128.LoadUnsafe(ref searchSpace, (nuint)i) |
+                            Vector128.LoadUnsafe(ref searchSpace, (nuint)i + (nuint)Vector128<T>.Count) |
+                            Vector128.LoadUnsafe(ref searchSpace, (nuint)i + 2 * (nuint)Vector128<T>.Count) |
+                            Vector128.LoadUnsafe(ref searchSpace, (nuint)i + 3 * (nuint)Vector128<T>.Count)))
                         {
                             return false;
                         }
-
-                        searchSpace = ref Unsafe.Add(ref searchSpace, 4 * Vector128<T>.Count);
                     }
-                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref finalStart));
 
-                    searchSpace = ref finalStart;
+                    searchSpace = ref Unsafe.Subtract(ref searchSpaceEnd, 4 * Vector128<T>.Count);
                 }
 
                 // Process the last [1, 64] bytes.
