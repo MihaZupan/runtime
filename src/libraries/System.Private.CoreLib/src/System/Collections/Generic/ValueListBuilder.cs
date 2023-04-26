@@ -158,7 +158,7 @@ namespace System.Collections.Generic
 
             itemsWritten = 0;
             return false;
-	    }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
