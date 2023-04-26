@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
@@ -287,6 +288,7 @@ namespace System.Buffers
                 : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength);
         }
 
+        [BypassReadyToRun]
         private static IndexOfAnyValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(
             ReadOnlySpan<string> values,
             HashSet<string> uniqueValues,
