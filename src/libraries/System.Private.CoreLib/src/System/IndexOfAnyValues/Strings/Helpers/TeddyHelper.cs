@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -300,6 +301,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         public static (Vector256<byte> Result, Vector256<byte> Prev0) ProcessInputN2(
             Vector256<byte> input,
             Vector256<byte> prev0,
@@ -341,6 +343,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         public static (Vector256<byte> Result, Vector256<byte> Prev0, Vector256<byte> Prev1) ProcessInputN3(
             Vector256<byte> input,
             Vector256<byte> prev0, Vector256<byte> prev1,
@@ -374,6 +377,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         public static Vector256<byte> LoadAndPack32AsciiChars(ref char source)
         {
             Vector256<ushort> source0 = Vector256.LoadUnsafe(ref source);
@@ -402,6 +406,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         private static (Vector256<byte> Low, Vector256<byte> High) GetNibbles(Vector256<byte> input)
         {
             // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
@@ -421,6 +426,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         private static Vector256<byte> Shuffle(Vector256<byte> maskLow, Vector256<byte> maskHigh, Vector256<byte> low, Vector256<byte> high)
         {
             return Avx2.Shuffle(maskLow, low) & Avx2.Shuffle(maskHigh, high);
@@ -469,6 +475,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         private static Vector256<byte> RightShift1(Vector256<byte> left, Vector256<byte> right)
         {
             Vector256<byte> leftShifted = Avx2.Permute2x128(left, right, 33);
@@ -476,6 +483,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
         private static Vector256<byte> RightShift2(Vector256<byte> left, Vector256<byte> right)
         {
             Vector256<byte> leftShifted = Avx2.Permute2x128(left, right, 33);
@@ -516,6 +524,7 @@ namespace System.Buffers
         {
             public static char TransformInput(char input) => (char)(input & ~0x20);
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
+            [BypassReadyToRun]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -545,6 +554,7 @@ namespace System.Buffers
                 return Vector128.ConditionalSelect(mask, input, upperCase);
             }
 
+            [BypassReadyToRun]
             public static Vector256<byte> TransformInput(Vector256<byte> input)
             {
                 Vector256<byte> mask = Vector256.GreaterThan(input - Vector256.Create((byte)'a'), Vector256.Create((byte)('z' - 'a')));

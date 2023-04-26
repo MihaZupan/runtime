@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -31,6 +32,7 @@ namespace System.Buffers
             (_n1Low, _n1High) = GenerateNonBucketizedFingerprint256(values, offset: 1);
         }
 
+        [BypassReadyToRun]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span)
         {
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
