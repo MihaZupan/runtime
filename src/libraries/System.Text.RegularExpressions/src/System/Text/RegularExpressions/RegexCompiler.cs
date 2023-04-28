@@ -69,7 +69,7 @@ namespace System.Text.RegularExpressions
         private static readonly MethodInfo s_spanIndexOfAnyCharChar = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0) })!.MakeGenericMethod(typeof(char));
         private static readonly MethodInfo s_spanIndexOfAnyCharCharChar = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0) })!.MakeGenericMethod(typeof(char));
         private static readonly MethodInfo s_spanIndexOfAnySpan = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)) })!.MakeGenericMethod(typeof(char));
-        private static readonly MethodInfo s_spanIndexOfAnyIndexOfAnyValues = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), typeof(IndexOfAnyValues<>).MakeGenericType(Type.MakeGenericMethodParameter(0)) })!.MakeGenericMethod(typeof(char));
+        private static readonly MethodInfo s_spanIndexOfAnyIndexOfAnyValuesString = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<char>), typeof(IndexOfAnyValues<string>) })!;
         private static readonly MethodInfo s_spanIndexOfAnyExceptChar = typeof(MemoryExtensions).GetMethod("IndexOfAnyExcept", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), Type.MakeGenericMethodParameter(0) })!.MakeGenericMethod(typeof(char));
         private static readonly MethodInfo s_spanIndexOfAnyExceptCharChar = typeof(MemoryExtensions).GetMethod("IndexOfAnyExcept", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0) })!.MakeGenericMethod(typeof(char));
         private static readonly MethodInfo s_spanIndexOfAnyExceptCharCharChar = typeof(MemoryExtensions).GetMethod("IndexOfAnyExcept", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0), Type.MakeGenericMethodParameter(0) })!.MakeGenericMethod(typeof(char));
@@ -99,6 +99,7 @@ namespace System.Text.RegularExpressions
         private static readonly MethodInfo s_arrayResize = typeof(Array).GetMethod("Resize")!.MakeGenericMethod(typeof(int));
         private static readonly MethodInfo s_mathMinIntInt = typeof(Math).GetMethod("Min", new Type[] { typeof(int), typeof(int) })!;
         private static readonly MethodInfo s_memoryMarshalGetArrayDataReferenceIndexOfAnyValues = typeof(MemoryMarshal).GetMethod("GetArrayDataReference", new Type[] { Type.MakeGenericMethodParameter(0).MakeArrayType() })!.MakeGenericMethod(typeof(IndexOfAnyValues<char>))!;
+        private static readonly MethodInfo s_spanIndexOfAnyIndexOfAnyValues = typeof(MemoryExtensions).GetMethod("IndexOfAny", new Type[] { typeof(ReadOnlySpan<>).MakeGenericType(Type.MakeGenericMethodParameter(0)), typeof(IndexOfAnyValues<>).MakeGenericType(Type.MakeGenericMethodParameter(0)) })!.MakeGenericMethod(typeof(char));
         // Note:
         // Single-range helpers like IsAsciiLetterLower, IsAsciiLetterUpper, IsAsciiDigit, and IsBetween aren't used here, as the IL generated for those
         // single-range checks is as cheap as the method call, and there's no readability issue as with the source generator.
@@ -113,7 +114,7 @@ namespace System.Text.RegularExpressions
         protected bool _hasTimeout;
 
         /// <summary><see cref="IndexOfAnyValues{T}"/> instances used by the expression. For now these are only ASCII sets.</summary>
-        protected List<IndexOfAnyValues<char>>? _indexOfAnyValues;
+        protected List<object>? _indexOfAnyValues;
 
         /// <summary>Pool of Int32 LocalBuilders.</summary>
         private Stack<LocalBuilder>? _int32LocalsPool;
@@ -456,12 +457,13 @@ namespace System.Text.RegularExpressions
             switch (_regexTree.FindOptimizations.FindMode)
             {
                 case FindNextStartingPositionMode.LeadingString_LeftToRight:
+                case FindNextStartingPositionMode.LeadingStrings_LeftToRight:
                 case FindNextStartingPositionMode.FixedDistanceString_LeftToRight:
-                    EmitIndexOf_LeftToRight();
+                    EmitIndexOfString_LeftToRight();
                     break;
 
                 case FindNextStartingPositionMode.LeadingString_RightToLeft:
-                    EmitIndexOf_RightToLeft();
+                    EmitIndexOfString_RightToLeft();
                     break;
 
                 case FindNextStartingPositionMode.LeadingSet_LeftToRight:
@@ -741,11 +743,11 @@ namespace System.Text.RegularExpressions
                 return false;
             }
 
-            // Emits a case-sensitive left-to-right search for a substring.
-            void EmitIndexOf_LeftToRight()
+            // Emits a case-sensitive left-to-right search for a substring or substrings.
+            void EmitIndexOfString_LeftToRight()
             {
                 RegexFindOptimizations opts = _regexTree.FindOptimizations;
-                Debug.Assert(opts.FindMode is FindNextStartingPositionMode.LeadingString_LeftToRight or FindNextStartingPositionMode.FixedDistanceString_LeftToRight);
+                Debug.Assert(opts.FindMode is FindNextStartingPositionMode.LeadingString_LeftToRight or FindNextStartingPositionMode.LeadingStrings_LeftToRight or FindNextStartingPositionMode.FixedDistanceString_LeftToRight);
 
                 using RentedLocalBuilder i = RentInt32Local();
 
@@ -759,11 +761,19 @@ namespace System.Text.RegularExpressions
                     Add();
                 }
                 Call(s_spanSliceIntMethod);
-                Ldstr(opts.FindMode == FindNextStartingPositionMode.LeadingString_LeftToRight ?
-                    opts.LeadingPrefix :
-                    opts.FixedDistanceLiteral.String!);
-                Call(s_stringAsSpanMethod);
-                Call(s_spanIndexOfSpan);
+                if (opts.FindMode == FindNextStartingPositionMode.LeadingStrings_LeftToRight)
+                {
+                    LoadIndexOfAnyValues(opts.LeadingPrefixes);
+                    Call(s_spanIndexOfAnyIndexOfAnyValuesString);
+                }
+                else
+                {
+                    Ldstr(opts.FindMode == FindNextStartingPositionMode.LeadingString_LeftToRight ?
+                        opts.LeadingPrefix :
+                        opts.FixedDistanceLiteral.String!);
+                    Call(s_stringAsSpanMethod);
+                    Call(s_spanIndexOfSpan);
+                }
                 Stloc(i);
 
                 // if (i < 0) goto ReturnFalse;
@@ -783,7 +793,7 @@ namespace System.Text.RegularExpressions
             }
 
             // Emits a case-sensitive right-to-left search for a substring.
-            void EmitIndexOf_RightToLeft()
+            void EmitIndexOfString_RightToLeft()
             {
                 string prefix = _regexTree.FindOptimizations.LeadingPrefix;
                 Debug.Assert(!string.IsNullOrEmpty(prefix));
@@ -953,12 +963,12 @@ namespace System.Text.RegularExpressions
                         // a sequential walk).  In order to do that search, we actually build up a set for all of the ASCII
                         // characters _not_ contained in the set, and then do a search for the inverse of that, which will be
                         // all of the target ASCII characters and all of non-ASCII.
-                        var asciiChars = new List<char>();
-                        for (int i = 0; i <= 0x7f; i++)
+                        using var asciiChars = new ValueListBuilder<char>(stackalloc char[128]);
+                        for (int i = 0; i < 128; i++)
                         {
                             if (!RegexCharClass.CharInClass((char)i, primarySet.Set))
                             {
-                                asciiChars.Add((char)i);
+                                asciiChars.Append((char)i);
                             }
                         }
 
@@ -970,7 +980,7 @@ namespace System.Text.RegularExpressions
 
                             // int i = span.
                             Ldloc(span);
-                            if (asciiChars.Count == 128)
+                            if (asciiChars.Length == 128)
                             {
                                 // IndexOfAnyExceptInRange('\0', '\u007f');
                                 Ldc(0);
@@ -980,7 +990,7 @@ namespace System.Text.RegularExpressions
                             else
                             {
                                 // IndexOfAnyExcept(indexOfAnyValuesArray[...]);
-                                LoadIndexOfAnyValues(CollectionsMarshal.AsSpan(asciiChars));
+                                LoadIndexOfAnyValues(asciiChars.AsSpan().ToArray());
                                 Call(s_spanIndexOfAnyExceptIndexOfAnyValues);
                             }
                             Stloc(i);
@@ -6096,13 +6106,16 @@ namespace System.Text.RegularExpressions
         }
 
         /// <summary>
-        /// Adds an entry in <see cref="CompiledRegexRunner._indexOfAnyValues"/> for the given <paramref name="chars"/> and emits a load of that initialized value.
+        /// Adds an entry in <see cref="CompiledRegexRunner._indexOfAnyValues"/> for the given <paramref name="values"/> and emits a load of that initialized value.
         /// </summary>
-        private void LoadIndexOfAnyValues(ReadOnlySpan<char> chars)
+        private void LoadIndexOfAnyValues<T>(T[] values)
         {
-            List<IndexOfAnyValues<char>> list = _indexOfAnyValues ??= new();
+            List<object> list = _indexOfAnyValues ??= new();
             int index = list.Count;
-            list.Add(IndexOfAnyValues.Create(chars));
+            list.Add(
+                typeof(T) == typeof(char) ? IndexOfAnyValues.Create((char[])(object)values) :
+                typeof(T) == typeof(string) ? IndexOfAnyValues.Create(StringComparison.Ordinal, (string[])(object)values) :
+                throw new UnreachableException());
 
             // Logically do _indexOfAnyValues[index], but avoid the bounds check on accessing the array,
             // and cast to the known derived sealed type to enable devirtualization.

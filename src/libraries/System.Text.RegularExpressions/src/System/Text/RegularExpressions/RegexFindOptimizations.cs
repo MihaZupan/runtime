@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 
 namespace System.Text.RegularExpressions
 {
@@ -128,6 +127,17 @@ namespace System.Text.RegularExpressions
 
             // We're now left-to-right only and looking for sets.
 
+            // If there are multiple leading strings, we can search for any of them.
+            if (compiled)
+            {
+                if (RegexPrefixAnalyzer.FindPrefixes(root) is { Length: > 1 and < 8 } prefixes)
+                {
+                    LeadingPrefixes = prefixes;
+                    FindMode = FindNextStartingPositionMode.LeadingStrings_LeftToRight;
+                    return;
+                }
+            }
+
             // Build up a list of all of the sets that are a fixed distance from the start of the expression.
             List<FixedDistanceSet>? fixedDistanceSets = RegexPrefixAnalyzer.FindFixedDistanceSets(root, thorough: !interpreter);
             Debug.Assert(fixedDistanceSets is null || fixedDistanceSets.Count != 0);
@@ -221,6 +231,9 @@ namespace System.Text.RegularExpressions
 
         /// <summary>Gets the leading prefix.  May be an empty string.</summary>
         public string LeadingPrefix { get; } = string.Empty;
+
+        /// <summary>Gets the leading prefixes.  May be an empty array.</summary>
+        public string[] LeadingPrefixes { get; } = Array.Empty<string>();
 
         /// <summary>When in fixed distance literal mode, gets the literal and how far it is from the start of the pattern.</summary>
         public (char Char, string? String, int Distance) FixedDistanceLiteral { get; }
@@ -737,10 +750,15 @@ namespace System.Text.RegularExpressions
                         return false;
                     }
 
+                // Not supported in the interpreter, but we could end up here for patterns so complex the compiler gave up on them.
+
+                case FindNextStartingPositionMode.LeadingStrings_LeftToRight:
+                    return true;
+
                 // Nothing special to look for.  Just return true indicating this is a valid position to try to match.
 
                 default:
-                    Debug.Assert(FindMode == FindNextStartingPositionMode.NoSearch);
+                    Debug.Assert(FindMode == FindNextStartingPositionMode.NoSearch, $"Unexpected FindMode {FindMode}");
                     return true;
             }
         }
@@ -776,6 +794,9 @@ namespace System.Text.RegularExpressions
         LeadingString_LeftToRight,
         /// <summary>A multi-character substring at the beginning of the right-to-left pattern.</summary>
         LeadingString_RightToLeft,
+
+        /// <summary>Multiple leading prefix strings</summary>
+        LeadingStrings_LeftToRight,
 
         /// <summary>A set starting the pattern.</summary>
         LeadingSet_LeftToRight,

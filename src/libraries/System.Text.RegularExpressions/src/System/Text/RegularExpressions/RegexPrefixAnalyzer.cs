@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -12,6 +11,199 @@ namespace System.Text.RegularExpressions
     /// <summary>Detects various forms of prefixes in the regular expression that can help FindFirstChars optimize its search.</summary>
     internal static class RegexPrefixAnalyzer
     {
+        public static string[]? FindPrefixes(RegexNode node)
+        {
+            const int MaxPrefixes = 8; // arbitrary limit to avoid creating too many strings
+            const int MaxPrefixLength = 8; // arbitrary limit to avoid creating too long strings
+            const int MinPrefixLength = 2; // minimum length for prefixes to be useful
+
+            string[]? results = FindPrefixesCore(node);
+            if (results is not null)
+            {
+                foreach (string result in results)
+                {
+                    if (result.Length < MinPrefixLength)
+                    {
+                        return null;
+                    }
+                }
+            }
+            return results;
+
+            static string[]? FindPrefixesCore(RegexNode node)
+            {
+                if (!StackHelper.TryEnsureSufficientExecutionStack())
+                {
+                    return null;
+                }
+
+                // These limits are approximations. We'll stop trying to make strings longer once we exceed the max length,
+                // and if we exceed the max number of prefixes by a non-trivial amount, we'll fail the operation.
+                Span<char> setChars = stackalloc char[MaxPrefixes]; // limit how many chars we get from a set based on the max prefixes we care about
+                Span<char> scratch = stackalloc char[32]; // arbitrary limit
+
+                while (true)
+                {
+                    switch (node.Kind)
+                    {
+                        case RegexNodeKind.Alternate:
+                            {
+                                int childCount = node.ChildCount();
+                                if (childCount > MaxPrefixes)
+                                {
+                                    return null;
+                                }
+
+                                List<string>? prefixes = null;
+                                for (int i = 0; i < childCount; i++)
+                                {
+                                    string[]? childPrefixes = FindPrefixesCore(node.Child(i));
+                                    if (childPrefixes is null || (childPrefixes.Length + (prefixes?.Count ?? 0) > MaxPrefixes))
+                                    {
+                                        return null;
+                                    }
+                                    (prefixes ??= new()).AddRange(childPrefixes);
+                                }
+                                return prefixes!.ToArray();
+                            }
+
+                        case RegexNodeKind.One:
+                            return new string[] { node.Ch.ToString() };
+
+                        case RegexNodeKind.Multi:
+                            return new string[] { node.Str! };
+
+                        case RegexNodeKind.Set when !RegexCharClass.IsNegated(node.Str!):
+                            {
+                                string[]? results = null;
+                                int charCount = RegexCharClass.GetSetChars(node.Str!, setChars);
+                                if (charCount != 0)
+                                {
+                                    results = new string[charCount];
+                                    for (int i = 0; i < charCount; i++)
+                                    {
+                                        results[i] = setChars[i].ToString();
+                                    }
+                                }
+                                return results;
+                            }
+
+                        case RegexNodeKind.Concatenate:
+                            {
+                                var vsb = new ValueStringBuilder(scratch);
+                                List<string>? concatStrings = null;
+
+                                int childCount = node.ChildCount();
+                                for (int i = 0; i < childCount; i++)
+                                {
+                                    if (vsb.Length >= MaxPrefixLength)
+                                    {
+                                        break;
+                                    }
+
+                                    RegexNode child = SkipThroughAtomicAndCapture(node.Child(i));
+                                    switch (child.Kind)
+                                    {
+                                        case RegexNodeKind.One:
+                                            if (concatStrings is null)
+                                            {
+                                                vsb.Append(child.Ch);
+                                            }
+                                            else
+                                            {
+                                                for (int s = 0; s < concatStrings.Count; s++)
+                                                {
+                                                    concatStrings[s] += child.Ch;
+                                                }
+                                            }
+                                            break;
+
+                                        case RegexNodeKind.Multi:
+                                            if (concatStrings is null)
+                                            {
+                                                vsb.Append(child.Str);
+                                            }
+                                            else
+                                            {
+                                                for (int s = 0; s < concatStrings.Count; s++)
+                                                {
+                                                    concatStrings[s] += child.Str;
+                                                }
+                                            }
+                                            break;
+
+                                        case RegexNodeKind.Set when concatStrings is null && !RegexCharClass.IsNegated(child.Str!): // if we've already branched for a set, don't again
+                                            int charCount = RegexCharClass.GetSetChars(child.Str!, setChars);
+                                            if (charCount == 0)
+                                            {
+                                                goto default;
+                                            }
+                                            concatStrings = new List<string>();
+                                            foreach (char c in setChars.Slice(0, charCount))
+                                            {
+                                                vsb.Append(c);
+                                                concatStrings.Add(vsb.AsSpan().ToString());
+                                                vsb.Length--;
+                                            }
+                                            break;
+
+                                        case RegexNodeKind.Alternate when concatStrings is null: // if we've already branched, don't again
+                                            if (FindPrefixesCore(child) is string[] childPrefixes)
+                                            {
+                                                concatStrings = new List<string>();
+                                                int currentLength = vsb.Length;
+                                                foreach (string childPrefix in childPrefixes)
+                                                {
+                                                    vsb.Append(childPrefix);
+                                                    concatStrings.Add(vsb.AsSpan().ToString());
+                                                    vsb.Length = currentLength;
+                                                }
+                                            }
+                                            goto default;
+
+                                        case RegexNodeKind.Bol:
+                                        case RegexNodeKind.Eol:
+                                        case RegexNodeKind.Boundary:
+                                        case RegexNodeKind.ECMABoundary:
+                                        case RegexNodeKind.NonBoundary:
+                                        case RegexNodeKind.NonECMABoundary:
+                                        case RegexNodeKind.Beginning:
+                                        case RegexNodeKind.Start:
+                                        case RegexNodeKind.EndZ:
+                                        case RegexNodeKind.End:
+                                        case RegexNodeKind.Empty:
+                                        case RegexNodeKind.UpdateBumpalong:
+                                        case RegexNodeKind.PositiveLookaround:
+                                        case RegexNodeKind.NegativeLookaround:
+                                            // Zero-width anchors and assertions that don't impact the string
+                                            break;
+
+                                        default:
+                                            i = childCount; // exit the loop
+                                            break;
+                                    }
+                                }
+
+                                vsb.Dispose();
+                                return
+                                    concatStrings is not null ? concatStrings.ToArray() :
+                                    vsb.Length != 0 ? new string[] { vsb.ToString() } :
+                                    null;
+                            }
+
+                        case RegexNodeKind.Atomic:
+                        case RegexNodeKind.Capture:
+                        case RegexNodeKind.Loop or RegexNodeKind.Lazyloop when node.M > 0:
+                            node = node.Child(0);
+                            break;
+
+                        default:
+                            return null;
+                    }
+                }
+            }
+        }
+
         /// <summary>Computes the leading substring in <paramref name="node"/>; may be empty.</summary>
         public static string FindPrefix(RegexNode node)
         {
@@ -751,10 +943,7 @@ namespace System.Text.RegularExpressions
             // Find the first concatenation.  We traverse through atomic and capture nodes as they don't effect flow control.  (We don't
             // want to explore loops, even if they have a guaranteed iteration, because we may use information about the node to then
             // skip the node's execution in the matching algorithm, and we would need to special-case only skipping the first iteration.)
-            while (node.Kind is RegexNodeKind.Atomic or RegexNodeKind.Capture)
-            {
-                node = node.Child(0);
-            }
+            node = SkipThroughAtomicAndCapture(node);
             if (node.Kind != RegexNodeKind.Concatenate)
             {
                 return null;
@@ -925,6 +1114,16 @@ namespace System.Text.RegularExpressions
                         return RegexNodeKind.Unknown;
                 }
             }
+        }
+
+        /// <summary>Walk through a node's children as long as the nodes are atomic or capture.</summary>
+        private static RegexNode SkipThroughAtomicAndCapture(RegexNode node)
+        {
+            while (node.Kind is RegexNodeKind.Atomic or RegexNodeKind.Capture)
+            {
+                node = node.Child(0);
+            }
+            return node;
         }
 
         /// <summary>Percent occurrences in source text (100 * char count / total count).</summary>
