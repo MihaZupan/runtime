@@ -247,12 +247,12 @@ namespace System.Buffers
 
             if (!ignoreCase)
             {
-                return PickTeddyImplementation<CaseSensitive, CaseSensitive>(values, uniqueValues, rabinKarp, minLength);
+                return PickTeddyImplementation<CaseSensitive, CaseSensitive>(values, uniqueValues, rabinKarp, n);
             }
 
             if (asciiLettersOnly)
             {
-                return PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAsciiLetters>(values, uniqueValues, rabinKarp, minLength);
+                return PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAsciiLetters>(values, uniqueValues, rabinKarp, n);
             }
 
             // Even if the whole value isn't ASCII letters only, we can still use a faster approach
@@ -272,20 +272,20 @@ namespace System.Buffers
             if (asciiStartUnaffectedByCaseConversion)
             {
                 return nonAsciiAffectedByCaseConversion
-                    ? PickTeddyImplementation<CaseSensitive, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength)
-                    : PickTeddyImplementation<CaseSensitive, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength);
+                    ? PickTeddyImplementation<CaseSensitive, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, n)
+                    : PickTeddyImplementation<CaseSensitive, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, n);
             }
 
             if (nonAsciiAffectedByCaseConversion)
             {
                 return asciiStartLettersOnly
-                    ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength)
-                    : PickTeddyImplementation<CaseInensitiveAscii, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, minLength);
+                    ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, n)
+                    : PickTeddyImplementation<CaseInensitiveAscii, CaseInsensitiveUnicode>(values, uniqueValues, rabinKarp, n);
             }
 
             return asciiStartLettersOnly
-                ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength)
-                : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, minLength);
+                ? PickTeddyImplementation<CaseInensitiveAsciiLetters, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, n)
+                : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, n);
         }
 
         [BypassReadyToRun]
@@ -299,7 +299,7 @@ namespace System.Buffers
         {
             Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
             Debug.Assert(values.Length > 0);
-            Debug.Assert(n >= 2);
+            Debug.Assert(n is 2 or 3);
 
             if (values.Length > 8)
             {
@@ -311,33 +311,15 @@ namespace System.Buffers
                 // TODO: We don't have to pick the first N characters for the fingerprint.
                 // Would smarter offset selection help here to improve bucket distribution?
 
-                if (n == 2)
-                {
-                    return Avx2.IsSupported
-                        ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                        : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
-                }
-                else
-                {
-                    return Avx2.IsSupported
-                        ? new IndexOfAnyAsciiStringValuesTeddy256BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
-                        : new IndexOfAnyAsciiStringValuesTeddy128BucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
-                }
+                return n == 2
+                    ? new IndexOfAnyAsciiStringValuesTeddyBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues)
+                    : new IndexOfAnyAsciiStringValuesTeddyBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(buckets, rabinKarp, uniqueValues);
             }
             else
             {
-                if (n == 2)
-                {
-                    return Avx2.IsSupported
-                        ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                        : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
-                }
-                else
-                {
-                    return Avx2.IsSupported
-                        ? new IndexOfAnyAsciiStringValuesTeddy256NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
-                        : new IndexOfAnyAsciiStringValuesTeddy128NonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
-                }
+                return n == 2
+                    ? new IndexOfAnyAsciiStringValuesTeddyNonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
+                    : new IndexOfAnyAsciiStringValuesTeddyNonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
             }
         }
     }
