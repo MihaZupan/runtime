@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -90,16 +91,22 @@ namespace System.Buffers
             return false;
         }
 
-        public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span, ref char current)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span)
+            where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity =>
+            typeof(TCaseSensitivity) == typeof(TeddyHelper.CaseInsensitiveUnicode)
+                ? IndexOfAnyMultiStringCaseInsensitiveUnicode(span)
+                : IndexOfAnyCore<TCaseSensitivity>(span);
+
+        private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span)
             where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
         {
             Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
-            Debug.Assert(!Unsafe.IsAddressLessThan(ref current, ref MemoryMarshal.GetReference(span)));
-            Debug.Assert(Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / 2 <= span.Length);
 
             // TODO: Is this code safe from overflow issues, or is the fact that it's only being used for short inputs saving us?
-            Debug.Assert(span.Length - (Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / 2) < 34,
-                "Teddy should have handled the start of the input.");
+            Debug.Assert(span.Length < 18, "Teddy should have handled short inputs.");
+
+            ref char current = ref MemoryMarshal.GetReference(span);
 
             int hashLength = _hashLength;
             ref bool bucketFlags = ref MemoryMarshal.GetArrayDataReference(_bucketFlags);
@@ -143,6 +150,20 @@ namespace System.Buffers
             }
 
             return -1;
+        }
+
+        private int IndexOfAnyMultiStringCaseInsensitiveUnicode(ReadOnlySpan<char> span)
+        {
+            // 18 = Vector128<ushort>.Count + 2 (MatchStartOffset for N=3)
+            Debug.Assert(span.Length < 18, "Teddy should have handled long inputs.");
+
+            Span<char> upperCase = stackalloc char[18].Slice(0, span.Length);
+
+            int charsWritten = Ordinal.ToUpperOrdinal(span, upperCase);
+            Debug.Assert(charsWritten == upperCase.Length);
+
+            // CaseSensitive instead of CaseInsensitiveUnicode as we've already done the case conversion.
+            return IndexOfAnyCore<TeddyHelper.CaseSensitive>(upperCase);
         }
     }
 }

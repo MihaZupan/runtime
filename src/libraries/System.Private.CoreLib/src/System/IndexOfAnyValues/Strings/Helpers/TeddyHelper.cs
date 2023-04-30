@@ -240,13 +240,6 @@ namespace System.Buffers
             return (low, high);
         }
 
-        public static (Vector256<byte> Low, Vector256<byte> High) GenerateNonBucketizedFingerprint256(ReadOnlySpan<string> values, int offset)
-        {
-            (Vector128<byte> low, Vector128<byte> high) = GenerateNonBucketizedFingerprint(values, offset);
-
-            return (Vector256.Create(low, low), Vector256.Create(high, high));
-        }
-
         public static (Vector128<byte> Low, Vector128<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
         {
             Debug.Assert(valueBuckets.Length <= 8);
@@ -272,13 +265,6 @@ namespace System.Buffers
             }
 
             return (low, high);
-        }
-
-        public static (Vector256<byte> Low, Vector256<byte> High) GenerateBucketizedFingerprint256(string[][] valueBuckets, int offset)
-        {
-            (Vector128<byte> low, Vector128<byte> high) = GenerateBucketizedFingerprint(valueBuckets, offset);
-
-            return (Vector256.Create(low, low), Vector256.Create(high, high));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

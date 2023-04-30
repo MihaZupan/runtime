@@ -12,10 +12,8 @@ namespace System.Buffers
     {
         private readonly AhoCorasick _ahoCorasick;
 
-        public IndexOfAnyStringValuesAhoCorasick(AhoCorasick ahoCorasick, HashSet<string> uniqueValues) : base(uniqueValues)
-        {
+        public IndexOfAnyStringValuesAhoCorasick(AhoCorasick ahoCorasick, HashSet<string> uniqueValues) : base(uniqueValues) =>
             _ahoCorasick = ahoCorasick;
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>

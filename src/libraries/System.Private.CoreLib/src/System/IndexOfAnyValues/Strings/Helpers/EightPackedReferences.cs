@@ -8,18 +8,18 @@ using System.Runtime.InteropServices;
 namespace System.Buffers
 {
     [StructLayout(LayoutKind.Sequential)]
-    internal readonly struct EightPackedReferences<T> where T : class
+    internal readonly struct EightPackedReferences
     {
-        private readonly T? _ref0;
-        private readonly T? _ref1;
-        private readonly T? _ref2;
-        private readonly T? _ref3;
-        private readonly T? _ref4;
-        private readonly T? _ref5;
-        private readonly T? _ref6;
-        private readonly T? _ref7;
+        private readonly object? _ref0;
+        private readonly object? _ref1;
+        private readonly object? _ref2;
+        private readonly object? _ref3;
+        private readonly object? _ref4;
+        private readonly object? _ref5;
+        private readonly object? _ref6;
+        private readonly object? _ref7;
 
-        public EightPackedReferences(ReadOnlySpan<T> values)
+        public EightPackedReferences(ReadOnlySpan<object> values)
         {
             Debug.Assert(values.Length <= 8, $"Got {values.Length} values");
 
@@ -29,7 +29,7 @@ namespace System.Buffers
             }
         }
 
-        public T this[int index]
+        public object this[int index]
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get

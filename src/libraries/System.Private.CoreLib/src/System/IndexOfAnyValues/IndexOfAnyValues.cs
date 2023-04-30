@@ -198,12 +198,12 @@ namespace System.Buffers
             static abstract bool Value { get; }
         }
 
-        private readonly struct TrueConst : IRuntimeConst
+        internal readonly struct TrueConst : IRuntimeConst
         {
             public static bool Value => true;
         }
 
-        private readonly struct FalseConst : IRuntimeConst
+        internal readonly struct FalseConst : IRuntimeConst
         {
             public static bool Value => false;
         }
