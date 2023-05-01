@@ -561,13 +561,20 @@ namespace System.Buffers
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
             {
-                for (int i = 0; i < candidate.Length; i++)
+                ref char end = ref Unsafe.Add(ref matchStart, candidate.Length);
+                ref char candidateRef = ref Unsafe.AsRef(candidate.GetPinnableReference());
+
+                do
                 {
-                    if (Unsafe.Add(ref matchStart, i) != candidate[i])
+                    if (candidateRef != matchStart)
                     {
                         return false;
                     }
+
+                    matchStart = ref Unsafe.Add(ref matchStart, 1);
+                    candidateRef = ref Unsafe.Add(ref candidateRef, 1);
                 }
+                while (Unsafe.IsAddressLessThan(ref matchStart, ref end));
 
                 return true;
             }
