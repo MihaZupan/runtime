@@ -437,6 +437,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddyNonBucketizedN2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddyNonBucketizedN3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyAsciiStringValuesTeddyBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnySingleAsciiStringValueBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnySingleAsciiStringValueN2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnySingleAsciiStringValueN3.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnySingleStringValueFallback.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringEmptyValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\IndexOfAnyValues\Strings\IndexOfAnyStringValuesBase.cs" />

@@ -140,6 +140,11 @@ namespace System.Buffers
                 return indexOfAnyValues;
             }
 
+            if (values.Length == 1)
+            {
+                return CreateSingleValueFallback(values[0], uniqueValues, ignoreCase);
+            }
+
             bool asciiOnlyStartChars = true;
 
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && !allAscii)
@@ -288,7 +293,6 @@ namespace System.Buffers
                 : PickTeddyImplementation<CaseInensitiveAscii, CaseInensitiveAscii>(values, uniqueValues, rabinKarp, n);
         }
 
-        [BypassReadyToRun]
         private static IndexOfAnyValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(
             ReadOnlySpan<string> values,
             HashSet<string> uniqueValues,
@@ -300,6 +304,24 @@ namespace System.Buffers
             Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
             Debug.Assert(values.Length > 0);
             Debug.Assert(n is 2 or 3);
+
+            if (values.Length == 1)
+            {
+                string value = values[0];
+
+                if (value.Length >= 8)
+                {
+                    return n == 2
+                        ? new IndexOfAnySingleAsciiStringValueN2<IndexOfAnyValues.TrueConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues)
+                        : new IndexOfAnySingleAsciiStringValueN3<IndexOfAnyValues.TrueConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues);
+                }
+                else
+                {
+                    return n == 2
+                        ? new IndexOfAnySingleAsciiStringValueN2<IndexOfAnyValues.FalseConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues)
+                        : new IndexOfAnySingleAsciiStringValueN3<IndexOfAnyValues.FalseConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues);
+                }
+            }
 
             if (values.Length > 8)
             {
@@ -321,6 +343,13 @@ namespace System.Buffers
                     ? new IndexOfAnyAsciiStringValuesTeddyNonBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues)
                     : new IndexOfAnyAsciiStringValuesTeddyNonBucketizedN3<TStartCaseSensitivity, TCaseSensitivity>(values, rabinKarp, uniqueValues);
             }
+        }
+
+        private static IndexOfAnyValues<string> CreateSingleValueFallback(string value, HashSet<string> uniqueValues, bool ignoreCase)
+        {
+            return ignoreCase
+                ? new IndexOfAnySingleStringValueFallback<IndexOfAnyValues.TrueConst>(value, uniqueValues)
+                : new IndexOfAnySingleStringValueFallback<IndexOfAnyValues.FalseConst>(value, uniqueValues);
         }
     }
 }

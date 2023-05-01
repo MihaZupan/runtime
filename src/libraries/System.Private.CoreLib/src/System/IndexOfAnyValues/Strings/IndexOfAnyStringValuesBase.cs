@@ -9,8 +9,8 @@ namespace System.Buffers
     {
         protected readonly HashSet<string> UniqueValues;
 
-        public IndexOfAnyStringValuesBase(HashSet<string> values) =>
-            UniqueValues = values;
+        public IndexOfAnyStringValuesBase(HashSet<string> uniqueValues) =>
+            UniqueValues = uniqueValues;
 
         internal sealed override bool ContainsCore(string value) =>
             UniqueValues.Contains(value);

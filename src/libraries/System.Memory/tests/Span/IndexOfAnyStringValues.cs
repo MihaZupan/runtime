@@ -90,8 +90,8 @@ namespace System.Memory.Tests.Span
         // Sets with empty values
         [InlineData(StringComparison.Ordinal, 0, " ", "abc, ")]
         [InlineData(StringComparison.OrdinalIgnoreCase, 0, " ", "abc, ")]
-        [InlineData(StringComparison.Ordinal, -1, "", "")]
-        [InlineData(StringComparison.OrdinalIgnoreCase, -1, "", "abc, ")]
+        [InlineData(StringComparison.Ordinal, 0, "", "")]
+        [InlineData(StringComparison.OrdinalIgnoreCase, 0, "", "abc, ")]
         // Empty sets
         [InlineData(StringComparison.Ordinal, -1, " ", null)]
         [InlineData(StringComparison.OrdinalIgnoreCase, -1, " ", null)]
@@ -127,6 +127,8 @@ namespace System.Memory.Tests.Span
             IndexOfAnyValues<string> stringValues = IndexOfAnyValues.Create(comparisonType, valuesArray);
 
             Assert.Equal(expected, text.AsSpan().IndexOfAny(stringValues));
+
+            Assert.Equal(expected, IndexOfAnyReferenceImpl(text, valuesArray, comparisonType));
         }
 
         [Fact]
@@ -181,7 +183,7 @@ namespace System.Memory.Tests.Span
         [ActiveIssue("Manual execution only. Worth running any time IndexOfAnyValues<string> logic is modified.")]
         public static void TestIndexOfAny_RandomInputs_Stress()
         {
-            foreach (int maxNeedleCount in new[] { 8, 20, 70 })
+            foreach (int maxNeedleCount in new[] { 2, 8, 20, 70 })
             {
                 foreach (int maxNeedleValueLength in new[] { 8, 40 })
                 {

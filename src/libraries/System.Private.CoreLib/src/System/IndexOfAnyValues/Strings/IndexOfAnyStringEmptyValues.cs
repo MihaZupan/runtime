@@ -7,16 +7,9 @@ namespace System.Buffers
 {
     internal sealed class IndexOfAnyStringEmptyValues : IndexOfAnyStringValuesBase
     {
-        public IndexOfAnyStringEmptyValues(HashSet<string> values) : base(values) { }
+        public IndexOfAnyStringEmptyValues(HashSet<string> uniqueValues) : base(uniqueValues) { }
 
-        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span)
-        {
-            if (UniqueValues.Count == 0 || span.IsEmpty)
-            {
-                return -1;
-            }
-
-            return 0;
-        }
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
+            UniqueValues.Count == 0 ? -1 : 0;
     }
 }

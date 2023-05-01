@@ -352,6 +352,72 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static (Vector128<byte> Result, Vector128<byte> Prev0) ProcessSingleInputN2(
+            Vector128<byte> input, Vector128<byte> prev0,
+            Vector128<byte> test0, Vector128<byte> test1)
+        {
+            Vector128<byte> match0 = Vector128.Equals(input, test0);
+            Vector128<byte> result1 = Vector128.Equals(input, test1);
+
+            Vector128<byte> result0 = RightShift1(prev0, match0);
+
+            Vector128<byte> result = result0 & result1;
+
+            return (result, match0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        public static (Vector256<byte> Result, Vector256<byte> Prev0) ProcessSingleInputN2(
+            Vector256<byte> input, Vector256<byte> prev0,
+            Vector256<byte> test0, Vector256<byte> test1)
+        {
+            Vector256<byte> match0 = Vector256.Equals(input, test0);
+            Vector256<byte> result1 = Vector256.Equals(input, test1);
+
+            Vector256<byte> result0 = RightShift1(prev0, match0);
+
+            Vector256<byte> result = result0 & result1;
+
+            return (result, match0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static (Vector128<byte> Result, Vector128<byte> Prev0, Vector128<byte> Prev1) ProcessSingleInputN3(
+            Vector128<byte> input, Vector128<byte> prev0, Vector128<byte> prev1,
+            Vector128<byte> test0, Vector128<byte> test1, Vector128<byte> test2)
+        {
+            Vector128<byte> match0 = Vector128.Equals(input, test0);
+            Vector128<byte> match1 = Vector128.Equals(input, test1);
+            Vector128<byte> result2 = Vector128.Equals(input, test2);
+
+            Vector128<byte> result0 = RightShift2(prev0, match0);
+            Vector128<byte> result1 = RightShift1(prev1, match1);
+
+            Vector128<byte> result = result0 & result1 & result2;
+
+            return (result, match0, match1);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        public static (Vector256<byte> Result, Vector256<byte> Prev0, Vector256<byte> Prev1) ProcessSingleInputN3(
+            Vector256<byte> input, Vector256<byte> prev0, Vector256<byte> prev1,
+            Vector256<byte> test0, Vector256<byte> test1, Vector256<byte> test2)
+        {
+            Vector256<byte> match0 = Vector256.Equals(input, test0);
+            Vector256<byte> match1 = Vector256.Equals(input, test1);
+            Vector256<byte> result2 = Vector256.Equals(input, test2);
+
+            Vector256<byte> result0 = RightShift2(prev0, match0);
+            Vector256<byte> result1 = RightShift1(prev1, match1);
+
+            Vector256<byte> result = result0 & result1 & result2;
+
+            return (result, match0, match1);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<byte> LoadAndPack16AsciiChars(ref char source)
         {
             Vector128<ushort> source0 = Vector128.LoadUnsafe(ref source);
@@ -483,6 +549,7 @@ namespace System.Buffers
             static abstract Vector128<byte> TransformInput(Vector128<byte> input);
             static abstract Vector256<byte> TransformInput(Vector256<byte> input);
             static abstract bool Equals(ref char matchStart, string candidate);
+            static abstract bool LongInputEquals(ref char matchStart, string candidate);
         }
 
         public readonly struct CaseSensitive : ICaseSensitivity
@@ -503,6 +570,15 @@ namespace System.Buffers
                 }
 
                 return true;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool LongInputEquals(ref char matchStart, string candidate)
+            {
+                return SpanHelpers.SequenceEqual(
+                    ref Unsafe.As<char, byte>(ref matchStart),
+                    ref Unsafe.As<char, byte>(ref candidate.GetRawStringData()),
+                    (nuint)(uint)candidate.Length * 2);
             }
         }
 
@@ -525,6 +601,13 @@ namespace System.Buffers
                 }
 
                 return true;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool LongInputEquals(ref char matchStart, string candidate)
+            {
+                // TODO: We can do better as we know the candidate is definitely normalized uppercase ASCII
+                return Ordinal.EqualsIgnoreCase_Vector128(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
             }
         }
 
@@ -561,6 +644,13 @@ namespace System.Buffers
 
                 return true;
             }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool LongInputEquals(ref char matchStart, string candidate)
+            {
+                // TODO: We can do better as we know the candidate is definitely normalized uppercase ASCII
+                return Ordinal.EqualsIgnoreCase_Vector128(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
+            }
         }
 
         public readonly struct CaseInsensitiveUnicode : ICaseSensitivity
@@ -574,6 +664,12 @@ namespace System.Buffers
             {
                 // TODO: Would Ordinal.CompareStringIgnoreCaseNonAscii == 0 be better?
                 return Ordinal.EqualsIgnoreCase(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool LongInputEquals(ref char matchStart, string candidate)
+            {
+                return Ordinal.EqualsIgnoreCase_Vector128(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
             }
         }
     }
