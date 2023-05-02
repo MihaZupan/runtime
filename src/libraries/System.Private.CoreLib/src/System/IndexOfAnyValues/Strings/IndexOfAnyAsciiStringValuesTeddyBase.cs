@@ -303,7 +303,6 @@ namespace System.Buffers
             do
             {
                 int matchOffset = BitOperations.TrailingZeroCount(resultMask);
-                resultMask = BitOperations.ResetLowestSetBit(resultMask);
 
                 ref char matchRef = ref Unsafe.Add(ref searchSpace, matchOffset - matchStartOffset);
                 offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref matchRef) / 2);
@@ -314,7 +313,6 @@ namespace System.Buffers
                 do
                 {
                     int candidateOffset = BitOperations.TrailingZeroCount(candidateMask);
-                    candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
 
                     object bucket = _buckets[candidateOffset];
 
@@ -324,8 +322,12 @@ namespace System.Buffers
                     {
                         return true;
                     }
+
+                    candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
                 }
                 while (candidateMask != 0);
+
+                resultMask = BitOperations.ResetLowestSetBit(resultMask);
             }
             while (resultMask != 0);
 
@@ -341,7 +343,6 @@ namespace System.Buffers
             do
             {
                 int matchOffset = BitOperations.TrailingZeroCount(resultMask);
-                resultMask = BitOperations.ResetLowestSetBit(resultMask);
 
                 ref char matchRef = ref Unsafe.Add(ref searchSpace, matchOffset - matchStartOffset);
                 offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref matchRef) / 2);
@@ -352,7 +353,6 @@ namespace System.Buffers
                 do
                 {
                     int candidateOffset = BitOperations.TrailingZeroCount(candidateMask);
-                    candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
 
                     object bucket = _buckets[candidateOffset];
 
@@ -362,8 +362,12 @@ namespace System.Buffers
                     {
                         return true;
                     }
+
+                    candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
                 }
                 while (candidateMask != 0);
+
+                resultMask = BitOperations.ResetLowestSetBit(resultMask);
             }
             while (resultMask != 0);
 

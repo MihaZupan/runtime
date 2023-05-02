@@ -291,7 +291,6 @@ namespace System.Buffers
             do
             {
                 int matchOffset = BitOperations.TrailingZeroCount(resultMask);
-                resultMask = BitOperations.ResetLowestSetBit(resultMask);
 
                 ref char matchRef = ref Unsafe.Add(ref searchSpace, matchOffset - matchStartOffset);
 
@@ -304,6 +303,8 @@ namespace System.Buffers
                     offsetFromStart = baseOffset + matchOffset;
                     return true;
                 }
+
+                resultMask = BitOperations.ResetLowestSetBit(resultMask);
             }
             while (resultMask != 0);
 
