@@ -214,7 +214,7 @@ namespace System.Buffers
         }
 
         // TODO: When we're dealing with ASCII-only patterns, can we get any use out of the spare bits (e.g. more buckets)?
-        public static (Vector128<byte> Low, Vector128<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
+        public static (Vector256<byte> Low, Vector256<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
         {
             Debug.Assert(values.Length <= 8);
 
@@ -237,10 +237,10 @@ namespace System.Buffers
                 high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
             }
 
-            return (low, high);
+            return (Vector256.Create(low, low), Vector256.Create(high, high));
         }
 
-        public static (Vector128<byte> Low, Vector128<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
+        public static (Vector256<byte> Low, Vector256<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
         {
             Debug.Assert(valueBuckets.Length <= 8);
 
@@ -264,7 +264,7 @@ namespace System.Buffers
                 }
             }
 
-            return (low, high);
+            return (Vector256.Create(low, low), Vector256.Create(high, high));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

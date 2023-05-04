@@ -26,11 +26,6 @@ namespace System.Buffers
         private readonly EightPackedReferences _buckets;
 
         private readonly Vector256<byte>
-            _n0Low256, _n0High256,
-            _n1Low256, _n1High256,
-            _n2Low256, _n2High256;
-
-        private readonly Vector128<byte>
             _n0Low, _n0High,
             _n1Low, _n1High,
             _n2Low, _n2High;
@@ -50,10 +45,6 @@ namespace System.Buffers
             {
                 (_n2Low, _n2High) = GenerateNonBucketizedFingerprint(values, offset: 2);
             }
-
-            (_n0Low256, _n0High256) = (Vector256.Create(_n0Low, _n0Low), Vector256.Create(_n0High, _n0High));
-            (_n1Low256, _n1High256) = (Vector256.Create(_n1Low, _n1Low), Vector256.Create(_n1High, _n1High));
-            (_n2Low256, _n2High256) = (Vector256.Create(_n2Low, _n2Low), Vector256.Create(_n2High, _n2High));
         }
 
         protected AsciiStringSearchValuesTeddyBase(string[][] buckets, RabinKarp rabinKarp, HashSet<string> uniqueValues, int n) : base(rabinKarp, uniqueValues)
@@ -69,10 +60,6 @@ namespace System.Buffers
             {
                 (_n2Low, _n2High) = GenerateBucketizedFingerprint(buckets, offset: 2);
             }
-
-            (_n0Low256, _n0High256) = (Vector256.Create(_n0Low, _n0Low), Vector256.Create(_n0High, _n0High));
-            (_n1Low256, _n1High256) = (Vector256.Create(_n1Low, _n1Low), Vector256.Create(_n1High, _n1High));
-            (_n2Low256, _n2High256) = (Vector256.Create(_n2Low, _n2Low), Vector256.Create(_n2High, _n2High));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -109,8 +96,8 @@ namespace System.Buffers
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
-            Vector128<byte> n0Low = _n0Low, n0High = _n0High;
-            Vector128<byte> n1Low = _n1Low, n1High = _n1High;
+            Vector128<byte> n0Low = _n0Low._lower, n0High = _n0High._lower;
+            Vector128<byte> n1Low = _n1Low._lower, n1High = _n1High._lower;
             Vector128<byte> prev0 = Vector128<byte>.AllBitsSet;
 
         Loop:
@@ -156,8 +143,8 @@ namespace System.Buffers
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
-            Vector256<byte> n0Low = _n0Low256, n0High = _n0High256;
-            Vector256<byte> n1Low = _n1Low256, n1High = _n1High256;
+            Vector256<byte> n0Low = _n0Low, n0High = _n0High;
+            Vector256<byte> n1Low = _n1Low, n1High = _n1High;
             Vector256<byte> prev0 = Vector256<byte>.AllBitsSet;
 
         Loop:
@@ -205,9 +192,9 @@ namespace System.Buffers
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
-            Vector128<byte> n0Low = _n0Low, n0High = _n0High;
-            Vector128<byte> n1Low = _n1Low, n1High = _n1High;
-            Vector128<byte> n2Low = _n2Low, n2High = _n2High;
+            Vector128<byte> n0Low = _n0Low._lower, n0High = _n0High._lower;
+            Vector128<byte> n1Low = _n1Low._lower, n1High = _n1High._lower;
+            Vector128<byte> n2Low = _n2Low._lower, n2High = _n2High._lower;
             Vector128<byte> prev0 = Vector128<byte>.AllBitsSet;
             Vector128<byte> prev1 = Vector128<byte>.AllBitsSet;
 
@@ -255,9 +242,9 @@ namespace System.Buffers
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
-            Vector256<byte> n0Low = _n0Low256, n0High = _n0High256;
-            Vector256<byte> n1Low = _n1Low256, n1High = _n1High256;
-            Vector256<byte> n2Low = _n2Low256, n2High = _n2High256;
+            Vector256<byte> n0Low = _n0Low, n0High = _n0High;
+            Vector256<byte> n1Low = _n1Low, n1High = _n1High;
+            Vector256<byte> n2Low = _n2Low, n2High = _n2High;
             Vector256<byte> prev0 = Vector256<byte>.AllBitsSet;
             Vector256<byte> prev1 = Vector256<byte>.AllBitsSet;
 
