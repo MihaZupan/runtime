@@ -143,6 +143,17 @@ namespace System.Buffers
             return new ProbabilisticCharSearchValues(values);
         }
 
+        public static SearchValues<string> Create(ReadOnlySpan<string> values, StringComparison comparisonType)
+        {
+            if (comparisonType is not (StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase))
+            {
+                // TODO: Should the API just accept 'bool ignoreCase' instead?
+                throw new NotSupportedException("Only Ordinal and OrdinalIgnoreCase are supported.");
+            }
+
+            return StringSearchValues.Create(values, ignoreCase: comparisonType == StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool TryGetSingleRange<T>(ReadOnlySpan<T> values, out T minInclusive, out T maxInclusive)
             where T : struct, INumber<T>, IMinMaxValue<T>
         {
@@ -187,12 +198,12 @@ namespace System.Buffers
             static abstract bool Value { get; }
         }
 
-        private readonly struct TrueConst : IRuntimeConst
+        internal readonly struct TrueConst : IRuntimeConst
         {
             public static bool Value => true;
         }
 
-        private readonly struct FalseConst : IRuntimeConst
+        internal readonly struct FalseConst : IRuntimeConst
         {
             public static bool Value => false;
         }
