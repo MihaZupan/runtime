@@ -21,6 +21,7 @@ namespace System.Buffers
         private const int MatchStartOffsetN2 = 1;
         private const int MatchStartOffsetN3 = 2;
         private const int CharsPerIterationAvx2 = 32;
+        private const int CharsPerIterationAvx512 = 64;
         private const int CharsPerIterationVector128 = 16;
 
         private readonly EightPackedReferences _buckets;
@@ -78,6 +79,11 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         protected int IndexOfAnyN2(ReadOnlySpan<char> span)
         {
+            if (Avx512BW.IsSupported && span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN2)
+            {
+                return IndexOfAnyN2Avx512(span);
+            }
+
             if (Avx2.IsSupported && span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN2)
             {
                 return IndexOfAnyN2Avx2(span);
@@ -89,6 +95,11 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         protected int IndexOfAnyN3(ReadOnlySpan<char> span)
         {
+            if (Avx512BW.IsSupported && span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN3)
+            {
+                return IndexOfAnyN3Avx512(span);
+            }
+
             if (Avx2.IsSupported && span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN3)
             {
                 return IndexOfAnyN3Avx2(span);
@@ -181,6 +192,53 @@ namespace System.Buffers
                 }
 
                 prev0 = Vector256<byte>.AllBitsSet;
+                searchSpace = ref lastVectorizedSearchSpace;
+            }
+            goto Loop;
+
+        CandidateFound:
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset))
+            {
+                return offset;
+            }
+            goto ContinueLoop;
+        }
+
+        [BypassReadyToRun]
+        private int IndexOfAnyN2Avx512(ReadOnlySpan<char> span)
+        {
+            Debug.Assert(span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN2);
+
+            ref char searchSpace = ref MemoryMarshal.GetReference(span);
+            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx512);
+
+            searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
+
+            Vector512<byte> n0Low = Vector512.Create(_n0Low256, _n0Low256), n0High = Vector512.Create(_n0High256, _n0High256);
+            Vector512<byte> n1Low = Vector512.Create(_n1Low256, _n1Low256), n1High = Vector512.Create(_n1High256, _n1High256);
+            Vector512<byte> prev0 = Vector512<byte>.AllBitsSet;
+
+        Loop:
+            Vector512<byte> input = TStartCaseSensitivity.TransformInput(LoadAndPack64AsciiChars(ref searchSpace));
+
+            (Vector512<byte> result, prev0) = ProcessInputN2(input, prev0, n0Low, n0High, n1Low, n1High);
+
+            if (result != Vector512<byte>.Zero)
+            {
+                goto CandidateFound;
+            }
+
+        ContinueLoop:
+            searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationAvx512);
+
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            {
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationAvx512)))
+                {
+                    return -1;
+                }
+
+                prev0 = Vector512<byte>.AllBitsSet;
                 searchSpace = ref lastVectorizedSearchSpace;
             }
             goto Loop;
@@ -295,6 +353,56 @@ namespace System.Buffers
             goto ContinueLoop;
         }
 
+        [BypassReadyToRun]
+        private int IndexOfAnyN3Avx512(ReadOnlySpan<char> span)
+        {
+            Debug.Assert(span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN3);
+
+            ref char searchSpace = ref MemoryMarshal.GetReference(span);
+            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx512);
+
+            searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
+
+            Vector512<byte> n0Low = Vector512.Create(_n0Low256, _n0Low256), n0High = Vector512.Create(_n0High256, _n0High256);
+            Vector512<byte> n1Low = Vector512.Create(_n1Low256, _n1Low256), n1High = Vector512.Create(_n1High256, _n1High256);
+            Vector512<byte> n2Low = Vector512.Create(_n2Low256, _n2Low256), n2High = Vector512.Create(_n2High256, _n2High256);
+            Vector512<byte> prev0 = Vector512<byte>.AllBitsSet;
+            Vector512<byte> prev1 = Vector512<byte>.AllBitsSet;
+
+        Loop:
+            Vector512<byte> input = TStartCaseSensitivity.TransformInput(LoadAndPack64AsciiChars(ref searchSpace));
+
+            (Vector512<byte> result, prev0, prev1) = ProcessInputN3(input, prev0, prev1, n0Low, n0High, n1Low, n1High, n2Low, n2High);
+
+            if (result != Vector512<byte>.Zero)
+            {
+                goto CandidateFound;
+            }
+
+        ContinueLoop:
+            searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationAvx512);
+
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            {
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationAvx512)))
+                {
+                    return -1;
+                }
+
+                prev0 = Vector512<byte>.AllBitsSet;
+                prev1 = Vector512<byte>.AllBitsSet;
+                searchSpace = ref lastVectorizedSearchSpace;
+            }
+            goto Loop;
+
+        CandidateFound:
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset))
+            {
+                return offset;
+            }
+            goto ContinueLoop;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector128<byte> result, int matchStartOffset, out int offsetFromStart)
         {
@@ -339,6 +447,46 @@ namespace System.Buffers
         private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector256<byte> result, int matchStartOffset, out int offsetFromStart)
         {
             uint resultMask = (~Vector256.Equals(result, Vector256<byte>.Zero)).ExtractMostSignificantBits();
+
+            do
+            {
+                int matchOffset = BitOperations.TrailingZeroCount(resultMask);
+
+                ref char matchRef = ref Unsafe.Add(ref searchSpace, matchOffset - matchStartOffset);
+                offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref matchRef) / 2);
+                int lengthRemaining = span.Length - offsetFromStart;
+
+                uint candidateMask = result.GetElementUnsafe(matchOffset);
+
+                do
+                {
+                    int candidateOffset = BitOperations.TrailingZeroCount(candidateMask);
+
+                    object bucket = _buckets[candidateOffset];
+
+                    if (TBucketized.Value
+                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket))
+                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket)))
+                    {
+                        return true;
+                    }
+
+                    candidateMask = BitOperations.ResetLowestSetBit(candidateMask);
+                }
+                while (candidateMask != 0);
+
+                resultMask = BitOperations.ResetLowestSetBit(resultMask);
+            }
+            while (resultMask != 0);
+
+            offsetFromStart = 0;
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector512<byte> result, int matchStartOffset, out int offsetFromStart)
+        {
+            ulong resultMask = (~Vector512.Equals(result, Vector512<byte>.Zero)).ExtractMostSignificantBits();
 
             do
             {
