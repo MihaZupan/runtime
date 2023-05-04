@@ -307,6 +307,26 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        public static (Vector512<byte> Result, Vector512<byte> Prev0) ProcessInputN2(
+            Vector512<byte> input,
+            Vector512<byte> prev0,
+            Vector512<byte> n0Low, Vector512<byte> n0High,
+            Vector512<byte> n1Low, Vector512<byte> n1High)
+        {
+            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
+
+            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
+            Vector512<byte> result1 = Shuffle(n1Low, n1High, low, high);
+
+            Vector512<byte> result0 = RightShift1(prev0, match0);
+
+            Vector512<byte> result = result0 & result1;
+
+            return (result, match0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static (Vector128<byte> Result, Vector128<byte> Prev0, Vector128<byte> Prev1) ProcessInputN3(
             Vector128<byte> input,
             Vector128<byte> prev0, Vector128<byte> prev1,
@@ -347,6 +367,29 @@ namespace System.Buffers
             Vector256<byte> result1 = RightShift1(prev1, match1);
 
             Vector256<byte> result = result0 & result1 & result2;
+
+            return (result, match0, match1);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        public static (Vector512<byte> Result, Vector512<byte> Prev0, Vector512<byte> Prev1) ProcessInputN3(
+            Vector512<byte> input,
+            Vector512<byte> prev0, Vector512<byte> prev1,
+            Vector512<byte> n0Low, Vector512<byte> n0High,
+            Vector512<byte> n1Low, Vector512<byte> n1High,
+            Vector512<byte> n2Low, Vector512<byte> n2High)
+        {
+            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
+
+            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
+            Vector512<byte> match1 = Shuffle(n1Low, n1High, low, high);
+            Vector512<byte> result2 = Shuffle(n2Low, n2High, low, high);
+
+            Vector512<byte> result0 = RightShift2(prev0, match0);
+            Vector512<byte> result1 = RightShift1(prev1, match1);
+
+            Vector512<byte> result = result0 & result1 & result2;
 
             return (result, match0, match1);
         }
@@ -441,6 +484,18 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        public static Vector512<byte> LoadAndPack64AsciiChars(ref char source)
+        {
+            Vector512<ushort> source0 = Vector512.LoadUnsafe(ref source);
+            Vector512<ushort> source1 = Vector512.LoadUnsafe(ref source, (nuint)Vector512<ushort>.Count);
+
+            Vector512<byte> packed = Avx512BW.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
+
+            return Avx512F.PermuteVar8x64(packed.AsInt64(), Vector512.Create(0, 2, 4, 6, 1, 3, 5, 7)).AsByte();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static (Vector128<byte> Low, Vector128<byte> High) GetNibbles(Vector128<byte> input)
         {
             // 'low' is not strictly correct here, but we take advantage of Ssse3.Shuffle's behavior
@@ -472,6 +527,20 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        private static (Vector512<byte> Low, Vector512<byte> High) GetNibbles(Vector512<byte> input)
+        {
+            // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
+            // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
+            Vector512<byte> low = input;
+
+            // X86 doesn't have a logical right shift intrinsic for bytes: https://github.com/dotnet/runtime/issues/82564
+            Vector512<byte> high = (input.AsInt32() >>> 4).AsByte() & Vector512.Create((byte)0xF);
+
+            return (low, high);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> Shuffle(Vector128<byte> maskLow, Vector128<byte> maskHigh, Vector128<byte> low, Vector128<byte> high)
         {
             return Vector128.ShuffleUnsafe(maskLow, low) & Vector128.ShuffleUnsafe(maskHigh, high);
@@ -482,6 +551,13 @@ namespace System.Buffers
         private static Vector256<byte> Shuffle(Vector256<byte> maskLow, Vector256<byte> maskHigh, Vector256<byte> low, Vector256<byte> high)
         {
             return Avx2.Shuffle(maskLow, low) & Avx2.Shuffle(maskHigh, high);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        private static Vector512<byte> Shuffle(Vector512<byte> maskLow, Vector512<byte> maskHigh, Vector512<byte> low, Vector512<byte> high)
+        {
+            return Avx512BW.Shuffle(maskLow, low) & Avx512BW.Shuffle(maskHigh, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -542,12 +618,29 @@ namespace System.Buffers
             return Avx2.AlignRight(right, leftShifted, 14);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        private static Vector512<byte> RightShift1(Vector512<byte> left, Vector512<byte> right)
+        {
+            Vector512<byte> leftShifted = Avx512F.PermuteVar8x64(left.AsInt64(), Vector512.Create(0, 7, 0, 0, 0, 0, 0, 0)).AsByte();
+            return Avx512BW.AlignRight(right, leftShifted, 15);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [BypassReadyToRun]
+        private static Vector512<byte> RightShift2(Vector512<byte> left, Vector512<byte> right)
+        {
+            Vector512<byte> leftShifted = Avx512F.PermuteVar8x64(left.AsInt64(), Vector512.Create(0, 7, 0, 0, 0, 0, 0, 0)).AsByte();
+            return Avx512BW.AlignRight(right, leftShifted, 14);
+        }
+
 
         public interface ICaseSensitivity
         {
             static abstract char TransformInput(char input);
             static abstract Vector128<byte> TransformInput(Vector128<byte> input);
             static abstract Vector256<byte> TransformInput(Vector256<byte> input);
+            static abstract Vector512<byte> TransformInput(Vector512<byte> input);
             static abstract bool Equals(ref char matchStart, string candidate);
             static abstract bool LongInputEquals(ref char matchStart, string candidate);
         }
@@ -557,6 +650,7 @@ namespace System.Buffers
             public static char TransformInput(char input) => input;
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input;
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input;
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
@@ -595,6 +689,8 @@ namespace System.Buffers
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
             [BypassReadyToRun]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
+            [BypassReadyToRun]
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => input & Vector512.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
@@ -638,6 +734,14 @@ namespace System.Buffers
                 return Vector256.ConditionalSelect(mask, input, upperCase);
             }
 
+            [BypassReadyToRun]
+            public static Vector512<byte> TransformInput(Vector512<byte> input)
+            {
+                Vector512<byte> mask = Vector512.GreaterThan(input - Vector512.Create((byte)'a'), Vector512.Create((byte)('z' - 'a')));
+                Vector512<byte> upperCase = input & Vector512.Create(unchecked((byte)~0x20));
+                return Vector512.ConditionalSelect(mask, input, upperCase);
+            }
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
             {
@@ -665,6 +769,7 @@ namespace System.Buffers
             public static char TransformInput(char input) => throw new UnreachableException();
             public static Vector128<byte> TransformInput(Vector128<byte> input) => throw new UnreachableException();
             public static Vector256<byte> TransformInput(Vector256<byte> input) => throw new UnreachableException();
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => throw new UnreachableException();
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
