@@ -1,0 +1,19 @@
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
+namespace System.Buffers
+{
+    internal sealed class SingleAsciiStringSearchValuesN3<TLongString, TStartCaseSensitivity, TCaseSensitivity> : SingleAsciiStringSearchValuesBase<TLongString, TStartCaseSensitivity, TCaseSensitivity>
+        where TLongString : struct, SearchValues.IRuntimeConst
+        where TStartCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+        where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+    {
+        public SingleAsciiStringSearchValuesN3(string value, HashSet<string> uniqueValues) : base(value, uniqueValues, n: 3) { }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) => IndexOfAnyN3(span);
+    }
+}
