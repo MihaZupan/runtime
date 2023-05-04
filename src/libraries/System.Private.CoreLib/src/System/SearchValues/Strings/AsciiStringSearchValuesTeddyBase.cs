@@ -92,7 +92,7 @@ namespace System.Buffers
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
@@ -113,15 +113,15 @@ namespace System.Buffers
         ContinueLoop:
             searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationVector128);
 
-            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpaceStart))
             {
-                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationVector128)))
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationVector128)))
                 {
                     return -1;
                 }
 
                 prev0 = Vector128<byte>.AllBitsSet;
-                searchSpace = ref lastVectorizedSearchSpace;
+                searchSpace = ref lastSearchSpaceStart;
             }
             goto Loop;
 
@@ -139,7 +139,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN2);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
@@ -160,15 +160,15 @@ namespace System.Buffers
         ContinueLoop:
             searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationAvx2);
 
-            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpaceStart))
             {
-                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationAvx2)))
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx2)))
                 {
                     return -1;
                 }
 
                 prev0 = Vector256<byte>.AllBitsSet;
-                searchSpace = ref lastVectorizedSearchSpace;
+                searchSpace = ref lastSearchSpaceStart;
             }
             goto Loop;
 
@@ -188,7 +188,7 @@ namespace System.Buffers
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
@@ -211,16 +211,16 @@ namespace System.Buffers
         ContinueLoop:
             searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationVector128);
 
-            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpaceStart))
             {
-                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationVector128)))
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationVector128)))
                 {
                     return -1;
                 }
 
                 prev0 = Vector128<byte>.AllBitsSet;
                 prev1 = Vector128<byte>.AllBitsSet;
-                searchSpace = ref lastVectorizedSearchSpace;
+                searchSpace = ref lastSearchSpaceStart;
             }
             goto Loop;
 
@@ -238,7 +238,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN3);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastVectorizedSearchSpace = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
@@ -261,16 +261,16 @@ namespace System.Buffers
         ContinueLoop:
             searchSpace = ref Unsafe.Add(ref searchSpace, CharsPerIterationAvx2);
 
-            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastVectorizedSearchSpace))
+            if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpaceStart))
             {
-                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastVectorizedSearchSpace, CharsPerIterationAvx2)))
+                if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx2)))
                 {
                     return -1;
                 }
 
                 prev0 = Vector256<byte>.AllBitsSet;
                 prev1 = Vector256<byte>.AllBitsSet;
-                searchSpace = ref lastVectorizedSearchSpace;
+                searchSpace = ref lastSearchSpaceStart;
             }
             goto Loop;
 
