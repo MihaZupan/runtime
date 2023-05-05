@@ -142,7 +142,7 @@ namespace System.Memory.Tests.Span
                 }
                 else
                 {
-                    Assert.Throws<NotSupportedException>(() => SearchValues.Create(new[] { "abc" }, comparisonType));
+                    Assert.Throws<ArgumentException>(() => SearchValues.Create(new[] { "abc" }, comparisonType));
                 }
             }
         }
