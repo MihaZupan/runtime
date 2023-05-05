@@ -30,7 +30,7 @@ namespace System.Buffers
             _n1Low, _n1High,
             _n2Low, _n2High;
 
-        protected AsciiStringSearchValuesTeddyBase(ReadOnlySpan<string> values, RabinKarp rabinKarp, HashSet<string> uniqueValues, int n) : base(rabinKarp, uniqueValues)
+        protected AsciiStringSearchValuesTeddyBase(ReadOnlySpan<string> values, HashSet<string> uniqueValues, int n) : base(values, uniqueValues)
         {
             Debug.Assert(!TBucketized.Value);
 
@@ -47,7 +47,7 @@ namespace System.Buffers
             }
         }
 
-        protected AsciiStringSearchValuesTeddyBase(string[][] buckets, RabinKarp rabinKarp, HashSet<string> uniqueValues, int n) : base(rabinKarp, uniqueValues)
+        protected AsciiStringSearchValuesTeddyBase(string[][] buckets, ReadOnlySpan<string> values, HashSet<string> uniqueValues, int n) : base(values, uniqueValues)
         {
             Debug.Assert(TBucketized.Value);
 

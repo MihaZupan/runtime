@@ -10,7 +10,7 @@ namespace System.Buffers
         where TStartCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
         where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
     {
-        public AsciiStringSearchValuesTeddyBucketizedN2(string[][] values, RabinKarp rabinKarp, HashSet<string> uniqueValues) : base(values, rabinKarp, uniqueValues, n: 2) { }
+        public AsciiStringSearchValuesTeddyBucketizedN2(string[][] buckets, ReadOnlySpan<string> values, HashSet<string> uniqueValues) : base(buckets, values, uniqueValues, n: 2) { }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) => IndexOfAnyN2(span);

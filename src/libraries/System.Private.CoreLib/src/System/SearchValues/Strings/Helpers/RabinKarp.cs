@@ -12,7 +12,6 @@ namespace System.Buffers
     internal readonly struct RabinKarp
     {
         // Arbitrary upper bounds. These also affect when Teddy may be used.
-        private const int MaxValuesPerBucket = 5;
         public const int MaxValues = 64;
 
         // This is a tradeoff between memory consumption and the number of false positives
@@ -73,22 +72,6 @@ namespace System.Buffers
             }
 
             _buckets = buckets;
-        }
-
-        public bool HasCatastrophicCollisionRate()
-        {
-            foreach (string[] bucket in _buckets)
-            {
-                if (bucket is not null)
-                {
-                    if (bucket.Length > MaxValuesPerBucket)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
