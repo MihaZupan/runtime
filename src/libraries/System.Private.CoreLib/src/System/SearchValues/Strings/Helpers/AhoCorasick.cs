@@ -11,13 +11,16 @@ using System.Text;
 
 namespace System.Buffers
 {
-    internal readonly struct AhoCorasick
+    internal ref struct AhoCorasickBuilder
     {
-        private readonly Node[] _nodes;
-        private readonly Vector128<byte> _startingCharsAsciiBitmap;
-        private readonly int _maxValueLength; // Only used by the NLS fallback
+        private readonly ReadOnlySpan<string> _values;
+        private readonly bool _ignoreCase;
+        private ValueListBuilder<AhoCorasick.Node> _nodes;
+        private ValueListBuilder<int> _parents;
+        private Vector128<byte> _startingCharsAsciiBitmap;
+        private int _maxValueLength; // Only used by the NLS fallback
 
-        public AhoCorasick(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues)
+        public AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues)
         {
             Debug.Assert(!values.IsEmpty);
             Debug.Assert(!string.IsNullOrEmpty(values[0]));
@@ -30,42 +33,45 @@ namespace System.Buffers
             }
 #endif
 
-            scoped ValueListBuilder<Node> nodesBuilder = default;
-            scoped ValueListBuilder<int> parents = new(stackalloc int[64]);
+            _values = values;
+            _ignoreCase = ignoreCase;
+            BuildTrie(ref unreachableValues);
+        }
 
-            BuildTrie(ref nodesBuilder, ref parents, values, ref _maxValueLength, ref unreachableValues);
+        public AhoCorasick Build()
+        {
+            AddSuffixLinks();
 
-            Span<Node> nodes = nodesBuilder.RawSpan();
+            Debug.Assert(_nodes[0].MatchLength == 0, "The root node shouldn't have a match.");
 
-            AddSuffixLinks(nodes, parents.AsSpan());
-
-            for (int i = 0; i < nodes.Length; i++)
+            for (int i = 0; i < _nodes.Length; i++)
             {
-                nodes[i].OptimizeChildren();
+                _nodes[i].OptimizeChildren();
             }
-
-            Debug.Assert(nodes[0].MatchLength == 0, "The root node shouldn't have a match.");
-
-            _nodes = nodes.ToArray();
-
-            nodesBuilder.Dispose();
-            parents.Dispose();
 
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
             {
-                GenerateStartingAsciiCharsBitmap(values, ignoreCase, out _startingCharsAsciiBitmap);
+                GenerateStartingAsciiCharsBitmap();
             }
+
+            return new AhoCorasick(_nodes.AsSpan().ToArray(), _startingCharsAsciiBitmap, _maxValueLength);
         }
 
-        private static void BuildTrie(ref ValueListBuilder<Node> nodes, ref ValueListBuilder<int> parents, ReadOnlySpan<string> values, ref int maxValueLength, ref List<string>? unreachableValues)
+        public void Dispose()
         {
-            nodes.Append(new Node());
-            parents.Append(0);
+            _nodes.Dispose();
+            _parents.Dispose();
+        }
 
-            foreach (string value in values)
+        private void BuildTrie(ref List<string>? unreachableValues)
+        {
+            _nodes.Append(new AhoCorasick.Node());
+            _parents.Append(0);
+
+            foreach (string value in _values)
             {
                 int nodeIndex = 0;
-                ref Node node = ref nodes[nodeIndex];
+                ref AhoCorasick.Node node = ref _nodes[nodeIndex];
 
                 for (int i = 0; i < value.Length; i++)
                 {
@@ -73,13 +79,13 @@ namespace System.Buffers
 
                     if (!node.TryGetChild(c, out int childIndex))
                     {
-                        childIndex = nodes.Length;
+                        childIndex = _nodes.Length;
                         node.AddChild(c, childIndex);
-                        nodes.Append(new Node());
-                        parents.Append(nodeIndex);
+                        _nodes.Append(new AhoCorasick.Node());
+                        _parents.Append(nodeIndex);
                     }
 
-                    node = ref nodes[childIndex];
+                    node = ref _nodes[childIndex];
                     nodeIndex = childIndex;
 
                     if (node.MatchLength != 0)
@@ -94,29 +100,29 @@ namespace System.Buffers
                     if (i == value.Length - 1)
                     {
                         node.MatchLength = value.Length;
-                        maxValueLength = Math.Max(maxValueLength, value.Length);
+                        _maxValueLength = Math.Max(_maxValueLength, value.Length);
                         break;
                     }
                 }
             }
         }
 
-        private static void AddSuffixLinks(Span<Node> nodes, ReadOnlySpan<int> parents)
+        private void AddSuffixLinks()
         {
             var queue = new Queue<(char Char, int Index)>();
             queue.Enqueue(((char)0, 0));
 
             while (queue.TryDequeue(out (char Char, int Index) trieNode))
             {
-                ref Node node = ref nodes[trieNode.Index];
-                int parent = parents[trieNode.Index];
-                int suffixLink = nodes[parent].SuffixLink;
+                ref AhoCorasick.Node node = ref _nodes[trieNode.Index];
+                int parent = _parents[trieNode.Index];
+                int suffixLink = _nodes[parent].SuffixLink;
 
                 if (parent != 0)
                 {
                     while (suffixLink >= 0)
                     {
-                        ref Node suffixNode = ref nodes[suffixLink];
+                        ref AhoCorasick.Node suffixNode = ref _nodes[suffixLink];
 
                         if (suffixNode.TryGetChild(trieNode.Char, out int childSuffixLink))
                         {
@@ -146,7 +152,7 @@ namespace System.Buffers
 
                     if (suffixLink >= 0)
                     {
-                        node.MatchLength = nodes[suffixLink].MatchLength;
+                        node.MatchLength = _nodes[suffixLink].MatchLength;
                     }
 
                     node.AddChildrenToQueue(queue);
@@ -154,14 +160,15 @@ namespace System.Buffers
             }
         }
 
-        private static void GenerateStartingAsciiCharsBitmap(ReadOnlySpan<string> values, bool ignoreCase, out Vector128<byte> bitmap)
+        private void GenerateStartingAsciiCharsBitmap()
         {
             scoped ValueListBuilder<char> startingChars = new ValueListBuilder<char>(stackalloc char[128]);
-            foreach (string value in values)
+
+            foreach (string value in _values)
             {
                 char c = value[0];
 
-                if (ignoreCase)
+                if (_ignoreCase)
                 {
                     startingChars.Append(char.ToLowerInvariant(c));
                     startingChars.Append(char.ToUpperInvariant(c));
@@ -172,11 +179,9 @@ namespace System.Buffers
                 }
             }
 
-            bitmap = default;
-
             if (Ascii.IsValid(startingChars.AsSpan()))
             {
-                IndexOfAnyAsciiSearcher.ComputeBitmap(startingChars.AsSpan(), out bitmap, out _);
+                IndexOfAnyAsciiSearcher.ComputeBitmap(startingChars.AsSpan(), out _startingCharsAsciiBitmap, out _);
 
                 // TODO: Should we avoid using the fast scan if there are too many starting values?
                 //int uniqueStartingChars =
@@ -185,6 +190,20 @@ namespace System.Buffers
             }
 
             startingChars.Dispose();
+        }
+    }
+
+    internal readonly struct AhoCorasick
+    {
+        private readonly Node[] _nodes;
+        private readonly Vector128<byte> _startingCharsAsciiBitmap;
+        private readonly int _maxValueLength; // Only used by the NLS fallback
+
+        public AhoCorasick(Node[] nodes, Vector128<byte> startingAsciiBitmap, int maxValueLength)
+        {
+            _nodes = nodes;
+            _startingCharsAsciiBitmap = startingAsciiBitmap;
+            _maxValueLength = maxValueLength;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -489,8 +508,15 @@ namespace System.Buffers
             return result;
         }
 
+        // TODO: Do we care about 1-5 chars fast paths for non-ASCII values that don't go through Teddy?
+        public interface IFastScan { }
+
+        public readonly struct IndexOfAnyAsciiFastScan : IFastScan { }
+
+        public readonly struct NoFastScan : IFastScan { }
+
         [DebuggerDisplay("MatchLength={MatchLength} SuffixLink={SuffixLink} ChildrenCount={(_children?.Count ?? 0) + (_firstChildChar < 0 ? 0 : 1)}")]
-        private struct Node
+        public struct Node
         {
             public int SuffixLink;
             public int MatchLength;
@@ -592,12 +618,5 @@ namespace System.Buffers
                 77, 32, 92, 91, 94, 83, 65, 57, 70, 73, 27, 49, 16, 49,  2,  0
             };
         }
-
-        // TODO: Do we care about 1-5 chars fast paths for non-ASCII values that don't go through Teddy?
-        public interface IFastScan { }
-
-        public readonly struct IndexOfAnyAsciiFastScan : IFastScan { }
-
-        public readonly struct NoFastScan : IFastScan { }
     }
 }

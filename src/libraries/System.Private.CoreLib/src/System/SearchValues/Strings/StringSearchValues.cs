@@ -61,7 +61,7 @@ namespace System.Buffers
             // We may not end up choosing Aho-Corasick as the implementation, but it has a nice property of
             // finding all the unreachable values during the construction stage, so we build the trie early.
             List<string>? unreachableValues = null;
-            var ahoCorasick = new AhoCorasick(normalizedValues, ignoreCase, ref unreachableValues);
+            var ahoCorasickBuilder = new AhoCorasickBuilder(normalizedValues, ignoreCase, ref unreachableValues);
 
             if (unreachableValues is not null)
             {
@@ -70,7 +70,9 @@ namespace System.Buffers
                 normalizedValues = RemoveUnreachableValues(normalizedValues, unreachableValues);
             }
 
-            return CreateFromNormalizedValues(normalizedValues, uniqueValues, ignoreCase, ahoCorasick);
+            SearchValues<string> searchValues = CreateFromNormalizedValues(normalizedValues, uniqueValues, ignoreCase, ref ahoCorasickBuilder);
+            ahoCorasickBuilder.Dispose();
+            return searchValues;
 
             static Span<string> RemoveUnreachableValues(Span<string> values, List<string> unreachableValues)
             {
@@ -97,7 +99,7 @@ namespace System.Buffers
             ReadOnlySpan<string> values,
             HashSet<string> uniqueValues,
             bool ignoreCase,
-            AhoCorasick ahoCorasick)
+            ref AhoCorasickBuilder ahoCorasickBuilder)
         {
             bool allAscii = true;
             bool asciiLettersOnly = true;
@@ -143,6 +145,8 @@ namespace System.Buffers
             {
                 return CreateSingleValueFallback(values[0], uniqueValues, ignoreCase);
             }
+
+            AhoCorasick ahoCorasick = ahoCorasickBuilder.Build();
 
             bool asciiOnlyStartChars = true;
 
@@ -325,7 +329,7 @@ namespace System.Buffers
             if (values.Length > 8)
             {
                 // TODO: Should we bother with "Fat Teddy" (16 buckets)? It's limited to Avx2
-                string[][] buckets = Bucketize(values, bucketCount: 8, n);
+                string[][] buckets = TeddyBucketizer.Bucketize(values, bucketCount: 8, n);
 
                 // TODO: Should we bail if we encounter a bad bucket distributions?
 
