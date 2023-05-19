@@ -402,6 +402,24 @@ namespace System
         }
 
         /// <summary>
+        /// Searches for any of the specified values and returns true if found. If not found, returns false.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The set of values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAny<T>(this Span<T> span, SearchValues<T> values) where T : IEquatable<T>? =>
+            ContainsAny((ReadOnlySpan<T>)span, values);
+
+        /// <summary>
+        /// Searches for any of the specified values and returns true if found. If not found, returns false.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The set of values to search for.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContainsAny<T>(this ReadOnlySpan<T> span, SearchValues<T> values) where T : IEquatable<T>? =>
+            SearchValues<T>.ContainsAny(span, values);
+
+        /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence. If not found, returns -1. Values are compared using IEquatable{T}.Equals(T).
         /// </summary>
         /// <param name="span">The span to search.</param>

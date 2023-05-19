@@ -23,6 +23,10 @@ namespace System.Buffers
             value == _e0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAny(ReadOnlySpan<byte> span) =>
+            span.Contains(_e0);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAny(ReadOnlySpan<byte> span) =>
             span.IndexOf(_e0);
 

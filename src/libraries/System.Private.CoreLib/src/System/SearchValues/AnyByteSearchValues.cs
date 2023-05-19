@@ -25,6 +25,14 @@ namespace System.Buffers
             _lookup.Contains(value);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAny(ReadOnlySpan<byte> span)
+        {
+            return IndexOfAnyAsciiSearcher.IsVectorizationSupported && span.Length >= sizeof(ulong)
+                ? IndexOfAnyAsciiSearcher.ContainsAnyByte(ref MemoryMarshal.GetReference(span), span.Length, ref _bitmaps)
+                : ContainsAnyScalar(ref MemoryMarshal.GetReference(span), span.Length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAny(ReadOnlySpan<byte> span) =>
             IndexOfAny<IndexOfAnyAsciiSearcher.DontNegate>(ref MemoryMarshal.GetReference(span), span.Length);
 
@@ -45,7 +53,7 @@ namespace System.Buffers
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
             return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
-                ? IndexOfAnyAsciiSearcher.IndexOfAnyVectorizedAnyByte<TNegator>(ref searchSpace, searchSpaceLength, ref _bitmaps)
+                ? IndexOfAnyAsciiSearcher.IndexOfAnyByte<TNegator>(ref searchSpace, searchSpaceLength, ref _bitmaps)
                 : IndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
         }
 
@@ -54,8 +62,27 @@ namespace System.Buffers
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
             return IndexOfAnyAsciiSearcher.IsVectorizationSupported && searchSpaceLength >= sizeof(ulong)
-                ? IndexOfAnyAsciiSearcher.LastIndexOfAnyVectorizedAnyByte<TNegator>(ref searchSpace, searchSpaceLength, ref _bitmaps)
+                ? IndexOfAnyAsciiSearcher.LastIndexOfAnyByte<TNegator>(ref searchSpace, searchSpaceLength, ref _bitmaps)
                 : LastIndexOfAnyScalar<TNegator>(ref searchSpace, searchSpaceLength);
+        }
+
+        private bool ContainsAnyScalar(ref byte searchSpace, int searchSpaceLength)
+        {
+            ref byte searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
+            ref byte cur = ref searchSpace;
+
+            while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
+            {
+                byte b = cur;
+                if (_lookup.Contains(b))
+                {
+                    return true;
+                }
+
+                cur = ref Unsafe.Add(ref cur, 1);
+            }
+
+            return false;
         }
 
         private int IndexOfAnyScalar<TNegator>(ref byte searchSpace, int searchSpaceLength)

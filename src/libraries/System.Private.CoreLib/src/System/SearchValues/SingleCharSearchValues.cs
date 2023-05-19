@@ -21,6 +21,18 @@ namespace System.Buffers
             value == _e0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAny(ReadOnlySpan<char> span) =>
+            (PackedSpanHelpers.PackedIndexOfIsSupported && TShouldUsePacked.Value)
+                ? PackedSpanHelpers.Contains(
+                    ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)),
+                    Unsafe.As<char, short>(ref _e0),
+                    span.Length)
+                : SpanHelpers.NonPackedContainsValueType(
+                    ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)),
+                    Unsafe.As<char, short>(ref _e0),
+                    span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAny(ReadOnlySpan<char> span) =>
             (PackedSpanHelpers.PackedIndexOfIsSupported && TShouldUsePacked.Value)
                 ? PackedSpanHelpers.IndexOf(ref MemoryMarshal.GetReference(span), _e0, span.Length)

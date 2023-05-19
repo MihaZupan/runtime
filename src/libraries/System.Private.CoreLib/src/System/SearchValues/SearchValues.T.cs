@@ -32,10 +32,24 @@ namespace System.Buffers
 
         internal virtual bool ContainsCore(T value) => throw new UnreachableException();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal virtual bool ContainsAny(ReadOnlySpan<T> span) => IndexOfAny(span) >= 0;
+
         internal virtual int IndexOfAny(ReadOnlySpan<T> span) => throw new UnreachableException();
         internal virtual int IndexOfAnyExcept(ReadOnlySpan<T> span) => throw new UnreachableException();
         internal virtual int LastIndexOfAny(ReadOnlySpan<T> span) => throw new UnreachableException();
         internal virtual int LastIndexOfAnyExcept(ReadOnlySpan<T> span) => throw new UnreachableException();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool ContainsAny(ReadOnlySpan<T> span, SearchValues<T> values)
+        {
+            if (values is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.values);
+            }
+
+            return values.ContainsAny(span);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int IndexOfAny(ReadOnlySpan<T> span, SearchValues<T> values)

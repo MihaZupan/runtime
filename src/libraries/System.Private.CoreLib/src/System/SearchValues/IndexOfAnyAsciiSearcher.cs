@@ -136,8 +136,8 @@ namespace System.Buffers
                     Vector256<byte> bitmap256 = Vector256.Create(bitmap, bitmap);
 
                     index = (Ssse3.IsSupported || PackedSimd.IsSupported) && needleContainsZero
-                        ? IndexOfAnyVectorized<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref bitmap256)
-                        : IndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, ref bitmap256);
+                        ? IndexOfAny<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref bitmap256)
+                        : IndexOfAny<TNegator, Default>(ref searchSpace, searchSpaceLength, ref bitmap256);
                     return true;
                 }
             }
@@ -160,8 +160,8 @@ namespace System.Buffers
                     Vector256<byte> bitmap256 = Vector256.Create(bitmap, bitmap);
 
                     index = (Ssse3.IsSupported || PackedSimd.IsSupported) && needleContainsZero
-                        ? LastIndexOfAnyVectorized<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref bitmap256)
-                        : LastIndexOfAnyVectorized<TNegator, Default>(ref searchSpace, searchSpaceLength, ref bitmap256);
+                        ? LastIndexOfAny<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref bitmap256)
+                        : LastIndexOfAny<TNegator, Default>(ref searchSpace, searchSpaceLength, ref bitmap256);
                     return true;
                 }
             }
@@ -170,12 +170,31 @@ namespace System.Buffers
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int IndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+        internal static bool ContainsAny<TOptimizations>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyCore<bool, DontNegate, TOptimizations, ContainsAnyResultMapper<short>>(ref searchSpace, searchSpaceLength, ref bitmapRef);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        internal static int IndexOfAny<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+            where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations =>
+            IndexOfAnyCore<int, TNegator, TOptimizations, IndexOfAnyResultMapper<short>>(ref searchSpace, searchSpaceLength, ref bitmapRef);
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        private static TResult IndexOfAnyCore<TResult, TNegator, TOptimizations, TResultMapper>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+            where TResult : struct
             where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
+            where TResultMapper : struct, IResultMapper<short, TResult>
         {
             ref short currentSearchSpace = ref searchSpace;
 
@@ -203,7 +222,7 @@ namespace System.Buffers
                         Vector256<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap256);
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndex<short, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                            return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                         }
 
                         currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
@@ -227,11 +246,11 @@ namespace System.Buffers
                     Vector256<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap256);
                     if (result != Vector256<byte>.Zero)
                     {
-                        return ComputeFirstIndexOverlapped<short, TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                        return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                     }
                 }
 
-                return -1;
+                return TResultMapper.NotFound;
             }
 
             Vector128<byte> bitmap = bitmapRef._lower;
@@ -256,7 +275,7 @@ namespace System.Buffers
                     Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap);
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<short, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -280,17 +299,17 @@ namespace System.Buffers
                 Vector128<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap);
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<short, TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                    return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int LastIndexOfAnyVectorized<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+        internal static int LastIndexOfAny<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
             where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
         {
@@ -402,11 +421,28 @@ namespace System.Buffers
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int IndexOfAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+        internal static bool ContainsAny(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef) =>
+            IndexOfAnyCore<bool, DontNegate, ContainsAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref bitmapRef);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        internal static int IndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+            where TNegator : struct, INegator =>
+            IndexOfAnyCore<int, TNegator, IndexOfAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref bitmapRef);
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        private static TResult IndexOfAnyCore<TResult, TNegator, TResultMapper>(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+            where TResult : struct
             where TNegator : struct, INegator
+            where TResultMapper : struct, IResultMapper<byte, TResult>
         {
             ref byte currentSearchSpace = ref searchSpace;
 
@@ -431,7 +467,7 @@ namespace System.Buffers
                         Vector256<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, bitmap256));
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                            return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                         }
 
                         currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector256<byte>.Count);
@@ -456,11 +492,11 @@ namespace System.Buffers
                     Vector256<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, bitmap256));
                     if (result != Vector256<byte>.Zero)
                     {
-                        return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                        return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                     }
                 }
 
-                return -1;
+                return TResultMapper.NotFound;
             }
 
             Vector128<byte> bitmap = bitmapRef._lower;
@@ -480,7 +516,7 @@ namespace System.Buffers
                     Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, bitmap));
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector128<byte>.Count);
@@ -505,17 +541,17 @@ namespace System.Buffers
                 Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, bitmap));
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                    return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int LastIndexOfAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
+        internal static int LastIndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector256<byte> bitmapRef)
             where TNegator : struct, INegator
         {
             ref byte currentSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
@@ -622,11 +658,28 @@ namespace System.Buffers
             return -1;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int IndexOfAnyVectorizedAnyByte<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef)
+        internal static bool ContainsAnyByte(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef) =>
+            IndexOfAnyByteCore<bool, DontNegate, ContainsAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref bitmapsRef);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        internal static int IndexOfAnyByte<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef)
+            where TNegator : struct, INegator =>
+            IndexOfAnyByteCore<int, TNegator, IndexOfAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref bitmapsRef);
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        private static TResult IndexOfAnyByteCore<TResult, TNegator, TResultMapper>(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef)
+            where TResult : struct
             where TNegator : struct, INegator
+            where TResultMapper : struct, IResultMapper<byte, TResult>
         {
             ref byte currentSearchSpace = ref searchSpace;
 
@@ -652,7 +705,7 @@ namespace System.Buffers
                         Vector256<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap256_0, bitmap256_1);
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                            return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                         }
 
                         currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector256<byte>.Count);
@@ -677,11 +730,11 @@ namespace System.Buffers
                     Vector256<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap256_0, bitmap256_1);
                     if (result != Vector256<byte>.Zero)
                     {
-                        return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                        return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                     }
                 }
 
-                return -1;
+                return TResultMapper.NotFound;
             }
 
             Vector128<byte> bitmap0 = bitmapsRef._lower._lower;
@@ -704,7 +757,7 @@ namespace System.Buffers
                     Vector128<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap0, bitmap1);
                     if (result != Vector128<byte>.Zero)
                     {
-                        return ComputeFirstIndex<byte, TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                        return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
                     }
 
                     currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, Vector128<byte>.Count);
@@ -729,17 +782,17 @@ namespace System.Buffers
                 Vector128<byte> result = IndexOfAnyLookup<TNegator>(source, bitmap0, bitmap1);
                 if (result != Vector128<byte>.Zero)
                 {
-                    return ComputeFirstIndexOverlapped<byte, TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
+                    return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref halfVectorAwayFromEnd, result);
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
-        internal static int LastIndexOfAnyVectorizedAnyByte<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef)
+        internal static int LastIndexOfAnyByte<TNegator>(ref byte searchSpace, int searchSpaceLength, ref Vector512<byte> bitmapsRef)
             where TNegator : struct, INegator
         {
             ref byte currentSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
@@ -969,34 +1022,26 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeFirstIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
-            where TNegator : struct, INegator
-        {
-            uint mask = TNegator.ExtractMask(result);
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe int ComputeFirstIndexOverlapped<T, TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result)
-            where TNegator : struct, INegator
-        {
-            uint mask = TNegator.ExtractMask(result);
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            if (offsetInVector >= Vector128<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector128<short>.Count;
-            }
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / (nuint)sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
             where TNegator : struct, INegator
         {
             uint mask = TNegator.ExtractMask(result) & 0xFFFF;
+            int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
+            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx2))]
+        private static unsafe int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector256<byte> result)
+            where TNegator : struct, INegator
+        {
+            if (typeof(T) == typeof(short))
+            {
+                result = FixUpPackedVector256Result(result);
+            }
+
+            uint mask = TNegator.ExtractMask(result);
+
             int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
             return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
         }
@@ -1014,60 +1059,6 @@ namespace System.Buffers
 
             // We matched within the second vector
             return offsetInVector - Vector128<short>.Count + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref secondVector) / (nuint)sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static unsafe int ComputeFirstIndex<T, TNegator>(ref T searchSpace, ref T current, Vector256<byte> result)
-            where TNegator : struct, INegator
-        {
-            if (typeof(T) == typeof(short))
-            {
-                result = FixUpPackedVector256Result(result);
-            }
-
-            uint mask = TNegator.ExtractMask(result);
-
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static unsafe int ComputeFirstIndexOverlapped<T, TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector256<byte> result)
-            where TNegator : struct, INegator
-        {
-            if (typeof(T) == typeof(short))
-            {
-                result = FixUpPackedVector256Result(result);
-            }
-
-            uint mask = TNegator.ExtractMask(result);
-
-            int offsetInVector = BitOperations.TrailingZeroCount(mask);
-            if (offsetInVector >= Vector256<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector256<short>.Count;
-            }
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / (nuint)sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static unsafe int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector256<byte> result)
-            where TNegator : struct, INegator
-        {
-            if (typeof(T) == typeof(short))
-            {
-                result = FixUpPackedVector256Result(result);
-            }
-
-            uint mask = TNegator.ExtractMask(result);
-
-            int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1115,21 +1106,39 @@ namespace System.Buffers
 
         internal readonly struct DontNegate : INegator
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool NegateIfNeeded(bool result) => result;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector128<byte> NegateIfNeeded(Vector128<byte> result) => result;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> NegateIfNeeded(Vector256<byte> result) => result;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static uint ExtractMask(Vector128<byte> result) => ~Vector128.Equals(result, Vector128<byte>.Zero).ExtractMostSignificantBits();
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static uint ExtractMask(Vector256<byte> result) => ~Vector256.Equals(result, Vector256<byte>.Zero).ExtractMostSignificantBits();
         }
 
         internal readonly struct Negate : INegator
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool NegateIfNeeded(bool result) => !result;
+
             // This is intentionally testing for equality with 0 instead of "~result".
             // We want to know if any character didn't match, as that means it should be treated as a match for the -Except method.
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector128<byte> NegateIfNeeded(Vector128<byte> result) => Vector128.Equals(result, Vector128<byte>.Zero);
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> NegateIfNeeded(Vector256<byte> result) => Vector256.Equals(result, Vector256<byte>.Zero);
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static uint ExtractMask(Vector128<byte> result) => result.ExtractMostSignificantBits();
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static uint ExtractMask(Vector256<byte> result) => result.ExtractMostSignificantBits();
         }
 
@@ -1191,6 +1200,90 @@ namespace System.Buffers
             public static Vector256<byte> PackSources(Vector256<ushort> lower, Vector256<ushort> upper)
             {
                 return Avx2.PackUnsignedSaturate(lower.AsInt16(), upper.AsInt16());
+            }
+        }
+
+        private interface IResultMapper<T, TResult>
+            where TResult : struct
+        {
+            static abstract TResult NotFound { get; }
+
+            static abstract TResult FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector128<byte> result) where TNegator : struct, INegator;
+            static abstract TResult FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector256<byte> result) where TNegator : struct, INegator;
+            static abstract TResult FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result) where TNegator : struct, INegator;
+            static abstract TResult FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector256<byte> result) where TNegator : struct, INegator;
+        }
+
+        private readonly struct ContainsAnyResultMapper<T> : IResultMapper<T, bool>
+        {
+            public static bool NotFound => false;
+
+            public static bool FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector128<byte> result) where TNegator : struct, INegator => TNegator.NegateIfNeeded(true);
+            public static bool FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector256<byte> result) where TNegator : struct, INegator => TNegator.NegateIfNeeded(true);
+            public static bool FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result) where TNegator : struct, INegator => TNegator.NegateIfNeeded(true);
+            public static bool FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector256<byte> result) where TNegator : struct, INegator => TNegator.NegateIfNeeded(true);
+        }
+
+        private readonly unsafe struct IndexOfAnyResultMapper<T> : IResultMapper<T, int>
+        {
+            public static int NotFound => -1;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector128<byte> result) where TNegator : struct, INegator
+            {
+                uint mask = TNegator.ExtractMask(result);
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx2))]
+            public static int FirstIndex<TNegator>(ref T searchSpace, ref T current, Vector256<byte> result) where TNegator : struct, INegator
+            {
+                if (typeof(T) == typeof(short))
+                {
+                    result = FixUpPackedVector256Result(result);
+                }
+
+                uint mask = TNegator.ExtractMask(result);
+
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector128<byte> result) where TNegator : struct, INegator
+            {
+                uint mask = TNegator.ExtractMask(result);
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                if (offsetInVector >= Vector128<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector128<short>.Count;
+                }
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / (nuint)sizeof(T));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx2))]
+            public static int FirstIndexOverlapped<TNegator>(ref T searchSpace, ref T current0, ref T current1, Vector256<byte> result) where TNegator : struct, INegator
+            {
+                if (typeof(T) == typeof(short))
+                {
+                    result = FixUpPackedVector256Result(result);
+                }
+
+                uint mask = TNegator.ExtractMask(result);
+
+                int offsetInVector = BitOperations.TrailingZeroCount(mask);
+                if (offsetInVector >= Vector256<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector256<short>.Count;
+                }
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / (nuint)sizeof(T));
             }
         }
     }
