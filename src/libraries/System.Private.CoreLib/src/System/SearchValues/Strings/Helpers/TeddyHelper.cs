@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
-using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -99,6 +98,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         public static (Vector128<byte> Result, Vector128<byte> Prev0) ProcessInputN2(
             Vector128<byte> input,
             Vector128<byte> prev0,
@@ -118,7 +119,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         public static (Vector256<byte> Result, Vector256<byte> Prev0) ProcessInputN2(
             Vector256<byte> input,
             Vector256<byte> prev0,
@@ -138,6 +139,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         public static (Vector128<byte> Result, Vector128<byte> Prev0, Vector128<byte> Prev1) ProcessInputN3(
             Vector128<byte> input,
             Vector128<byte> prev0, Vector128<byte> prev1,
@@ -160,7 +163,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         public static (Vector256<byte> Result, Vector256<byte> Prev0, Vector256<byte> Prev1) ProcessInputN3(
             Vector256<byte> input,
             Vector256<byte> prev0, Vector256<byte> prev1,
@@ -183,6 +186,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         public static (Vector128<byte> Result, Vector128<byte> Prev0) ProcessSingleInputN2(
             Vector128<byte> input, Vector128<byte> prev0,
             Vector128<byte> test0, Vector128<byte> test1)
@@ -198,7 +203,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         public static (Vector256<byte> Result, Vector256<byte> Prev0) ProcessSingleInputN2(
             Vector256<byte> input, Vector256<byte> prev0,
             Vector256<byte> test0, Vector256<byte> test1)
@@ -214,6 +219,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         public static (Vector128<byte> Result, Vector128<byte> Prev0, Vector128<byte> Prev1) ProcessSingleInputN3(
             Vector128<byte> input, Vector128<byte> prev0, Vector128<byte> prev1,
             Vector128<byte> test0, Vector128<byte> test1, Vector128<byte> test2)
@@ -231,7 +238,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         public static (Vector256<byte> Result, Vector256<byte> Prev0, Vector256<byte> Prev1) ProcessSingleInputN3(
             Vector256<byte> input, Vector256<byte> prev0, Vector256<byte> prev1,
             Vector256<byte> test0, Vector256<byte> test1, Vector256<byte> test2)
@@ -249,6 +256,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static Vector128<byte> LoadAndPack16AsciiChars(ref char source)
         {
             Vector128<ushort> source0 = Vector128.LoadUnsafe(ref source);
@@ -260,7 +269,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         public static Vector256<byte> LoadAndPack32AsciiChars(ref char source)
         {
             Vector256<ushort> source0 = Vector256.LoadUnsafe(ref source);
@@ -272,6 +281,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static (Vector128<byte> Low, Vector128<byte> High) GetNibbles(Vector128<byte> input)
         {
             // 'low' is not strictly correct here, but we take advantage of Ssse3.Shuffle's behavior
@@ -289,7 +300,6 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
         private static (Vector256<byte> Low, Vector256<byte> High) GetNibbles(Vector256<byte> input)
         {
             // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
@@ -303,19 +313,23 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private static Vector128<byte> Shuffle(Vector128<byte> maskLow, Vector128<byte> maskHigh, Vector128<byte> low, Vector128<byte> high)
         {
             return Vector128.ShuffleUnsafe(maskLow, low) & Vector128.ShuffleUnsafe(maskHigh, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         private static Vector256<byte> Shuffle(Vector256<byte> maskLow, Vector256<byte> maskHigh, Vector256<byte> low, Vector256<byte> high)
         {
             return Avx2.Shuffle(maskLow, low) & Avx2.Shuffle(maskHigh, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private static Vector128<byte> RightShift1(Vector128<byte> left, Vector128<byte> right)
         {
             // Given input vectors like
@@ -337,6 +351,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private static Vector128<byte> RightShift2(Vector128<byte> left, Vector128<byte> right)
         {
             // Given input vectors like
@@ -358,7 +374,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         private static Vector256<byte> RightShift1(Vector256<byte> left, Vector256<byte> right)
         {
             Vector256<byte> leftShifted = Avx2.Permute2x128(left, right, 33);
@@ -366,7 +382,7 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         private static Vector256<byte> RightShift2(Vector256<byte> left, Vector256<byte> right)
         {
             Vector256<byte> leftShifted = Avx2.Permute2x128(left, right, 33);
@@ -423,8 +439,9 @@ namespace System.Buffers
         public readonly struct CaseInensitiveAsciiLetters : ICaseSensitivity
         {
             public static char TransformInput(char input) => (char)(input & ~0x20);
+
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
-            [BypassReadyToRun]
+
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -461,7 +478,6 @@ namespace System.Buffers
                 return Vector128.ConditionalSelect(mask, input, upperCase);
             }
 
-            [BypassReadyToRun]
             public static Vector256<byte> TransformInput(Vector256<byte> input)
             {
                 Vector256<byte> mask = Vector256.GreaterThan(input - Vector256.Create((byte)'a'), Vector256.Create((byte)('z' - 'a')));

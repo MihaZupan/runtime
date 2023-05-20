@@ -3,6 +3,8 @@
 
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 
 namespace System.Buffers
 {
@@ -14,6 +16,8 @@ namespace System.Buffers
         public SingleAsciiStringSearchValuesN2(string value, HashSet<string> uniqueValues) : base(value, uniqueValues, n: 2) { }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) => IndexOfAnyN2(span);
     }
 }

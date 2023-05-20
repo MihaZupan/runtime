@@ -5,10 +5,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
-using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using static System.Buffers.TeddyHelper;
 
@@ -58,9 +58,13 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         protected int IndexOfAnyN2(ReadOnlySpan<char> span)
         {
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx2.IsSupported is false
             if (Avx2.IsSupported && span.Length >= _minInputLengthAvx2)
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
                 return IndexOfAnyN2Avx2(span);
             }
@@ -69,9 +73,13 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         protected int IndexOfAnyN3(ReadOnlySpan<char> span)
         {
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx2.IsSupported is false
             if (Avx2.IsSupported && span.Length >= _minInputLengthAvx2)
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
                 return IndexOfAnyN3Avx2(span);
             }
@@ -79,6 +87,8 @@ namespace System.Buffers
             return IndexOfAnyN3Vector128(span);
         }
 
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private int IndexOfAnyN2Vector128(ReadOnlySpan<char> span)
         {
             if (span.Length < _minInputLengthVector128)
@@ -131,7 +141,7 @@ namespace System.Buffers
             goto ContinueLoop;
         }
 
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         private int IndexOfAnyN2Avx2(ReadOnlySpan<char> span)
         {
             Debug.Assert(span.Length >= _minInputLengthAvx2);
@@ -178,6 +188,8 @@ namespace System.Buffers
             goto ContinueLoop;
         }
 
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private int IndexOfAnyN3Vector128(ReadOnlySpan<char> span)
         {
             if (span.Length < _minInputLengthVector128)
@@ -233,7 +245,7 @@ namespace System.Buffers
             goto ContinueLoop;
         }
 
-        [BypassReadyToRun]
+        [CompExactlyDependsOn(typeof(Avx2))]
         private int IndexOfAnyN3Avx2(ReadOnlySpan<char> span)
         {
             Debug.Assert(span.Length >= _minInputLengthAvx2);

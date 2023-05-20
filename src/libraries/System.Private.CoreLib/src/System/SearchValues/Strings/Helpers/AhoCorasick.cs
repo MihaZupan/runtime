@@ -17,7 +17,7 @@ namespace System.Buffers
         private readonly bool _ignoreCase;
         private ValueListBuilder<AhoCorasick.Node> _nodes;
         private ValueListBuilder<int> _parents;
-        private Vector128<byte> _startingCharsAsciiBitmap;
+        private Vector256<byte> _startingCharsAsciiBitmap;
         private int _maxValueLength; // Only used by the NLS fallback
 
         public AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues)
@@ -193,13 +193,13 @@ namespace System.Buffers
         }
     }
 
-    internal readonly struct AhoCorasick
+    internal struct AhoCorasick
     {
         private readonly Node[] _nodes;
-        private readonly Vector128<byte> _startingCharsAsciiBitmap;
+        private Vector256<byte> _startingCharsAsciiBitmap;
         private readonly int _maxValueLength; // Only used by the NLS fallback
 
-        public AhoCorasick(Node[] nodes, Vector128<byte> startingAsciiBitmap, int maxValueLength)
+        public AhoCorasick(Node[] nodes, Vector256<byte> startingAsciiBitmap, int maxValueLength)
         {
             _nodes = nodes;
             _startingCharsAsciiBitmap = startingAsciiBitmap;
@@ -245,7 +245,7 @@ namespace System.Buffers
                     int offset = IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, IndexOfAnyAsciiSearcher.Default>(
                         ref Unsafe.As<char, short>(ref Unsafe.Add(ref MemoryMarshal.GetReference(span), i)),
                         remainingLength,
-                        _startingCharsAsciiBitmap);
+                        ref Unsafe.AsRef(_startingCharsAsciiBitmap));
 
                     if (offset < 0)
                     {
@@ -340,7 +340,7 @@ namespace System.Buffers
                     int offset = IndexOfAnyAsciiSearcher.IndexOfAnyVectorized<IndexOfAnyAsciiSearcher.DontNegate, IndexOfAnyAsciiSearcher.Default>(
                         ref Unsafe.As<char, short>(ref Unsafe.Add(ref MemoryMarshal.GetReference(span), i)),
                         remainingLength,
-                        _startingCharsAsciiBitmap);
+                        ref Unsafe.AsRef(_startingCharsAsciiBitmap));
 
                     if (offset < 0)
                     {
