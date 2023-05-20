@@ -508,7 +508,6 @@ namespace System.Buffers
             return result;
         }
 
-        // TODO: Do we care about 1-5 chars fast paths for non-ASCII values that don't go through Teddy?
         public interface IFastScan { }
 
         public readonly struct IndexOfAnyAsciiFastScan : IFastScan { }

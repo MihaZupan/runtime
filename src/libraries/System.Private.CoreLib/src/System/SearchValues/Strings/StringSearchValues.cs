@@ -208,8 +208,6 @@ namespace System.Buffers
                 return null;
             }
 
-            // TODO: We could pick N=2 even if minLength >= 3 to speed up the vectorized search
-            // while increasing the time spent in the verification step.
             int n = minLength == 2 ? 2 : 3;
 
             if (Ssse3.IsSupported)
@@ -316,13 +314,12 @@ namespace System.Buffers
 
             if (values.Length > 8)
             {
-                // TODO: Should we bother with "Fat Teddy" (16 buckets)? It's limited to Avx2
                 string[][] buckets = TeddyBucketizer.Bucketize(values, bucketCount: 8, n);
 
                 // TODO: Should we bail if we encounter a bad bucket distributions?
 
                 // TODO: We don't have to pick the first N characters for the fingerprint.
-                // Would smarter offset selection help here to improve bucket distribution?
+                // Different offset selection can noticeably improve throughput (e.g. 2x).
 
                 return n == 2
                     ? new AsciiStringSearchValuesTeddyBucketizedN2<TStartCaseSensitivity, TCaseSensitivity>(buckets, values, uniqueValues)

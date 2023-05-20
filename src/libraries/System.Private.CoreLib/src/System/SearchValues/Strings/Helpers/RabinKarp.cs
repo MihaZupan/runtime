@@ -19,6 +19,11 @@ namespace System.Buffers
         private const nuint BucketCount = 64;
         private const nuint BucketFlagsCount = BucketCount * 8;
 
+        // 18 = Vector128<ushort>.Count + 2 (MatchStartOffset for N=3)
+        // The logic in this class is not safe from overflows, but we avoid any issues by
+        // only calling into it for inputs that are too short for Teddy to handle.
+        private const int MaxInputLength = 18 - 1;
+
         // We first check that the hash has a corresponding bucket via _bucketFlags to further
         // reduce the number of false positives that make it to the verification step.
         // While we could achieve similar results by increasing the number of buckets,
@@ -78,16 +83,14 @@ namespace System.Buffers
         public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span)
             where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity =>
             typeof(TCaseSensitivity) == typeof(TeddyHelper.CaseInsensitiveUnicode)
-                ? IndexOfAnyMultiStringCaseInsensitiveUnicode(span)
+                ? IndexOfAnyCaseInsensitiveUnicode(span)
                 : IndexOfAnyCore<TCaseSensitivity>(span);
 
         private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span)
             where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
         {
             Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
-
-            // TODO: Is this code safe from overflow issues, or is the fact that it's only being used for short inputs saving us?
-            Debug.Assert(span.Length < 18, "Teddy should have handled short inputs.");
+            Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled short inputs.");
 
             ref char current = ref MemoryMarshal.GetReference(span);
 
@@ -135,12 +138,11 @@ namespace System.Buffers
             return -1;
         }
 
-        private int IndexOfAnyMultiStringCaseInsensitiveUnicode(ReadOnlySpan<char> span)
+        private int IndexOfAnyCaseInsensitiveUnicode(ReadOnlySpan<char> span)
         {
-            // 18 = Vector128<ushort>.Count + 2 (MatchStartOffset for N=3)
-            Debug.Assert(span.Length < 18, "Teddy should have handled long inputs.");
+            Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled long inputs.");
 
-            Span<char> upperCase = stackalloc char[18].Slice(0, span.Length);
+            Span<char> upperCase = stackalloc char[MaxInputLength].Slice(0, span.Length);
 
             int charsWritten = Ordinal.ToUpperOrdinal(span, upperCase);
             Debug.Assert(charsWritten == upperCase.Length);

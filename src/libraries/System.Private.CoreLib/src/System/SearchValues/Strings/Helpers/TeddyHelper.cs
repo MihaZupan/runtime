@@ -32,9 +32,6 @@ namespace System.Buffers
         public static bool StartsWith<TCaseSensitivity>(ref char matchStart, int lengthRemaining, string candidate)
             where TCaseSensitivity : struct, ICaseSensitivity
         {
-            // TODO: For non-first iterations in the non-bucketized path, we don't actually have to check the first
-            // 2-3 characters as they are guaranteed to match. Can we make use of that fact to improve this at all?
-
             if (lengthRemaining < candidate.Length)
             {
                 return false;
@@ -43,7 +40,6 @@ namespace System.Buffers
             return TCaseSensitivity.Equals(ref matchStart, candidate);
         }
 
-        // TODO: When we're dealing with ASCII-only patterns, can we get any use out of the spare bits (e.g. more buckets)?
         public static (Vector256<byte> Low, Vector256<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
         {
             Debug.Assert(values.Length <= 8);
