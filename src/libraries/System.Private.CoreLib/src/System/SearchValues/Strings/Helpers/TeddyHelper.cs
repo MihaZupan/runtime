@@ -397,8 +397,13 @@ namespace System.Buffers
 
         public readonly struct CaseSensitive : ICaseSensitivity
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static char TransformInput(char input) => input;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -434,10 +439,13 @@ namespace System.Buffers
 
         public readonly struct CaseInensitiveAsciiLetters : ICaseSensitivity
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static char TransformInput(char input) => (char)(input & ~0x20);
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -464,21 +472,29 @@ namespace System.Buffers
 
         public readonly struct CaseInensitiveAscii : ICaseSensitivity
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static char TransformInput(char input) => TextInfo.ToUpperAsciiInvariant(input);
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector128<byte> TransformInput(Vector128<byte> input)
             {
-                // TODO: Can we save an instruction here?
-                Vector128<byte> mask = Vector128.GreaterThan(input - Vector128.Create((byte)'a'), Vector128.Create((byte)('z' - 'a')));
-                Vector128<byte> upperCase = input & Vector128.Create(unchecked((byte)~0x20));
-                return Vector128.ConditionalSelect(mask, input, upperCase);
+                Vector128<byte> subtraction = Vector128.Create((byte)(128 + 'a'));
+                Vector128<byte> comparison = Vector128.Create((byte)(128 + 26));
+                Vector128<byte> caseConversion = Vector128.Create((byte)0x20);
+
+                Vector128<byte> matches = Vector128.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
+                return input ^ (matches & caseConversion);
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> TransformInput(Vector256<byte> input)
             {
-                Vector256<byte> mask = Vector256.GreaterThan(input - Vector256.Create((byte)'a'), Vector256.Create((byte)('z' - 'a')));
-                Vector256<byte> upperCase = input & Vector256.Create(unchecked((byte)~0x20));
-                return Vector256.ConditionalSelect(mask, input, upperCase);
+                Vector256<byte> subtraction = Vector256.Create((byte)(128 + 'a'));
+                Vector256<byte> comparison = Vector256.Create((byte)(128 + 26));
+                Vector256<byte> caseConversion = Vector256.Create((byte)0x20);
+
+                Vector256<byte> matches = Vector256.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
+                return input ^ (matches & caseConversion);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
