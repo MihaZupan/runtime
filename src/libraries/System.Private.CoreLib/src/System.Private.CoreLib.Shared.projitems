@@ -431,6 +431,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\EmptySearchValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\ProbabilisticMap.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\Helpers\AhoCorasick.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\Helpers\CharacterFrequencyHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\Helpers\EightPackedReferences.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\Helpers\RabinKarp.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\Helpers\TeddyBucketizer.cs" />
@@ -440,9 +441,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\AsciiStringSearchValuesTeddyNonBucketizedN2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\AsciiStringSearchValuesTeddyNonBucketizedN3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\AsciiStringSearchValuesTeddyBase.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\SingleAsciiStringSearchValuesBase.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\SingleAsciiStringSearchValuesN2.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\SingleAsciiStringSearchValuesN3.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\SingleStringSearchValuesThreeChars.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\SingleStringSearchValuesFallback.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\EmptyStringSearchValues.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\SearchValues\Strings\StringSearchValues.cs" />

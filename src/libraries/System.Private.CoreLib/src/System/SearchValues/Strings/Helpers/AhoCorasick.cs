@@ -586,11 +586,11 @@ namespace System.Buffers
                 {
                     _children.Add((char)_firstChildChar, _firstChildIndex);
 
-                    int frequency = -2;
+                    float frequency = -2;
 
                     foreach ((char childChar, int childIndex) in _children)
                     {
-                        int newFrequency = char.IsAscii(childChar) ? s_asciiFrequency[childChar] : -1;
+                        float newFrequency = char.IsAscii(childChar) ? CharacterFrequencyHelper.AsciiFrequency[childChar] : -1;
 
                         if (newFrequency > frequency)
                         {
@@ -603,19 +603,6 @@ namespace System.Buffers
                     _children.Remove((char)_firstChildChar);
                 }
             }
-
-            // Same as RegexPrefixAnalyzer.Frequency.
-            private static ReadOnlySpan<byte> s_asciiFrequency => new byte[]
-            {
-                 0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,
-                 0,  0,  0,  0,  3,  0,  0,  0,  0,  4,  0,  0,  6,  6,  0,  0,
-                96, 17, 50,  8,  9,  5, 18, 15, 90, 89, 45, 84, 76, 26, 81, 62,
-                74, 68, 63, 55, 43, 37, 51, 34, 33, 28, 24, 69, 46, 60, 47, 21,
-                 7, 66, 31, 56, 41, 53, 44, 25, 22, 54, 12, 14, 40, 29, 35, 30,
-                39, 13, 48, 64, 61, 36, 42, 23, 19, 11, 11, 59, 20, 58, 10, 67,
-                 1, 93, 75, 82, 80, 95, 79, 71, 72, 87, 38, 52, 85, 78, 88, 86,
-                77, 32, 92, 91, 94, 83, 65, 57, 70, 73, 27, 49, 16, 49,  2,  0
-            };
         }
     }
 }

@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
@@ -133,17 +134,17 @@ namespace System.Buffers
                 }
             }
 
+            if (values.Length == 1)
+            {
+                return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
+            }
+
             // TODO: Should this be supported anywhere else?
             // It may be too niche and too much code for WASM, but AOT with just Vector128 may be interesting.
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
                 TryGetTeddyAcceleratedValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } searchValues)
             {
                 return searchValues;
-            }
-
-            if (values.Length == 1)
-            {
-                return CreateSingleValueFallback(values[0], uniqueValues, ignoreCase);
             }
 
             AhoCorasick ahoCorasick = ahoCorasickBuilder.Build();
@@ -291,26 +292,8 @@ namespace System.Buffers
             where TCaseSensitivity : struct, ICaseSensitivity
         {
             Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
-            Debug.Assert(values.Length > 0);
+            Debug.Assert(values.Length > 1);
             Debug.Assert(n is 2 or 3);
-
-            if (values.Length == 1)
-            {
-                string value = values[0];
-
-                if (value.Length >= 8)
-                {
-                    return n == 2
-                        ? new SingleAsciiStringSearchValuesN2<SearchValues.TrueConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues)
-                        : new SingleAsciiStringSearchValuesN3<SearchValues.TrueConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues);
-                }
-                else
-                {
-                    return n == 2
-                        ? new SingleAsciiStringSearchValuesN2<SearchValues.FalseConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues)
-                        : new SingleAsciiStringSearchValuesN3<SearchValues.FalseConst, TStartCaseSensitivity, TCaseSensitivity>(value, uniqueValues);
-                }
-            }
 
             if (values.Length > 8)
             {
@@ -333,11 +316,65 @@ namespace System.Buffers
             }
         }
 
-        private static SearchValues<string> CreateSingleValueFallback(string value, HashSet<string> uniqueValues, bool ignoreCase)
+        private static SearchValues<string> CreateForSingleValue(
+            string value,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            bool allAscii,
+            bool asciiLettersOnly)
         {
+            // We make use of optimizations that may overflow on 32bit systems for long values.
+            int maxLength = IntPtr.Size == 4 ? 1_000_000_000 : int.MaxValue;
+
+            if (Vector128.IsHardwareAccelerated && value.Length > 1 && value.Length < maxLength)
+            {
+                SearchValues<string>? searchValues = value.Length switch
+                {
+                    < 4 => TryCreateSingleValuesThreeChars<ValueLengthLessThan4>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    < 8 => TryCreateSingleValuesThreeChars<ValueLength4To7>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    _ => TryCreateSingleValuesThreeChars<ValueLength8OrLonger>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                };
+
+                if (searchValues is not null)
+                {
+                    return searchValues;
+                }
+            }
+
             return ignoreCase
                 ? new SingleStringSearchValuesFallback<SearchValues.TrueConst>(value, uniqueValues)
                 : new SingleStringSearchValuesFallback<SearchValues.FalseConst>(value, uniqueValues);
+        }
+
+        private static SearchValues<string>? TryCreateSingleValuesThreeChars<TValueLength>(
+            string value,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            bool allAscii,
+            bool asciiLettersOnly)
+            where TValueLength : struct, IValueLength
+        {
+            if (!ignoreCase)
+            {
+                return new SingleStringSearchValuesThreeChars<TValueLength, CaseSensitive>(value, uniqueValues);
+            }
+
+            if (asciiLettersOnly)
+            {
+                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAsciiLetters>(value, uniqueValues);
+            }
+
+            if (allAscii)
+            {
+                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAscii>(value, uniqueValues);
+            }
+
+            if (char.IsAscii(value[0]) && value.AsSpan().LastIndexOfAnyInRange((char)0, (char)127) > 0)
+            {
+                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+            }
+
+            return null;
         }
     }
 }
