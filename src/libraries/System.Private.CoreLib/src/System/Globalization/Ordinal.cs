@@ -323,9 +323,6 @@ namespace System.Globalization
             int searchSpaceMinusValueTailLength = source.Length - valueTailLength;
             ref char searchSpace = ref MemoryMarshal.GetReference(source);
             char valueCharU = default;
-            char valueCharL = default;
-            nint offset = 0;
-            bool isLetter = false;
 
             // If the input is long enough and the value ends with ASCII and is at least two characters,
             // we can take a special vectorized path that compares both the beginning and the end at the same time.
@@ -339,6 +336,10 @@ namespace System.Globalization
                     goto SearchTwoChars;
                 }
             }
+
+            char valueCharL = default;
+            nint offset = 0;
+            bool isLetter = false;
 
             // We're searching for the first character and it's known to be ASCII. If it's not a letter,
             // then IgnoreCase doesn't impact what it matches and we just need to do a normal search
@@ -387,178 +388,147 @@ namespace System.Globalization
 
             return -1;
 
-        // Based on SpanHelpers.IndexOf(ref char, int, ref char, int), which was in turn based on
-        // http://0x80.pl/articles/simd-strfind.html#algorithm-1-generic-simd. This version has additional
-        // modifications to support case-insensitive searches.
+            // Based on SpanHelpers.IndexOf(ref char, int, ref char, int), which was in turn based on
+            // http://0x80.pl/articles/simd-strfind.html#algorithm-1-generic-simd. This version has additional
+            // modifications to support case-insensitive searches.
         SearchTwoChars:
             // Both the first character in value (valueChar) and the last character in value (valueCharU) are ASCII. Get their lowercase variants.
             valueChar = (char)(valueChar | 0x20);
             valueCharU = (char)(valueCharU | 0x20);
 
-            // The search is more efficient if the two characters being searched for are different. As long as they are equal, walk backwards
-            // from the last character in the search value until we find a character that's different. Since we're dealing with IgnoreCase,
-            // we compare the lowercase variants, as that's what we'll be comparing against in the main loop.
-            nint ch1ch2Distance = valueTailLength;
-            while (valueCharU == valueChar && ch1ch2Distance > 1)
-            {
-                char tmp = Unsafe.Add(ref valueRef, ch1ch2Distance - 1);
-                if (!char.IsAscii(tmp))
-                {
-                    break;
-                }
-                --ch1ch2Distance;
-                valueCharU = (char)(tmp | 0x20);
-            }
+            ref char searchSpaceStart = ref searchSpace;
+            nuint ch1ch2Distance = (uint)valueTailLength;
 
             // Use Vector256 if the input is long enough.
             if (Vector256.IsHardwareAccelerated && searchSpaceMinusValueTailLength - Vector256<ushort>.Count >= 0)
             {
                 // Create a vector for each of the lowercase ASCII characters we're searching for.
+                // The algorithm works fine if both characters are equal.
                 Vector256<ushort> ch1 = Vector256.Create((ushort)valueChar);
                 Vector256<ushort> ch2 = Vector256.Create((ushort)valueCharU);
 
-                nint searchSpaceMinusValueTailLengthAndVector = searchSpaceMinusValueTailLength - (nint)Vector256<ushort>.Count;
-                do
+                ref char lastSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceMinusValueTailLength - Vector256<ushort>.Count);
+
+                while (true)
                 {
                     // Make sure we don't go out of bounds.
-                    Debug.Assert(offset + ch1ch2Distance + Vector256<ushort>.Count <= source.Length);
+                    Debug.Assert(Unsafe.ByteOffset(ref searchSpaceStart, ref searchSpace) / 2 + (int)ch1ch2Distance + Vector256<ushort>.Count <= value.Length);
 
                     // Load a vector from the current search space offset and another from the offset plus the distance between the two characters.
                     // For each, | with 0x20 so that letters are lowercased, then & those together to get a mask. If the mask is all zeros, there
                     // was no match.  If it wasn't, we have to do more work to check for a match.
-                    Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.BitwiseOr(Vector256.LoadUnsafe(ref searchSpace, (nuint)(offset + ch1ch2Distance)), Vector256.Create((ushort)0x20)));
-                    Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.BitwiseOr(Vector256.LoadUnsafe(ref searchSpace, (nuint)offset), Vector256.Create((ushort)0x20)));
+                    Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.LoadUnsafe(ref searchSpace) | Vector256.Create((ushort)0x20));
+                    Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.LoadUnsafe(ref searchSpace, ch1ch2Distance) | Vector256.Create((ushort)0x20));
                     Vector256<byte> cmpAnd = (cmpCh1 & cmpCh2).AsByte();
+
                     if (cmpAnd != Vector256<byte>.Zero)
                     {
                         goto CandidateFound;
                     }
 
                 LoopFooter:
-                    // No match. Advance to the next vector.
-                    offset += Vector256<ushort>.Count;
+                    searchSpace = ref Unsafe.Add(ref searchSpace, Vector256<ushort>.Count);
 
-                    // If we've reached the end of the search space, bail.
-                    if (offset == searchSpaceMinusValueTailLength)
+                    if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpace))
                     {
-                        return -1;
-                    }
+                        if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpace, Vector256<ushort>.Count)))
+                        {
+                            return -1;
+                        }
 
-                    // If we're within a vector's length of the end of the search space, adjust the offset
-                    // to point to the last vector so that our next iteration will process it.
-                    if (offset > searchSpaceMinusValueTailLengthAndVector)
-                    {
-                        offset = searchSpaceMinusValueTailLengthAndVector;
+                        searchSpace = ref lastSearchSpace;
                     }
 
                     continue;
 
                 CandidateFound:
-                    // Possible matches at the current location. Extract the bits for each element.
-                    // For each set bits, we'll check if it's a match at that location.
-                    uint mask = cmpAnd.ExtractMostSignificantBits();
-                    do
+                    if (TryMatchTwoCharsIgnoreCase(ref searchSpaceStart, ref searchSpace, ref valueRef, value.Length, cmpAnd.ExtractMostSignificantBits(), out int resultOffset))
                     {
-                        // Do a full IgnoreCase equality comparison. SpanHelpers.IndexOf skips comparing the two characters in some cases,
-                        // but we don't actually know that the two characters are equal, since we compared with | 0x20. So we just compare
-                        // the full string always.
-                        int bitPos = BitOperations.TrailingZeroCount(mask);
-                        nint charPos = (nint)((uint)bitPos / 2); // div by 2 (shr) because we work with 2-byte chars
-                        if (EqualsIgnoreCase(ref Unsafe.Add(ref searchSpace, offset + charPos), ref valueRef, value.Length))
-                        {
-                            // Match! Return the index.
-                            return (int)(offset + charPos);
-                        }
-
-                        // Clear the two lowest set bits in the mask. If there are no more set bits, we're done.
-                        // If any remain, we loop around to do the next comparison.
-                        if (Bmi1.IsSupported)
-                        {
-                            mask = Bmi1.ResetLowestSetBit(Bmi1.ResetLowestSetBit(mask));
-                        }
-                        else
-                        {
-                            mask &= ~(uint)(0b11 << bitPos);
-                        }
-                    } while (mask != 0);
+                        return resultOffset;
+                    }
                     goto LoopFooter;
-
-                } while (true);
+                }
             }
             else // 128bit vector path (SSE2 or AdvSimd)
             {
                 // Create a vector for each of the lowercase ASCII characters we're searching for.
+                // The algorithm works fine if both characters are equal.
                 Vector128<ushort> ch1 = Vector128.Create((ushort)valueChar);
                 Vector128<ushort> ch2 = Vector128.Create((ushort)valueCharU);
 
-                nint searchSpaceMinusValueTailLengthAndVector = searchSpaceMinusValueTailLength - (nint)Vector128<ushort>.Count;
-                do
+                ref char lastSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceMinusValueTailLength - Vector128<ushort>.Count);
+
+                while (true)
                 {
                     // Make sure we don't go out of bounds.
-                    Debug.Assert(offset + ch1ch2Distance + Vector128<ushort>.Count <= source.Length);
+                    Debug.Assert(Unsafe.ByteOffset(ref searchSpaceStart, ref searchSpace) / 2 + (int)ch1ch2Distance + Vector128<ushort>.Count <= value.Length);
 
                     // Load a vector from the current search space offset and another from the offset plus the distance between the two characters.
                     // For each, | with 0x20 so that letters are lowercased, then & those together to get a mask. If the mask is all zeros, there
                     // was no match.  If it wasn't, we have to do more work to check for a match.
-                    Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.BitwiseOr(Vector128.LoadUnsafe(ref searchSpace, (nuint)(offset + ch1ch2Distance)), Vector128.Create((ushort)0x20)));
-                    Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.BitwiseOr(Vector128.LoadUnsafe(ref searchSpace, (nuint)offset), Vector128.Create((ushort)0x20)));
+                    Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.LoadUnsafe(ref searchSpace) | Vector128.Create((ushort)0x20));
+                    Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.LoadUnsafe(ref searchSpace, ch1ch2Distance) | Vector128.Create((ushort)0x20));
                     Vector128<byte> cmpAnd = (cmpCh1 & cmpCh2).AsByte();
+
                     if (cmpAnd != Vector128<byte>.Zero)
                     {
                         goto CandidateFound;
                     }
 
                 LoopFooter:
-                    // No match. Advance to the next vector.
-                    offset += Vector128<ushort>.Count;
+                    searchSpace = ref Unsafe.Add(ref searchSpace, Vector128<ushort>.Count);
 
-                    // If we've reached the end of the search space, bail.
-                    if (offset == searchSpaceMinusValueTailLength)
+                    if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpace))
                     {
-                        return -1;
-                    }
+                        if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpace, Vector128<ushort>.Count)))
+                        {
+                            return -1;
+                        }
 
-                    // If we're within a vector's length of the end of the search space, adjust the offset
-                    // to point to the last vector so that our next iteration will process it.
-                    if (offset > searchSpaceMinusValueTailLengthAndVector)
-                    {
-                        offset = searchSpaceMinusValueTailLengthAndVector;
+                        searchSpace = ref lastSearchSpace;
                     }
 
                     continue;
 
                 CandidateFound:
-                    // Possible matches at the current location. Extract the bits for each element.
-                    // For each set bits, we'll check if it's a match at that location.
-                    uint mask = cmpAnd.ExtractMostSignificantBits();
-                    do
+                    if (TryMatchTwoCharsIgnoreCase(ref searchSpaceStart, ref searchSpace, ref valueRef, value.Length, cmpAnd.ExtractMostSignificantBits(), out int resultOffset))
                     {
-                        // Do a full IgnoreCase equality comparison. SpanHelpers.IndexOf skips comparing the two characters in some cases,
-                        // but we don't actually know that the two characters are equal, since we compared with | 0x20. So we just compare
-                        // the full string always.
-                        int bitPos = BitOperations.TrailingZeroCount(mask);
-                        int charPos = (int)((uint)bitPos / 2); // div by 2 (shr) because we work with 2-byte chars
-                        if (EqualsIgnoreCase(ref Unsafe.Add(ref searchSpace, offset + charPos), ref valueRef, value.Length))
-                        {
-                            // Match! Return the index.
-                            return (int)(offset + charPos);
-                        }
-
-                        // Clear the two lowest set bits in the mask. If there are no more set bits, we're done.
-                        // If any remain, we loop around to do the next comparison.
-                        if (Bmi1.IsSupported)
-                        {
-                            mask = Bmi1.ResetLowestSetBit(Bmi1.ResetLowestSetBit(mask));
-                        }
-                        else
-                        {
-                            mask &= ~(uint)(0b11 << bitPos);
-                        }
-                    } while (mask != 0);
+                        return resultOffset;
+                    }
                     goto LoopFooter;
-
-                } while (true);
+                }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool TryMatchTwoCharsIgnoreCase(ref char searchSpaceStart, ref char searchSpace, ref char value, int valueLength, uint mask, out int resultOffset)
+        {
+            do
+            {
+                int bitPos = BitOperations.TrailingZeroCount(mask);
+                Debug.Assert(bitPos % 2 == 0);
+
+                ref char matchStart = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
+
+                if (EqualsIgnoreCase(ref matchStart, ref value, valueLength))
+                {
+                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchStart) / 2);
+                    return true;
+                }
+
+                if (Bmi1.IsSupported)
+                {
+                    mask = Bmi1.ResetLowestSetBit(Bmi1.ResetLowestSetBit(mask));
+                }
+                else
+                {
+                    mask &= ~(uint)(0b11 << bitPos);
+                }
+            }
+            while (mask != 0);
+
+            resultOffset = 0;
+            return false;
         }
 
         internal static int LastIndexOf(string source, string value, int startIndex, int count)
