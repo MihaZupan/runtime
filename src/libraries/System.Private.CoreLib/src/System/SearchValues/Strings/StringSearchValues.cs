@@ -326,13 +326,14 @@ namespace System.Buffers
             // We make use of optimizations that may overflow on 32bit systems for long values.
             int maxLength = IntPtr.Size == 4 ? 1_000_000_000 : int.MaxValue;
 
+            // TODO: Double-check R2R isn't messing up this IsHardwareAccelerated check
             if (Vector128.IsHardwareAccelerated && value.Length > 1 && value.Length < maxLength)
             {
                 SearchValues<string>? searchValues = value.Length switch
                 {
-                    < 4 => TryCreateSingleValuesThreeChars<ValueLengthLessThan4>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
-                    < 8 => TryCreateSingleValuesThreeChars<ValueLength4To7>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
-                    _ => TryCreateSingleValuesThreeChars<ValueLength8OrLonger>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    < 4 => TryCreateSingleValuesMultiChars<ValueLengthLessThan4>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    < 8 => TryCreateSingleValuesMultiChars<ValueLength4To7>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    _ => TryCreateSingleValuesMultiChars<ValueLength8OrLonger>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
                 };
 
                 if (searchValues is not null)
@@ -346,7 +347,7 @@ namespace System.Buffers
                 : new SingleStringSearchValuesFallback<SearchValues.FalseConst>(value, uniqueValues);
         }
 
-        private static SearchValues<string>? TryCreateSingleValuesThreeChars<TValueLength>(
+        private static SearchValues<string>? TryCreateSingleValuesMultiChars<TValueLength>(
             string value,
             HashSet<string> uniqueValues,
             bool ignoreCase,
@@ -356,25 +357,38 @@ namespace System.Buffers
         {
             if (!ignoreCase)
             {
-                return new SingleStringSearchValuesThreeChars<TValueLength, CaseSensitive>(value, uniqueValues);
+                return TryCreateSingleValuesMultiChars<TValueLength, CaseSensitive>(value, uniqueValues);
             }
 
             if (asciiLettersOnly)
             {
-                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAsciiLetters>(value, uniqueValues);
+                return TryCreateSingleValuesMultiChars<TValueLength, CaseInensitiveAsciiLetters>(value, uniqueValues);
             }
 
             if (allAscii)
             {
-                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAscii>(value, uniqueValues);
+                return TryCreateSingleValuesMultiChars<TValueLength, CaseInensitiveAscii>(value, uniqueValues);
             }
 
-            if (char.IsAscii(value[0]) && value.AsSpan().LastIndexOfAnyInRange((char)0, (char)127) > 0)
+            return TryCreateSingleValuesMultiChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+        }
+
+        private static SearchValues<string>? TryCreateSingleValuesMultiChars<TValueLength, TCaseSensitivity>(string value, HashSet<string> uniqueValues)
+            where TValueLength : struct, IValueLength
+            where TCaseSensitivity : struct, ICaseSensitivity
+        {
+            if (!CharacterFrequencyHelper.TryGetSingleStringMultiCharacterOffsets(
+                value,
+                ignoreCase: typeof(TCaseSensitivity) != typeof(CaseSensitive),
+                out int ch2Offset,
+                out int? ch3Offset))
             {
-                return new SingleStringSearchValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+                return null;
             }
 
-            return null;
+            return ch3Offset is null
+                ? new SingleStringSearchValuesMultiCharsN2<TValueLength, TCaseSensitivity>(value, uniqueValues, ch2Offset)
+                : new SingleStringSearchValuesMultiCharsN3<TValueLength, TCaseSensitivity>(value, uniqueValues, ch2Offset, ch3Offset.Value);
         }
     }
 }

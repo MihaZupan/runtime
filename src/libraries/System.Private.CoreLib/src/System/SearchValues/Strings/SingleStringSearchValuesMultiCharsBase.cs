@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using static System.Buffers.TeddyHelper;
@@ -14,10 +13,12 @@ namespace System.Buffers
 {
     // Based on SpanHelpers.IndexOf(ref char, int, ref char, int)
     // which is in turn based on http://0x80.pl/articles/simd-strfind.html#algorithm-1-generic-simd.
-    internal sealed class SingleStringSearchValuesThreeChars<TValueLength, TCaseSensitivity> : StringSearchValuesBase
+    internal abstract class SingleStringSearchValuesMultiCharsBase<TValueLength, TCaseSensitivity> : StringSearchValuesBase
         where TValueLength : struct, IValueLength
         where TCaseSensitivity : struct, ICaseSensitivity
     {
+        private const ushort CaseConversionMask = unchecked((ushort)~0x20);
+
         private readonly string _value;
         private readonly nint _minusValueTailLength;
         private readonly nuint _ch2ByteOffset;
@@ -26,48 +27,11 @@ namespace System.Buffers
         private readonly ushort _ch2;
         private readonly ushort _ch3;
 
-        public SingleStringSearchValuesThreeChars(string value, HashSet<string> uniqueValues) : base(uniqueValues)
+        protected SingleStringSearchValuesMultiCharsBase(string value, HashSet<string> uniqueValues, int ch2Offset, int ch3Offset = 0) : base(uniqueValues)
         {
             Debug.Assert(value.Length > 1);
-
-            ReadOnlySpan<char> valueRemainder = value.AsSpan(1);
-            bool ignoreCase = typeof(TCaseSensitivity) != typeof(CaseSensitive);
-
-            int ch2Offset = CharacterFrequencyHelper.IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase);
-            int ch3Offset = CharacterFrequencyHelper.IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase, excludeIndex: ch2Offset);
-
-            Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
-            Debug.Assert(!ignoreCase || ch2Offset >= 0);
-
-            ch2Offset++;
-            ch3Offset++;
-
-            // Fixup positions for length=2 and non-ASCII values
-            if (ch2Offset == 0)
-            {
-                Debug.Assert(!ignoreCase);
-                ch2Offset = 1;
-            }
-
-            if (ch3Offset == 0)
-            {
-                // We have fewer than 3 ASCII chars in the value.
-                if (value.Length > 2 && !ignoreCase)
-                {
-                    // We don't have a frequency table for non-ASCII characters, pick a random one.
-                    ch3Offset = ch2Offset == 1 ? 2 : 1;
-                }
-                else
-                {
-                    // The value is either 2 chars long, or we're ignoring casing.
-                    ch3Offset = 0;
-                }
-            }
-
-            if (ch3Offset > ch2Offset)
-            {
-                (ch2Offset, ch3Offset) = (ch3Offset, ch2Offset);
-            }
+            Debug.Assert(ch2Offset > 0);
+            Debug.Assert(ch3Offset == 0 || ch3Offset > ch2Offset);
 
             _value = value;
             _minusValueTailLength = -(value.Length - 1);
@@ -76,25 +40,125 @@ namespace System.Buffers
             _ch2 = value[ch2Offset];
             _ch3 = value[ch3Offset];
 
-            if (ignoreCase)
+            if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
             {
-                const ushort Mask = unchecked((ushort)~0x20);
-                _ch1 &= Mask;
-                _ch2 &= Mask;
-                _ch3 &= Mask;
+                Debug.Assert(_ch1 < 128);
+                Debug.Assert(_ch2 < 128);
+                Debug.Assert(_ch3 < 128);
+            }
+            else
+            {
+                _ch1 &= CaseConversionMask;
+                _ch2 &= CaseConversionMask;
+                _ch3 &= CaseConversionMask;
             }
 
             _ch2ByteOffset = (nuint)ch2Offset * 2;
             _ch3ByteOffset = (nuint)ch3Offset * 2;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
-            IndexOf(ref MemoryMarshal.GetReference(span), span.Length);
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        protected int IndexOfN2(ref char searchSpace, int searchSpaceLength)
+        {
+            ref char searchSpaceStart = ref searchSpace;
+
+            nint searchSpaceMinusValueTailLength = searchSpaceLength + _minusValueTailLength;
+
+            if (!Vector128.IsHardwareAccelerated || searchSpaceMinusValueTailLength < Vector128<ushort>.Count)
+            {
+                goto ShortInput;
+            }
+
+            nuint ch2ByteOffset = _ch2ByteOffset;
+
+            if (Vector256.IsHardwareAccelerated && searchSpaceMinusValueTailLength - Vector256<ushort>.Count >= 0)
+            {
+                Vector256<ushort> ch1 = Vector256.Create(_ch1);
+                Vector256<ushort> ch2 = Vector256.Create(_ch2);
+
+                ref char lastSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceMinusValueTailLength - Vector256<ushort>.Count);
+
+                while (true)
+                {
+                    Vector256<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch1, ch2);
+
+                    if (result != Vector256<byte>.Zero)
+                    {
+                        goto CandidateFound;
+                    }
+
+                LoopFooter:
+                    searchSpace = ref Unsafe.Add(ref searchSpace, Vector256<ushort>.Count);
+
+                    if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpace))
+                    {
+                        if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpace, Vector256<ushort>.Count)))
+                        {
+                            return -1;
+                        }
+
+                        searchSpace = ref lastSearchSpace;
+                    }
+
+                    continue;
+
+                CandidateFound:
+                    if (TryMatch(ref searchSpaceStart, ref searchSpace, result.ExtractMostSignificantBits(), out int resultOffset))
+                    {
+                        return resultOffset;
+                    }
+                    goto LoopFooter;
+                }
+            }
+            else
+            {
+                Vector128<ushort> ch1 = Vector128.Create(_ch1);
+                Vector128<ushort> ch2 = Vector128.Create(_ch2);
+
+                ref char lastSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceMinusValueTailLength - Vector128<ushort>.Count);
+
+                while (true)
+                {
+                    Vector128<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch1, ch2);
+
+                    if (result != Vector128<byte>.Zero)
+                    {
+                        goto CandidateFound;
+                    }
+
+                LoopFooter:
+                    searchSpace = ref Unsafe.Add(ref searchSpace, Vector128<ushort>.Count);
+
+                    if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpace))
+                    {
+                        if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpace, Vector128<ushort>.Count)))
+                        {
+                            return -1;
+                        }
+
+                        searchSpace = ref lastSearchSpace;
+                    }
+
+                    continue;
+
+                CandidateFound:
+                    if (TryMatch(ref searchSpaceStart, ref searchSpace, result.ExtractMostSignificantBits(), out int resultOffset))
+                    {
+                        return resultOffset;
+                    }
+                    goto LoopFooter;
+                }
+            }
+
+        ShortInput:
+            return IndexOfShortInput(ref searchSpace, searchSpaceMinusValueTailLength);
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private int IndexOf(ref char searchSpace, int searchSpaceLength)
+        protected int IndexOfN3(ref char searchSpace, int searchSpaceLength)
         {
+            Debug.Assert(_ch3ByteOffset > 0);
+
             ref char searchSpaceStart = ref searchSpace;
 
             nint searchSpaceMinusValueTailLength = searchSpaceLength + _minusValueTailLength;
@@ -189,6 +253,12 @@ namespace System.Buffers
             }
 
         ShortInput:
+            return IndexOfShortInput(ref searchSpace, searchSpaceMinusValueTailLength);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int IndexOfShortInput(ref char searchSpace, nint searchSpaceMinusValueTailLength)
+        {
             string value = _value;
             char valueHead = value.GetRawStringData();
 
@@ -207,6 +277,44 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<byte> GetComparisonResult(ref char searchSpace, nuint ch2ByteOffset, Vector128<ushort> ch1, Vector128<ushort> ch2)
+        {
+            if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
+            {
+                Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.LoadUnsafe(ref searchSpace));
+                Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16());
+                return (cmpCh1 & cmpCh2).AsByte();
+            }
+            else
+            {
+                Vector128<ushort> caseConversion = Vector128.Create(CaseConversionMask);
+
+                Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.LoadUnsafe(ref searchSpace) & caseConversion);
+                Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
+                return (cmpCh1 & cmpCh2).AsByte();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector256<byte> GetComparisonResult(ref char searchSpace, nuint ch2ByteOffset, Vector256<ushort> ch1, Vector256<ushort> ch2)
+        {
+            if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
+            {
+                Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.LoadUnsafe(ref searchSpace));
+                Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16());
+                return (cmpCh1 & cmpCh2).AsByte();
+            }
+            else
+            {
+                Vector256<ushort> caseConversion = Vector256.Create(CaseConversionMask);
+
+                Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.LoadUnsafe(ref searchSpace) & caseConversion);
+                Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
+                return (cmpCh1 & cmpCh2).AsByte();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> GetComparisonResult(ref char searchSpace, nuint ch2ByteOffset, nuint ch3ByteOffset, Vector128<ushort> ch1, Vector128<ushort> ch2, Vector128<ushort> ch3)
         {
             if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
@@ -218,7 +326,7 @@ namespace System.Buffers
             }
             else
             {
-                Vector128<ushort> caseConversion = Vector128.Create(unchecked((ushort)~0x20));
+                Vector128<ushort> caseConversion = Vector128.Create(CaseConversionMask);
 
                 Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.LoadUnsafe(ref searchSpace) & caseConversion);
                 Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
@@ -239,7 +347,7 @@ namespace System.Buffers
             }
             else
             {
-                Vector256<ushort> caseConversion = Vector256.Create(unchecked((ushort)~0x20));
+                Vector256<ushort> caseConversion = Vector256.Create(CaseConversionMask);
 
                 Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.LoadUnsafe(ref searchSpace) & caseConversion);
                 Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);

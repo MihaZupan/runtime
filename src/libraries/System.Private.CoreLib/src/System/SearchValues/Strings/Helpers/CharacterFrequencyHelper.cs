@@ -1,45 +1,12 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+
 namespace System.Buffers
 {
     internal static class CharacterFrequencyHelper
     {
-        public static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
-        {
-            float minFrequency = float.MaxValue;
-            int minIndex = -1;
-
-            for (int i = 0; i < span.Length; i++)
-            {
-                if (i == excludeIndex)
-                {
-                    continue;
-                }
-
-                char c = span[i];
-
-                if (char.IsAscii(c))
-                {
-                    float frequency = AsciiFrequency[c];
-
-                    if (ignoreCase)
-                    {
-                        // Include the alternative character that will also match.
-                        frequency += AsciiFrequency[c ^ 0x20];
-                    }
-
-                    if (frequency < minFrequency)
-                    {
-                        minFrequency = frequency;
-                        minIndex = i;
-                    }
-                }
-            }
-
-            return minIndex;
-        }
-
         // Same as RegexPrefixAnalyzer.Frequency.
         public static ReadOnlySpan<float> AsciiFrequency => new float[]
         {
@@ -61,5 +28,108 @@ namespace System.Buffers
             0.992f /* '   x' */, 1.067f /* '   y' */, 0.181f /* '   z' */, 0.391f /* '   {' */, 0.056f /* '   |' */, 0.391f /* '   }' */, 0.002f /* '   ~' */, 0.000f /* '\x7F' */,
         };
 
+        public static bool TryGetSingleStringMultiCharacterOffsets(string value, bool ignoreCase, out int ch2Offset, out int? ch3Offset)
+        {
+            Debug.Assert(value.Length > 1);
+
+            ch2Offset = 0;
+            ch3Offset = null;
+
+            if (ignoreCase && !char.IsAscii(value[0]))
+            {
+                // When ignoring casing, all anchor chars have to be ASCII.
+                return false;
+            }
+
+            ReadOnlySpan<char> valueRemainder = value.AsSpan(1);
+
+            ch2Offset = 1 + IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase);
+
+            if (ch2Offset == 0)
+            {
+                // We have fewer than 2 ASCII chars in the value.
+                if (ignoreCase)
+                {
+                    return false;
+                }
+
+                // We don't have a frequency table for non-ASCII characters, pick a random one.
+                ch2Offset = value.Length - 1;
+            }
+
+            if (value.Length > 2)
+            {
+                ch3Offset = 1 + IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase, excludeIndex: ch2Offset);
+
+                if (ch3Offset == 0)
+                {
+                    // We have fewer than 3 ASCII chars in the value.
+                    if (ignoreCase)
+                    {
+                        // We can still use N=2.
+                        ch3Offset = null;
+                    }
+                    else
+                    {
+                        // We don't have a frequency table for non-ASCII characters, pick a random one.
+                        ch3Offset = value.Length - 1;
+
+                        if (ch2Offset == ch3Offset)
+                        {
+                            ch2Offset--;
+                        }
+                    }
+                }
+            }
+
+            Debug.Assert(ch2Offset != 0 && ch3Offset != 0);
+            Debug.Assert(ch2Offset != ch3Offset);
+
+            if (ch3Offset.HasValue && ch3Offset > ch2Offset)
+            {
+                (ch2Offset, ch3Offset) = (ch3Offset.Value, ch2Offset);
+            }
+
+            return true;
+
+            static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
+            {
+                float minFrequency = float.MaxValue;
+                int minIndex = -1;
+
+                for (int i = 0; i < span.Length; i++)
+                {
+                    if (i == excludeIndex)
+                    {
+                        continue;
+                    }
+
+                    char c = span[i];
+
+                    if (char.IsAscii(c))
+                    {
+                        float frequency = AsciiFrequency[c];
+
+                        if (ignoreCase)
+                        {
+                            // Include the alternative character that will also match.
+                            frequency += AsciiFrequency[c ^ 0x20];
+                        }
+
+                        // Avoiding characters from the front of the value for the 2nd and 3rd character
+                        // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
+                        if (i <= 1) frequency *= 1.5f;
+
+                        if (frequency <= minFrequency)
+                        {
+                            minFrequency = frequency;
+                            minIndex = i;
+                        }
+                    }
+                }
+
+                return minIndex;
+            }
+        }
     }
 }
