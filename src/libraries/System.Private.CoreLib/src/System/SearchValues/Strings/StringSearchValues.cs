@@ -369,6 +369,7 @@ namespace System.Buffers
                 return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAscii>(value, uniqueValues);
             }
 
+            // When ignoring casing, all anchor chars have to be ASCII.
             if (char.IsAscii(value[0]) && value.AsSpan().LastIndexOfAnyInRange((char)0, (char)127) > 0)
             {
                 return new SingleStringSearchValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);

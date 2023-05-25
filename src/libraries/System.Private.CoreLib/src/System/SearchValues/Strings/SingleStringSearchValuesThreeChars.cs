@@ -18,6 +18,8 @@ namespace System.Buffers
         where TValueLength : struct, IValueLength
         where TCaseSensitivity : struct, ICaseSensitivity
     {
+        private const ushort CaseConversionMask = unchecked((ushort)~0x20);
+
         private readonly string _value;
         private readonly nint _minusValueTailLength;
         private readonly nuint _ch2ByteOffset;
@@ -30,44 +32,11 @@ namespace System.Buffers
         {
             Debug.Assert(value.Length > 1);
 
-            ReadOnlySpan<char> valueRemainder = value.AsSpan(1);
             bool ignoreCase = typeof(TCaseSensitivity) != typeof(CaseSensitive);
 
-            int ch2Offset = CharacterFrequencyHelper.IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase);
-            int ch3Offset = CharacterFrequencyHelper.IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase, excludeIndex: ch2Offset);
+            CharacterFrequencyHelper.GetSingleStringMultiCharacterOffsets(value, ignoreCase, out int ch2Offset, out int ch3Offset);
 
-            Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
-            Debug.Assert(!ignoreCase || ch2Offset >= 0);
-
-            ch2Offset++;
-            ch3Offset++;
-
-            // Fixup positions for length=2 and non-ASCII values
-            if (ch2Offset == 0)
-            {
-                Debug.Assert(!ignoreCase);
-                ch2Offset = 1;
-            }
-
-            if (ch3Offset == 0)
-            {
-                // We have fewer than 3 ASCII chars in the value.
-                if (value.Length > 2 && !ignoreCase)
-                {
-                    // We don't have a frequency table for non-ASCII characters, pick a random one.
-                    ch3Offset = ch2Offset == 1 ? 2 : 1;
-                }
-                else
-                {
-                    // The value is either 2 chars long, or we're ignoring casing.
-                    ch3Offset = 0;
-                }
-            }
-
-            if (ch3Offset > ch2Offset)
-            {
-                (ch2Offset, ch3Offset) = (ch3Offset, ch2Offset);
-            }
+            Debug.Assert(ch3Offset == 0 || ch3Offset > ch2Offset);
 
             _value = value;
             _minusValueTailLength = -(value.Length - 1);
@@ -78,10 +47,9 @@ namespace System.Buffers
 
             if (ignoreCase)
             {
-                const ushort Mask = unchecked((ushort)~0x20);
-                _ch1 &= Mask;
-                _ch2 &= Mask;
-                _ch3 &= Mask;
+                _ch1 &= CaseConversionMask;
+                _ch2 &= CaseConversionMask;
+                _ch3 &= CaseConversionMask;
             }
 
             _ch2ByteOffset = (nuint)ch2Offset * 2;
@@ -218,7 +186,7 @@ namespace System.Buffers
             }
             else
             {
-                Vector128<ushort> caseConversion = Vector128.Create(unchecked((ushort)~0x20));
+                Vector128<ushort> caseConversion = Vector128.Create(CaseConversionMask);
 
                 Vector128<ushort> cmpCh1 = Vector128.Equals(ch1, Vector128.LoadUnsafe(ref searchSpace) & caseConversion);
                 Vector128<ushort> cmpCh2 = Vector128.Equals(ch2, Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
@@ -239,7 +207,7 @@ namespace System.Buffers
             }
             else
             {
-                Vector256<ushort> caseConversion = Vector256.Create(unchecked((ushort)~0x20));
+                Vector256<ushort> caseConversion = Vector256.Create(CaseConversionMask);
 
                 Vector256<ushort> cmpCh1 = Vector256.Equals(ch1, Vector256.LoadUnsafe(ref searchSpace) & caseConversion);
                 Vector256<ushort> cmpCh2 = Vector256.Equals(ch2, Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
