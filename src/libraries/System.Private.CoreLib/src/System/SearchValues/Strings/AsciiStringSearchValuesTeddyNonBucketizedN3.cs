@@ -12,11 +12,14 @@ namespace System.Buffers
         where TStartCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
         where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
     {
-        public AsciiStringSearchValuesTeddyNonBucketizedN3(ReadOnlySpan<string> values, HashSet<string> uniqueValues) : base(values, uniqueValues, n: 3) { }
+        public AsciiStringSearchValuesTeddyNonBucketizedN3(ReadOnlySpan<string> values, HashSet<string> uniqueValues)
+            : base(values, uniqueValues, n: 3)
+        { }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) => IndexOfAnyN3(span);
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
+            IndexOfAnyN3(span);
     }
 }
