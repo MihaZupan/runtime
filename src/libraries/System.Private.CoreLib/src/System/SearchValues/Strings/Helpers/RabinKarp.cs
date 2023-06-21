@@ -23,6 +23,9 @@ namespace System.Buffers
         // only calling into it for inputs that are too short for Teddy to handle.
         private const int MaxInputLength = 18 - 1;
 
+        // We're using nuint as the rolling hash, so we can spread the hash over more bits on 64bit.
+        private static int HashShiftPerElement => IntPtr.Size == 8 ? 2 : 1;
+
         private readonly string[][] _buckets;
         private readonly int _hashLength;
         private readonly nuint _hashUpdateMultiplier;
@@ -40,7 +43,7 @@ namespace System.Buffers
             Debug.Assert(minimumLength > 1);
 
             _hashLength = minimumLength;
-            _hashUpdateMultiplier = (nuint)1 << (minimumLength - 1);
+            _hashUpdateMultiplier = (nuint)1 << ((minimumLength - 1) * HashShiftPerElement);
 
             var bucketLists = new List<string>?[BucketCount];
 
@@ -49,7 +52,7 @@ namespace System.Buffers
                 nuint hash = 0;
                 for (int i = 0; i < minimumLength; i++)
                 {
-                    hash = (hash << 1) + value[i];
+                    hash = (hash << HashShiftPerElement) + value[i];
                 }
 
                 nuint bucket = hash % BucketCount;
@@ -97,7 +100,7 @@ namespace System.Buffers
                 nuint hash = 0;
                 for (uint i = 0; i < hashLength; i++)
                 {
-                    hash = (hash << 1) + TCaseSensitivity.TransformInput(Unsafe.Add(ref current, i));
+                    hash = (hash << HashShiftPerElement) + TCaseSensitivity.TransformInput(Unsafe.Add(ref current, i));
                 }
 
                 while (true)
@@ -120,7 +123,8 @@ namespace System.Buffers
                     char previous = TCaseSensitivity.TransformInput(current);
                     char next = TCaseSensitivity.TransformInput(Unsafe.Add(ref current, (uint)hashLength));
 
-                    hash = ((hash - (previous * _hashUpdateMultiplier)) << 1) + next;
+                    // Update the hash by removing the previous character and adding the next one.
+                    hash = ((hash - (previous * _hashUpdateMultiplier)) << HashShiftPerElement) + next;
                     current = ref Unsafe.Add(ref current, 1);
                 }
             }
