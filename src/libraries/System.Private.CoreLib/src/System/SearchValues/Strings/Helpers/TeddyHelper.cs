@@ -65,6 +65,7 @@ namespace System.Buffers
             return (DuplicateTo512(low), DuplicateTo512(high));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector512<byte> DuplicateTo512(Vector128<byte> vector)
         {
             Vector256<byte> vector256 = Vector256.Create(vector, vector);
