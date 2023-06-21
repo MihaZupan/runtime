@@ -304,7 +304,7 @@ namespace System.Buffers
             // We make use of optimizations that may overflow on 32bit systems for long values.
             int maxLength = IntPtr.Size == 4 ? 1_000_000_000 : int.MaxValue;
 
-            if (Vector128.IsHardwareAccelerated && value.Length > 1 && value.Length < maxLength)
+            if (Vector128.IsHardwareAccelerated && value.Length > 1 && value.Length <= maxLength)
             {
                 SearchValues<string>? searchValues = value.Length switch
                 {
