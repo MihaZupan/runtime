@@ -33,11 +33,10 @@ namespace System.Buffers
             Debug.Assert(value.Length > 1);
             Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
 
-            ReadOnlySpan<char> valueRemainder = value.AsSpan(1);
+            ch2Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase);
+            ch3Offset = 0;
 
-            ch2Offset = 1 + IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase);
-
-            if (ch2Offset == 0)
+            if (ch2Offset < 0)
             {
                 // We have fewer than 2 ASCII chars in the value.
                 Debug.Assert(!ignoreCase);
@@ -48,9 +47,9 @@ namespace System.Buffers
 
             if (value.Length > 2)
             {
-                ch3Offset = 1 + IndexOfAsciiCharWithLowestFrequency(valueRemainder, ignoreCase, excludeIndex: ch2Offset);
+                ch3Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase, excludeIndex: ch2Offset);
 
-                if (ch3Offset == 0)
+                if (ch3Offset < 0)
                 {
                     // We have fewer than 3 ASCII chars in the value.
                     if (ignoreCase)
@@ -74,7 +73,7 @@ namespace System.Buffers
             Debug.Assert(ch2Offset != 0);
             Debug.Assert(ch2Offset != ch3Offset);
 
-            if (ch3Offset > 0 && ch3Offset > ch2Offset)
+            if (ch3Offset > 0 && ch3Offset < ch2Offset)
             {
                 (ch2Offset, ch3Offset) = (ch3Offset, ch2Offset);
             }
@@ -84,7 +83,7 @@ namespace System.Buffers
                 float minFrequency = float.MaxValue;
                 int minIndex = -1;
 
-                for (int i = 0; i < span.Length; i++)
+                for (int i = 1; i < span.Length; i++)
                 {
                     if (i == excludeIndex)
                     {
@@ -105,7 +104,7 @@ namespace System.Buffers
 
                         // Avoiding characters from the front of the value for the 2nd and 3rd character
                         // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
-                        if (i <= 1) frequency *= 1.5f;
+                        if (i <= 2) frequency *= 1.5f;
 
                         if (frequency <= minFrequency)
                         {
