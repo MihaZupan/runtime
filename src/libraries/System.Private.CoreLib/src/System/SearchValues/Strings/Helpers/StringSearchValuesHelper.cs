@@ -67,6 +67,7 @@ namespace System.Buffers
             static abstract char TransformInput(char input);
             static abstract Vector128<byte> TransformInput(Vector128<byte> input);
             static abstract Vector256<byte> TransformInput(Vector256<byte> input);
+            static abstract Vector512<byte> TransformInput(Vector512<byte> input);
             static abstract bool Equals(ref char matchStart, string candidate);
             static abstract bool Equals<TValueLength>(ref char matchStart, string candidate) where TValueLength : struct, IValueLength;
         }
@@ -81,6 +82,9 @@ namespace System.Buffers
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
@@ -145,6 +149,9 @@ namespace System.Buffers
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => input & Vector512.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
@@ -221,6 +228,17 @@ namespace System.Buffers
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static Vector512<byte> TransformInput(Vector512<byte> input)
+            {
+                Vector512<byte> subtraction = Vector512.Create((byte)(128 + 'a'));
+                Vector512<byte> comparison = Vector512.Create((byte)(128 + 26));
+                Vector512<byte> caseConversion = Vector512.Create((byte)0x20);
+
+                Vector512<byte> matches = Vector512.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
+                return input ^ (matches & caseConversion);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
             {
                 for (int i = 0; i < candidate.Length; i++)
@@ -252,6 +270,7 @@ namespace System.Buffers
             public static char TransformInput(char input) => throw new UnreachableException();
             public static Vector128<byte> TransformInput(Vector128<byte> input) => throw new UnreachableException();
             public static Vector256<byte> TransformInput(Vector256<byte> input) => throw new UnreachableException();
+            public static Vector512<byte> TransformInput(Vector512<byte> input) => throw new UnreachableException();
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)

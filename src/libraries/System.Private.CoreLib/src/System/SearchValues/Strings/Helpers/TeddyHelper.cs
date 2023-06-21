@@ -12,7 +12,7 @@ namespace System.Buffers
 {
     internal static class TeddyHelper
     {
-        public static (Vector256<byte> Low, Vector256<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
+        public static (Vector512<byte> Low, Vector512<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
         {
             Debug.Assert(values.Length <= 8);
 
@@ -35,10 +35,10 @@ namespace System.Buffers
                 high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
             }
 
-            return (Vector256.Create(low, low), Vector256.Create(high, high));
+            return (DuplicateTo512(low), DuplicateTo512(high));
         }
 
-        public static (Vector256<byte> Low, Vector256<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
+        public static (Vector512<byte> Low, Vector512<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
         {
             Debug.Assert(valueBuckets.Length <= 8);
 
@@ -62,7 +62,13 @@ namespace System.Buffers
                 }
             }
 
-            return (Vector256.Create(low, low), Vector256.Create(high, high));
+            return (DuplicateTo512(low), DuplicateTo512(high));
+        }
+
+        private static Vector512<byte> DuplicateTo512(Vector128<byte> vector)
+        {
+            Vector256<byte> vector256 = Vector256.Create(vector, vector);
+            return Vector512.Create(vector256, vector256);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -102,6 +108,26 @@ namespace System.Buffers
             Vector256<byte> result0 = RightShift1(prev0, match0);
 
             Vector256<byte> result = result0 & result1;
+
+            return (result, match0);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        public static (Vector512<byte> Result, Vector512<byte> Prev0) ProcessInputN2(
+            Vector512<byte> input,
+            Vector512<byte> prev0,
+            Vector512<byte> n0Low, Vector512<byte> n0High,
+            Vector512<byte> n1Low, Vector512<byte> n1High)
+        {
+            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
+
+            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
+            Vector512<byte> result1 = Shuffle(n1Low, n1High, low, high);
+
+            Vector512<byte> result0 = RightShift1(prev0, match0);
+
+            Vector512<byte> result = result0 & result1;
 
             return (result, match0);
         }
@@ -154,6 +180,29 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        public static (Vector512<byte> Result, Vector512<byte> Prev0, Vector512<byte> Prev1) ProcessInputN3(
+            Vector512<byte> input,
+            Vector512<byte> prev0, Vector512<byte> prev1,
+            Vector512<byte> n0Low, Vector512<byte> n0High,
+            Vector512<byte> n1Low, Vector512<byte> n1High,
+            Vector512<byte> n2Low, Vector512<byte> n2High)
+        {
+            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
+
+            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
+            Vector512<byte> match1 = Shuffle(n1Low, n1High, low, high);
+            Vector512<byte> result2 = Shuffle(n2Low, n2High, low, high);
+
+            Vector512<byte> result0 = RightShift2(prev0, match0);
+            Vector512<byte> result1 = RightShift1(prev1, match1);
+
+            Vector512<byte> result = result0 & result1 & result2;
+
+            return (result, match0, match1);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         public static Vector128<byte> LoadAndPack16AsciiChars(ref char source)
@@ -175,7 +224,19 @@ namespace System.Buffers
 
             Vector256<byte> packed = Avx2.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
 
-            return Avx2.Permute4x64(packed.AsInt64(), 0b_11_01_10_00).AsByte();
+            return PackedSpanHelpers.FixUpPackedVector256Result(packed);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        public static Vector512<byte> LoadAndPack64AsciiChars(ref char source)
+        {
+            Vector512<ushort> source0 = Vector512.LoadUnsafe(ref source);
+            Vector512<ushort> source1 = Vector512.LoadUnsafe(ref source, (nuint)Vector512<ushort>.Count);
+
+            Vector512<byte> packed = Avx512BW.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
+
+            return PackedSpanHelpers.FixUpPackedVector512Result(packed);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -211,6 +272,19 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static (Vector512<byte> Low, Vector512<byte> High) GetNibbles(Vector512<byte> input)
+        {
+            // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
+            // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
+            Vector512<byte> low = input;
+
+            // X86 doesn't have a logical right shift intrinsic for bytes: https://github.com/dotnet/runtime/issues/82564
+            Vector512<byte> high = (input.AsInt32() >>> 4).AsByte() & Vector512.Create((byte)0xF);
+
+            return (low, high);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private static Vector128<byte> Shuffle(Vector128<byte> maskLow, Vector128<byte> maskHigh, Vector128<byte> low, Vector128<byte> high)
@@ -223,6 +297,13 @@ namespace System.Buffers
         private static Vector256<byte> Shuffle(Vector256<byte> maskLow, Vector256<byte> maskHigh, Vector256<byte> low, Vector256<byte> high)
         {
             return Avx2.Shuffle(maskLow, low) & Avx2.Shuffle(maskHigh, high);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        private static Vector512<byte> Shuffle(Vector512<byte> maskLow, Vector512<byte> maskHigh, Vector512<byte> low, Vector512<byte> high)
+        {
+            return Avx512BW.Shuffle(maskLow, low) & Avx512BW.Shuffle(maskHigh, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -285,6 +366,22 @@ namespace System.Buffers
         {
             Vector256<byte> leftShifted = Avx2.Permute2x128(left, right, 33);
             return Avx2.AlignRight(right, leftShifted, 14);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        private static Vector512<byte> RightShift1(Vector512<byte> left, Vector512<byte> right)
+        {
+            Vector512<byte> leftShifted = Avx512F.PermuteVar8x64(left.AsInt64(), Vector512.Create(0, 7, 0, 0, 0, 0, 0, 0)).AsByte();
+            return Avx512BW.AlignRight(right, leftShifted, 15);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        private static Vector512<byte> RightShift2(Vector512<byte> left, Vector512<byte> right)
+        {
+            Vector512<byte> leftShifted = Avx512F.PermuteVar8x64(left.AsInt64(), Vector512.Create(0, 7, 0, 0, 0, 0, 0, 0)).AsByte();
+            return Avx512BW.AlignRight(right, leftShifted, 14);
         }
     }
 }

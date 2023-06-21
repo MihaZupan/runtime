@@ -35,7 +35,7 @@ namespace System.Buffers
 
             if (uniqueValues.Contains(string.Empty))
             {
-                return new EmptyStringSearchValues(uniqueValues);
+                return new SingleStringSearchValuesFallback<SearchValues.FalseConst>(string.Empty, uniqueValues);
             }
 
             Span<string> normalizedValues = new string[uniqueValues.Count];

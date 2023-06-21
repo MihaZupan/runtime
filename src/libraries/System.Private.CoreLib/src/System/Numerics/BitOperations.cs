@@ -945,6 +945,17 @@ namespace System.Numerics
         }
 
         /// <summary>
+        /// Reset specific bit in the given value
+        /// Reset the lowest significant bit in the given value
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong ResetLowestSetBit(ulong value)
+        {
+            // It's lowered to BLSR on x86
+            return value & (value - 1);
+        }
+
+        /// <summary>
         /// Flip the bit at a specific position in a given value.
         /// Similar in behavior to the x86 instruction BTC (Bit Test and Complement).
         /// </summary>

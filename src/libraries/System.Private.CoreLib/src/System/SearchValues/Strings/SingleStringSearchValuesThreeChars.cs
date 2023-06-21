@@ -7,7 +7,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using static System.Buffers.StringSearchValuesHelper;
 
 namespace System.Buffers
@@ -75,7 +74,47 @@ namespace System.Buffers
             nuint ch2ByteOffset = _ch2ByteOffset;
             nuint ch3ByteOffset = _ch3ByteOffset;
 
-            if (Vector256.IsHardwareAccelerated && searchSpaceMinusValueTailLength - Vector256<ushort>.Count >= 0)
+            if (Vector512.IsHardwareAccelerated && searchSpaceMinusValueTailLength - Vector512<ushort>.Count >= 0)
+            {
+                Vector512<ushort> ch1 = Vector512.Create(_ch1);
+                Vector512<ushort> ch2 = Vector512.Create(_ch2);
+                Vector512<ushort> ch3 = Vector512.Create(_ch3);
+
+                ref char lastSearchSpace = ref Unsafe.Add(ref searchSpace, searchSpaceMinusValueTailLength - Vector512<ushort>.Count);
+
+                while (true)
+                {
+                    Vector512<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1, ch2, ch3);
+
+                    if (result != Vector512<byte>.Zero)
+                    {
+                        goto CandidateFound;
+                    }
+
+                LoopFooter:
+                    searchSpace = ref Unsafe.Add(ref searchSpace, Vector512<ushort>.Count);
+
+                    if (Unsafe.IsAddressGreaterThan(ref searchSpace, ref lastSearchSpace))
+                    {
+                        if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpace, Vector512<ushort>.Count)))
+                        {
+                            return -1;
+                        }
+
+                        searchSpace = ref lastSearchSpace;
+                    }
+
+                    continue;
+
+                CandidateFound:
+                    if (TryMatch(ref searchSpaceStart, ref searchSpace, result.ExtractMostSignificantBits(), out int resultOffset))
+                    {
+                        return resultOffset;
+                    }
+                    goto LoopFooter;
+                }
+            }
+            else if (Vector256.IsHardwareAccelerated && searchSpaceMinusValueTailLength - Vector256<ushort>.Count >= 0)
             {
                 Vector256<ushort> ch1 = Vector256.Create(_ch1);
                 Vector256<ushort> ch2 = Vector256.Create(_ch2);
@@ -217,6 +256,27 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector512<byte> GetComparisonResult(ref char searchSpace, nuint ch2ByteOffset, nuint ch3ByteOffset, Vector512<ushort> ch1, Vector512<ushort> ch2, Vector512<ushort> ch3)
+        {
+            if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
+            {
+                Vector512<ushort> cmpCh1 = Vector512.Equals(ch1, Vector512.LoadUnsafe(ref searchSpace));
+                Vector512<ushort> cmpCh2 = Vector512.Equals(ch2, Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16());
+                Vector512<ushort> cmpCh3 = Vector512.Equals(ch3, Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16());
+                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+            }
+            else
+            {
+                Vector512<ushort> caseConversion = Vector512.Create(CaseConversionMask);
+
+                Vector512<ushort> cmpCh1 = Vector512.Equals(ch1, Vector512.LoadUnsafe(ref searchSpace) & caseConversion);
+                Vector512<ushort> cmpCh2 = Vector512.Equals(ch2, Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion);
+                Vector512<ushort> cmpCh3 = Vector512.Equals(ch3, Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16() & caseConversion);
+                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryMatch(ref char searchSpaceStart, ref char searchSpace, uint mask, out int resultOffset)
         {
             do
@@ -233,14 +293,32 @@ namespace System.Buffers
                     return true;
                 }
 
-                if (Bmi1.IsSupported)
+                mask = BitOperations.ResetLowestSetBit(BitOperations.ResetLowestSetBit(mask));
+            }
+            while (mask != 0);
+
+            resultOffset = 0;
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryMatch(ref char searchSpaceStart, ref char searchSpace, ulong mask, out int resultOffset)
+        {
+            do
+            {
+                int bitPos = BitOperations.TrailingZeroCount(mask);
+                Debug.Assert(bitPos % 2 == 0);
+
+                ref char matchStart = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
+
+                if ((typeof(TCaseSensitivity) == typeof(CaseSensitive) && !TValueLength.AtLeast4Chars) ||
+                    TCaseSensitivity.Equals<TValueLength>(ref matchStart, _value))
                 {
-                    mask = Bmi1.ResetLowestSetBit(Bmi1.ResetLowestSetBit(mask));
+                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchStart) / 2);
+                    return true;
                 }
-                else
-                {
-                    mask &= ~(uint)(0b11 << bitPos);
-                }
+
+                mask = BitOperations.ResetLowestSetBit(BitOperations.ResetLowestSetBit(mask));
             }
             while (mask != 0);
 

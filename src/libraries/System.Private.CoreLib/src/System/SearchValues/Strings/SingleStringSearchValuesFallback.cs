@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace System.Buffers
 {
@@ -16,6 +17,7 @@ namespace System.Buffers
             _value = value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
             TIgnoreCase.Value
                 ? Ordinal.IndexOfOrdinalIgnoreCase(span, _value)
