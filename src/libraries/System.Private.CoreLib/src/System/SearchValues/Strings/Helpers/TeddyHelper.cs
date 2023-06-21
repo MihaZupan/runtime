@@ -213,7 +213,7 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static (Vector512<byte> Low, Vector512<byte> High) GetNibbles(Vector512<byte> input)
         {
-            // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
+            // 'low' is not strictly correct here, but we take advantage of Avx512BW.Shuffle's behavior
             // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
             Vector512<byte> low = input;
 
