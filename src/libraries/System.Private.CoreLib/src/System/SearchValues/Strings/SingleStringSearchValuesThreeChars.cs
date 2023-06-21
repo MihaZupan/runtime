@@ -59,7 +59,6 @@ namespace System.Buffers
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
             IndexOf(ref MemoryMarshal.GetReference(span), span.Length);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private int IndexOf(ref char searchSpace, int searchSpaceLength)
         {
             ref char searchSpaceStart = ref searchSpace;
