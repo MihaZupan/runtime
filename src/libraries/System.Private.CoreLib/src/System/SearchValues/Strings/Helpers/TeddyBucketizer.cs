@@ -8,29 +8,31 @@ using System.Runtime.InteropServices;
 
 namespace System.Buffers
 {
-    // https://github.com/jneem/teddy/blob/9ab5e899ad6ef6911aecd3cf1033f1abe6e1f66c/src/x86/mask.rs#L215-L262
-    // TODO: Rewrite this?
-    // TODO: Does this actually work to produce a decent bucket distribution?
+    // Based on https://github.com/jneem/teddy/blob/9ab5e899ad6ef6911aecd3cf1033f1abe6e1f66c/src/x86/mask.rs#L215-L262
     internal static class TeddyBucketizer
     {
-        private sealed record Fingerprint((uint High, uint Low)[] Nibbles)
+        private sealed class Fingerprint((uint High, uint Low)[] Nibbles)
         {
+            private readonly (uint High, uint Low)[] _nibbles = Nibbles;
+
             public void AddString(string s)
             {
-                for (int i = 0; i < Nibbles.Length; i++)
+                (uint High, uint Low)[] nibbles = _nibbles;
+
+                for (int i = 0; i < nibbles.Length; i++)
                 {
                     Debug.Assert(char.IsAscii(s[i]));
                     byte b = (byte)s[i];
 
-                    (uint high, uint low) = Nibbles[i];
-                    Nibbles[i] = (high | (1u << (b >> 4)), low | (1u << (b & 0xF)));
+                    (uint high, uint low) = nibbles[i];
+                    nibbles[i] = (high | (1u << (b >> 4)), low | (1u << (b & 0xF)));
                 }
             }
 
             public int Len()
             {
                 int product = 1;
-                foreach ((uint high, uint low) in Nibbles)
+                foreach ((uint high, uint low) in _nibbles)
                 {
                     product *= BitOperations.PopCount(high);
                     product *= BitOperations.PopCount(low);
@@ -40,58 +42,81 @@ namespace System.Buffers
 
             public int IntersectionSize(Fingerprint other)
             {
+                (uint High, uint Low)[] nibbles = _nibbles;
+                (uint High, uint Low)[] otherNibbles = other._nibbles;
+
                 int product = 1;
-                for (int i = 0; i < Nibbles.Length; i++)
+                for (int i = 0; i < nibbles.Length; i++)
                 {
-                    product *= BitOperations.PopCount(Nibbles[i].High & other.Nibbles[i].High);
-                    product *= BitOperations.PopCount(Nibbles[i].Low & other.Nibbles[i].Low);
+                    product *= BitOperations.PopCount(nibbles[i].High & otherNibbles[i].High);
+                    product *= BitOperations.PopCount(nibbles[i].Low & otherNibbles[i].Low);
                 }
                 return product;
             }
 
             public int CoverSize(Fingerprint other)
             {
+                (uint High, uint Low)[] nibbles = _nibbles;
+                (uint High, uint Low)[] otherNibbles = other._nibbles;
+
                 int product = 1;
-                for (int i = 0; i < Nibbles.Length; i++)
+                for (int i = 0; i < nibbles.Length; i++)
                 {
-                    product *= BitOperations.PopCount(Nibbles[i].High | other.Nibbles[i].High);
-                    product *= BitOperations.PopCount(Nibbles[i].Low | other.Nibbles[i].Low);
+                    product *= BitOperations.PopCount(nibbles[i].High | otherNibbles[i].High);
+                    product *= BitOperations.PopCount(nibbles[i].Low | otherNibbles[i].Low);
                 }
                 return product;
             }
 
             public void Include(Fingerprint other)
             {
-                for (int i = 0; i < Nibbles.Length; i++)
+                (uint High, uint Low)[] nibbles = _nibbles;
+                (uint High, uint Low)[] otherNibbles = other._nibbles;
+
+                for (int i = 0; i < nibbles.Length; i++)
                 {
-                    Nibbles[i] = (Nibbles[i].High | other.Nibbles[i].High, Nibbles[i].Low | other.Nibbles[i].Low);
+                    nibbles[i] = (nibbles[i].High | otherNibbles[i].High, nibbles[i].Low | otherNibbles[i].Low);
                 }
             }
         }
 
-        private sealed record Bucket(List<string> Values, Fingerprint Fingerprint)
+        private sealed class Bucket
         {
+            private readonly Fingerprint _fingerprint;
+
+            public List<string> Values { get; private set; }
+
+            public Bucket(List<string> values, Fingerprint fingerprint)
+            {
+                Values = values;
+                _fingerprint = fingerprint;
+            }
+
             public void AddString(string s)
             {
                 Values.Add(s);
-                Fingerprint.AddString(s);
+                _fingerprint.AddString(s);
             }
 
             public Penalty MergePenalty(Bucket other)
             {
-                int oldSize = Fingerprint.Len() + other.Fingerprint.Len() - Fingerprint.IntersectionSize(other.Fingerprint);
-                int newSize = Fingerprint.CoverSize(other.Fingerprint);
+                int oldSize = _fingerprint.Len() + other._fingerprint.Len() - _fingerprint.IntersectionSize(other._fingerprint);
+                int newSize = _fingerprint.CoverSize(other._fingerprint);
                 return new Penalty(newSize - oldSize, newSize);
             }
 
             public void Merge(Bucket other)
             {
                 Values.AddRange(other.Values);
-                Fingerprint.Include(other.Fingerprint);
+                _fingerprint.Include(other._fingerprint);
             }
         }
 
-        private record struct Penalty(int Difference, int NewSize);
+        private readonly struct Penalty(int difference, int newSize)
+        {
+            public int Difference => difference;
+            public int NewSize => newSize;
+        }
 
         private static void MergeOneBucket(List<Bucket> buckets)
         {
