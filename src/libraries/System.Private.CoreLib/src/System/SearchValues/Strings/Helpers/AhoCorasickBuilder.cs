@@ -180,11 +180,6 @@ namespace System.Buffers
             if (Ascii.IsValid(startingChars.AsSpan()))
             {
                 IndexOfAnyAsciiSearcher.ComputeBitmap(startingChars.AsSpan(), out _startingCharsAsciiBitmap, out _);
-
-                // TODO: Should we avoid using the fast scan if there are too many starting values?
-                //int uniqueStartingChars =
-                //    BitOperations.PopCount(bitmap.AsUInt64()[0]) +
-                //    BitOperations.PopCount(bitmap.AsUInt64()[1]);
             }
 
             startingChars.Dispose();

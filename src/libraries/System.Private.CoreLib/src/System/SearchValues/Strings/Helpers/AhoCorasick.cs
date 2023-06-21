@@ -23,6 +23,24 @@ namespace System.Buffers
             _maxValueLength = maxValueLength;
         }
 
+        public readonly bool ShouldUseAsciiFastScan
+        {
+            get
+            {
+                if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && _startingCharsAsciiBitmap != default)
+                {
+                    // TODO: Should we avoid using the fast scan if there are too many starting values?
+                    // int uniqueStartingChars =
+                    //     BitOperations.PopCount(_startingCharsAsciiBitmap.AsUInt64()[0]) +
+                    //     BitOperations.PopCount(_startingCharsAsciiBitmap.AsUInt64()[1]);
+                    // return uniqueStartingChars <= 42;
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int IndexOfAny<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span)
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity

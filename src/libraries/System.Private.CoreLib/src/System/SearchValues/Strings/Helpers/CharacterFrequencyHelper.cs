@@ -83,6 +83,7 @@ namespace System.Buffers
                 float minFrequency = float.MaxValue;
                 int minIndex = -1;
 
+                // Exclude i = 0 as we've already decided to use the first character.
                 for (int i = 1; i < span.Length; i++)
                 {
                     if (i == excludeIndex)

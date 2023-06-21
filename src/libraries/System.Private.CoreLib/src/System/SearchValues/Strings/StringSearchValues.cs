@@ -113,6 +113,7 @@ namespace System.Buffers
 
             if (values.Length == 1)
             {
+                // We may reach this if we've removed unreachable values and ended up with only 1 remaining.
                 return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
             }
 
@@ -126,39 +127,30 @@ namespace System.Buffers
 
             AhoCorasick ahoCorasick = ahoCorasickBuilder.Build();
 
-            bool asciiOnlyStartChars = true;
-
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && !allAscii)
+            if (!ignoreCase)
             {
-                foreach (string value in values)
-                {
-                    if (!char.IsAscii(value[0]))
-                    {
-                        asciiOnlyStartChars = false;
-                        break;
-                    }
-                }
+                return PickAhoCorasickImplementation<CaseSensitive>(ahoCorasick, uniqueValues);
             }
 
-            if (ignoreCase)
+            if (nonAsciiAffectedByCaseConversion)
             {
-                if (nonAsciiAffectedByCaseConversion)
-                {
-                    return asciiOnlyStartChars
-                        ? new StringSearchValuesAhoCorasick<CaseInsensitiveUnicode, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
-                        : new StringSearchValuesAhoCorasick<CaseInsensitiveUnicode, AhoCorasick.NoFastScan>(ahoCorasick, uniqueValues);
-                }
-                else
-                {
-                    return asciiLettersOnly
-                        ? new StringSearchValuesAhoCorasick<CaseInensitiveAsciiLetters, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
-                        : new StringSearchValuesAhoCorasick<CaseInensitiveAscii, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues);
-                }
+                return PickAhoCorasickImplementation<CaseInsensitiveUnicode>(ahoCorasick, uniqueValues);
             }
 
-            return asciiOnlyStartChars
-                ? new StringSearchValuesAhoCorasick<CaseSensitive, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
-                : new StringSearchValuesAhoCorasick<CaseSensitive, AhoCorasick.NoFastScan>(ahoCorasick, uniqueValues);
+            if (asciiLettersOnly)
+            {
+                return PickAhoCorasickImplementation<CaseInensitiveAsciiLetters>(ahoCorasick, uniqueValues);
+            }
+
+            return PickAhoCorasickImplementation<CaseInensitiveAscii>(ahoCorasick, uniqueValues);
+
+            static SearchValues<string> PickAhoCorasickImplementation<TCaseSensitivity>(AhoCorasick ahoCorasick, HashSet<string> uniqueValues)
+                where TCaseSensitivity : struct, ICaseSensitivity
+            {
+                return ahoCorasick.ShouldUseAsciiFastScan
+                    ? new StringSearchValuesAhoCorasick<TCaseSensitivity, AhoCorasick.IndexOfAnyAsciiFastScan>(ahoCorasick, uniqueValues)
+                    : new StringSearchValuesAhoCorasick<TCaseSensitivity, AhoCorasick.NoFastScan>(ahoCorasick, uniqueValues);
+            }
         }
 
         private static SearchValues<string>? TryGetTeddyAcceleratedValues(
@@ -347,7 +339,7 @@ namespace System.Buffers
                 return new SingleStringSearchValuesThreeChars<TValueLength, CaseInensitiveAscii>(value, uniqueValues);
             }
 
-            // When ignoring casing, all anchor chars have to be ASCII.
+            // When ignoring casing, all anchor chars we search for must be ASCII.
             if (char.IsAscii(value[0]) && value.AsSpan().LastIndexOfAnyInRange((char)0, (char)127) > 0)
             {
                 return new SingleStringSearchValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
