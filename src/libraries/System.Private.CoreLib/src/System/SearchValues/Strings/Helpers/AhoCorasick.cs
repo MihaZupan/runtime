@@ -211,7 +211,7 @@ namespace System.Buffers
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
-            if (typeof(TCaseSensitivity) == typeof(TeddyHelper.CaseInsensitiveUnicode))
+            if (typeof(TCaseSensitivity) == typeof(StringSearchValuesHelper.CaseInsensitiveUnicode))
             {
                 return GlobalizationMode.UseNls
                     ? IndexOfAnyCaseInsensitiveUnicodeNls<TFastScanVariant>(span)
@@ -481,7 +481,9 @@ namespace System.Buffers
                 span = span.Slice(toConvert);
 
                 Span<char> upperCaseBuffer = buffer.Slice(0, leftoverFromPreviousIteration + toConvert);
-                result = IndexOfAny<TeddyHelper.CaseSensitive, TFastScanVariant>(upperCaseBuffer);
+
+                // CaseSensitive instead of CaseInsensitiveUnicode as we've already done the case conversion.
+                result = IndexOfAny<StringSearchValuesHelper.CaseSensitive, TFastScanVariant>(upperCaseBuffer);
 
                 if (result >= 0 && (span.IsEmpty || result <= buffer.Length - _maxValueLength))
                 {
