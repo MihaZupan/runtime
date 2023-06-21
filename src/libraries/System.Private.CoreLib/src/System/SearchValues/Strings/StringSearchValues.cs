@@ -42,26 +42,23 @@ namespace System.Buffers
             int i = 0;
             foreach (string value in uniqueValues)
             {
-                string normalized = value;
-
-                if (ignoreCase && (value.AsSpan().IndexOfAnyInRange('a', 'z') >= 0 || !Ascii.IsValid(value)))
-                {
-                    string upperCase = string.FastAllocateString(value.Length);
-                    int charsWritten = Ordinal.ToUpperOrdinal(value, new Span<char>(ref upperCase.GetRawStringData(), upperCase.Length));
-                    Debug.Assert(charsWritten == upperCase.Length);
-                    normalized = upperCase;
-                }
-
-                normalizedValues[i++] = normalized;
+                normalizedValues[i++] = NormalizeIfNeeded(value, ignoreCase);
             }
             Debug.Assert(i == normalizedValues.Length);
+
+            if (normalizedValues.Length == 1)
+            {
+                // Avoid the overhead of building the AhoCorasick trie for single-value inputs.
+                AnalyzeValues(normalizedValues, ref ignoreCase, out bool ascii, out bool asciiLettersOnly, out _, out _);
+                return CreateForSingleValue(normalizedValues[0], uniqueValues, ignoreCase, ascii, asciiLettersOnly);
+            }
 
             // Aho-Corasick's ctor expects values to be sorted by length.
             normalizedValues.Sort(static (a, b) => a.Length.CompareTo(b.Length));
 
             // We may not end up choosing Aho-Corasick as the implementation, but it has a nice property of
             // finding all the unreachable values during the construction stage, so we build the trie early.
-            List<string>? unreachableValues = null;
+            HashSet<string>? unreachableValues = null;
             var ahoCorasickBuilder = new AhoCorasickBuilder(normalizedValues, ignoreCase, ref unreachableValues);
 
             if (unreachableValues is not null)
@@ -75,21 +72,31 @@ namespace System.Buffers
             ahoCorasickBuilder.Dispose();
             return searchValues;
 
-            static Span<string> RemoveUnreachableValues(Span<string> values, List<string> unreachableValues)
+            static string NormalizeIfNeeded(string value, bool ignoreCase)
             {
-                // We've already normalized the values, so we can do ordinal comparisons here.
-                var unreachableValuesSet = new HashSet<string>(unreachableValues, StringComparer.Ordinal);
+                if (ignoreCase && (value.AsSpan().ContainsAnyInRange('a', 'z') || !Ascii.IsValid(value)))
+                {
+                    string upperCase = string.FastAllocateString(value.Length);
+                    int charsWritten = Ordinal.ToUpperOrdinal(value, new Span<char>(ref upperCase.GetRawStringData(), upperCase.Length));
+                    Debug.Assert(charsWritten == upperCase.Length);
+                    value = upperCase;
+                }
 
+                return value;
+            }
+
+            static Span<string> RemoveUnreachableValues(Span<string> values, HashSet<string> unreachableValues)
+            {
                 int newCount = 0;
                 foreach (string value in values)
                 {
-                    if (!unreachableValuesSet.Contains(value))
+                    if (!unreachableValues.Contains(value))
                     {
                         values[newCount++] = value;
                     }
                 }
 
-                Debug.Assert(newCount == values.Length - unreachableValues.Count);
+                Debug.Assert(newCount <= values.Length - unreachableValues.Count);
                 Debug.Assert(newCount > 0);
 
                 return values.Slice(0, newCount);
@@ -102,37 +109,7 @@ namespace System.Buffers
             bool ignoreCase,
             ref AhoCorasickBuilder ahoCorasickBuilder)
         {
-            bool allAscii = true;
-            bool asciiLettersOnly = true;
-            int minLength = int.MaxValue;
-
-            foreach (string value in values)
-            {
-                allAscii = allAscii && Ascii.IsValid(value);
-                asciiLettersOnly = asciiLettersOnly && value.AsSpan().IndexOfAnyExcept(s_asciiLetters) < 0;
-                minLength = Math.Min(minLength, value.Length);
-            }
-
-            // TODO: Not all characters participate in Unicode case conversion.
-            // If we can determine that none of the non-ASCII characters do, we can make searching faster
-            // by using the same paths as we do for ASCII-only values.
-            // We should be able to get that answer as long as we're not using NLS.
-            bool nonAsciiAffectedByCaseConversion = ignoreCase && !allAscii;
-
-            // If all the characters in values are unaffected by casing, we can avoid the ignoreCase overhead.
-            if (ignoreCase && !nonAsciiAffectedByCaseConversion)
-            {
-                ignoreCase = false;
-
-                foreach (string value in values)
-                {
-                    if (value.AsSpan().IndexOfAny(s_asciiLetters) >= 0)
-                    {
-                        ignoreCase = true;
-                        break;
-                    }
-                }
-            }
+            AnalyzeValues(values, ref ignoreCase, out bool allAscii, out bool asciiLettersOnly, out bool nonAsciiAffectedByCaseConversion, out int minLength);
 
             if (values.Length == 1)
             {
@@ -259,8 +236,8 @@ namespace System.Buffers
             foreach (string value in values)
             {
                 ReadOnlySpan<char> slice = value.AsSpan(0, n);
-                asciiStartLettersOnly = asciiStartLettersOnly && slice.IndexOfAnyExcept(s_asciiLetters) < 0;
-                asciiStartUnaffectedByCaseConversion = asciiStartUnaffectedByCaseConversion && slice.IndexOfAny(s_asciiLetters) < 0;
+                asciiStartLettersOnly = asciiStartLettersOnly && !slice.ContainsAnyExcept(s_asciiLetters);
+                asciiStartUnaffectedByCaseConversion = asciiStartUnaffectedByCaseConversion && !slice.ContainsAny(s_asciiLetters);
             }
 
             Debug.Assert(!(asciiStartLettersOnly && asciiStartUnaffectedByCaseConversion));
@@ -376,6 +353,46 @@ namespace System.Buffers
             }
 
             return null;
+        }
+
+        private static void AnalyzeValues(
+            ReadOnlySpan<string> values,
+            ref bool ignoreCase,
+            out bool allAscii,
+            out bool asciiLettersOnly,
+            out bool nonAsciiAffectedByCaseConversion,
+            out int minLength)
+        {
+            allAscii = true;
+            asciiLettersOnly = true;
+            minLength = int.MaxValue;
+
+            foreach (string value in values)
+            {
+                allAscii = allAscii && Ascii.IsValid(value);
+                asciiLettersOnly = asciiLettersOnly && !value.AsSpan().ContainsAnyExcept(s_asciiLetters);
+                minLength = Math.Min(minLength, value.Length);
+            }
+
+            // TODO: Not all characters participate in Unicode case conversion.
+            // If we can determine that none of the non-ASCII characters do, we can make searching faster
+            // by using the same paths as we do for ASCII-only values.
+            nonAsciiAffectedByCaseConversion = ignoreCase && !allAscii;
+
+            // If all the characters in values are unaffected by casing, we can avoid the ignoreCase overhead.
+            if (ignoreCase && !nonAsciiAffectedByCaseConversion && !asciiLettersOnly)
+            {
+                ignoreCase = false;
+
+                foreach (string value in values)
+                {
+                    if (value.AsSpan().ContainsAny(s_asciiLetters))
+                    {
+                        ignoreCase = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 }

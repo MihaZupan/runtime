@@ -256,7 +256,7 @@ namespace System.Buffers
             public static bool Equals<TValueLength>(ref char matchStart, string candidate)
                 where TValueLength : struct, IValueLength
             {
-                if (TValueLength.AtLeast8Chars)
+                if (Vector128.IsHardwareAccelerated && TValueLength.AtLeast8Chars)
                 {
                     return Ascii.EqualsIgnoreCase(ref matchStart, ref candidate.GetRawStringData(), (uint)candidate.Length);
                 }
@@ -283,7 +283,7 @@ namespace System.Buffers
             public static bool Equals<TValueLength>(ref char matchStart, string candidate)
                 where TValueLength : struct, IValueLength
             {
-                if (TValueLength.AtLeast8Chars)
+                if (Vector128.IsHardwareAccelerated && TValueLength.AtLeast8Chars)
                 {
                     return Ordinal.EqualsIgnoreCase_Vector128(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
                 }

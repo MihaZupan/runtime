@@ -89,7 +89,11 @@ namespace System.Buffers
         private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span)
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
         {
-            Debug.Assert(typeof(TCaseSensitivity) != typeof(StringSearchValuesHelper.CaseInsensitiveUnicode));
+            if (typeof(TCaseSensitivity) == typeof(StringSearchValuesHelper.CaseInsensitiveUnicode))
+            {
+                throw new UnreachableException();
+            }
+
             Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled short inputs.");
 
             ref char current = ref MemoryMarshal.GetReference(span);

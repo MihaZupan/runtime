@@ -34,7 +34,10 @@ namespace System.Buffers
 
         protected AsciiStringSearchValuesTeddyBase(ReadOnlySpan<string> values, HashSet<string> uniqueValues, int n) : base(values, uniqueValues)
         {
-            Debug.Assert(!TBucketized.Value);
+            if (TBucketized.Value)
+            {
+                throw new UnreachableException();
+            }
 
             _buckets = new EightPackedReferences(MemoryMarshal.CreateReadOnlySpan(
                 ref Unsafe.As<string, object>(ref MemoryMarshal.GetReference(values)),
@@ -51,7 +54,10 @@ namespace System.Buffers
 
         protected AsciiStringSearchValuesTeddyBase(string[][] buckets, ReadOnlySpan<string> values, HashSet<string> uniqueValues, int n) : base(values, uniqueValues)
         {
-            Debug.Assert(TBucketized.Value);
+            if (!TBucketized.Value)
+            {
+                throw new UnreachableException();
+            }
 
             _buckets = new EightPackedReferences(buckets);
 

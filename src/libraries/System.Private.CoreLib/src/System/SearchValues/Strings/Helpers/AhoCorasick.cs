@@ -20,7 +20,7 @@ namespace System.Buffers
         private Vector256<byte> _startingCharsAsciiBitmap;
         private int _maxValueLength; // Only used by the NLS fallback
 
-        public AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase, ref List<string>? unreachableValues)
+        public AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase, ref HashSet<string>? unreachableValues)
         {
             Debug.Assert(!values.IsEmpty);
             Debug.Assert(!string.IsNullOrEmpty(values[0]));
@@ -63,7 +63,7 @@ namespace System.Buffers
             _parents.Dispose();
         }
 
-        private void BuildTrie(ref List<string>? unreachableValues)
+        private void BuildTrie(ref HashSet<string>? unreachableValues)
         {
             _nodes.Append(new AhoCorasick.Node());
             _parents.Append(0);
@@ -92,7 +92,8 @@ namespace System.Buffers
                     {
                         // A previous value is an exact prefix of this one.
                         // We're looking for the index of the first match, not necessarily the longest one, we can skip this value.
-                        unreachableValues ??= new List<string>();
+                        // We've already normalized the values, so we can do ordinal comparisons here.
+                        unreachableValues ??= new HashSet<string>(StringComparer.Ordinal);
                         unreachableValues.Add(value);
                         break;
                     }
@@ -225,7 +226,10 @@ namespace System.Buffers
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
-            Debug.Assert(typeof(TCaseSensitivity) != typeof(StringSearchValuesHelper.CaseInsensitiveUnicode));
+            if (typeof(TCaseSensitivity) == typeof(StringSearchValuesHelper.CaseInsensitiveUnicode))
+            {
+                throw new UnreachableException();
+            }
 
             ref Node nodes = ref MemoryMarshal.GetArrayDataReference(_nodes);
             int nodeIndex = 0;
