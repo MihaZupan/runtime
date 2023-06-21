@@ -1,8 +1,6 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -12,66 +10,6 @@ namespace System.Buffers
 {
     internal static class TeddyHelper
     {
-        public static (Vector512<byte> Low, Vector512<byte> High) GenerateNonBucketizedFingerprint(ReadOnlySpan<string> values, int offset)
-        {
-            Debug.Assert(values.Length <= 8);
-
-            Vector128<byte> low = default;
-            Vector128<byte> high = default;
-
-            for (int i = 0; i < values.Length; i++)
-            {
-                string value = values[i];
-
-                int bit = 1 << i;
-
-                char c = value[offset];
-                Debug.Assert(char.IsAscii(c));
-
-                int lowNibble = c & 0xF;
-                int highNibble = c >> 4;
-
-                low.SetElementUnsafe(lowNibble, (byte)(low.GetElementUnsafe(lowNibble) | bit));
-                high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
-            }
-
-            return (DuplicateTo512(low), DuplicateTo512(high));
-        }
-
-        public static (Vector512<byte> Low, Vector512<byte> High) GenerateBucketizedFingerprint(string[][] valueBuckets, int offset)
-        {
-            Debug.Assert(valueBuckets.Length <= 8);
-
-            Vector128<byte> low = default;
-            Vector128<byte> high = default;
-
-            for (int i = 0; i < valueBuckets.Length; i++)
-            {
-                int bit = 1 << i;
-
-                foreach (string value in valueBuckets[i])
-                {
-                    char c = value[offset];
-                    Debug.Assert(char.IsAscii(c));
-
-                    int lowNibble = c & 0xF;
-                    int highNibble = c >> 4;
-
-                    low.SetElementUnsafe(lowNibble, (byte)(low.GetElementUnsafe(lowNibble) | bit));
-                    high.SetElementUnsafe(highNibble, (byte)(high.GetElementUnsafe(highNibble) | bit));
-                }
-            }
-
-            return (DuplicateTo512(low), DuplicateTo512(high));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Vector512<byte> DuplicateTo512(Vector128<byte> vector)
-        {
-            Vector256<byte> vector256 = Vector256.Create(vector, vector);
-            return Vector512.Create(vector256, vector256);
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]

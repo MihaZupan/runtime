@@ -43,12 +43,12 @@ namespace System.Buffers
                 ref Unsafe.As<string, object>(ref MemoryMarshal.GetReference(values)),
                 values.Length));
 
-            (_n0Low, _n0High) = GenerateNonBucketizedFingerprint(values, offset: 0);
-            (_n1Low, _n1High) = GenerateNonBucketizedFingerprint(values, offset: 1);
+            (_n0Low, _n0High) = TeddyBucketizer.GenerateNonBucketizedFingerprint(values, offset: 0);
+            (_n1Low, _n1High) = TeddyBucketizer.GenerateNonBucketizedFingerprint(values, offset: 1);
 
             if (n == 3)
             {
-                (_n2Low, _n2High) = GenerateNonBucketizedFingerprint(values, offset: 2);
+                (_n2Low, _n2High) = TeddyBucketizer.GenerateNonBucketizedFingerprint(values, offset: 2);
             }
         }
 
@@ -61,12 +61,12 @@ namespace System.Buffers
 
             _buckets = new EightPackedReferences(buckets);
 
-            (_n0Low, _n0High) = GenerateBucketizedFingerprint(buckets, offset: 0);
-            (_n1Low, _n1High) = GenerateBucketizedFingerprint(buckets, offset: 1);
+            (_n0Low, _n0High) = TeddyBucketizer.GenerateBucketizedFingerprint(buckets, offset: 0);
+            (_n1Low, _n1High) = TeddyBucketizer.GenerateBucketizedFingerprint(buckets, offset: 1);
 
             if (n == 3)
             {
-                (_n2Low, _n2High) = GenerateBucketizedFingerprint(buckets, offset: 2);
+                (_n2Low, _n2High) = TeddyBucketizer.GenerateBucketizedFingerprint(buckets, offset: 2);
             }
         }
 
