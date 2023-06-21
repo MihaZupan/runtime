@@ -77,12 +77,24 @@ namespace System.Memory.Tests.Span
                 }
             }
 
-            void AssertIndexOfAnyAndFriends(ReadOnlySpan<string> values, int any, int anyExcept, int last, int lastExcept)
+            void AssertIndexOfAnyAndFriends(Span<string> values, int any, int anyExcept, int last, int lastExcept)
             {
+                Assert.Equal(any >= 0, last >= 0);
+                Assert.Equal(anyExcept >= 0, lastExcept >= 0);
+
                 Assert.Equal(any, values.IndexOfAny(stringValues));
+                Assert.Equal(any, ((ReadOnlySpan<string>)values).IndexOfAny(stringValues));
                 Assert.Equal(anyExcept, values.IndexOfAnyExcept(stringValues));
+                Assert.Equal(anyExcept, ((ReadOnlySpan<string>)values).IndexOfAnyExcept(stringValues));
                 Assert.Equal(last, values.LastIndexOfAny(stringValues));
+                Assert.Equal(last, ((ReadOnlySpan<string>)values).LastIndexOfAny(stringValues));
                 Assert.Equal(lastExcept, values.LastIndexOfAnyExcept(stringValues));
+                Assert.Equal(lastExcept, ((ReadOnlySpan<string>)values).LastIndexOfAnyExcept(stringValues));
+
+                Assert.Equal(any >= 0, values.ContainsAny(stringValues));
+                Assert.Equal(any >= 0, ((ReadOnlySpan<string>)values).ContainsAny(stringValues));
+                Assert.Equal(anyExcept >= 0, values.ContainsAnyExcept(stringValues));
+                Assert.Equal(anyExcept >= 0, ((ReadOnlySpan<string>)values).ContainsAnyExcept(stringValues));
             }
         }
 
@@ -122,13 +134,19 @@ namespace System.Memory.Tests.Span
         [InlineData(StringComparison.OrdinalIgnoreCase, 6, "AAAAsB\u017FBSBBCCCC", "\u017F")]
         public static void IndexOfAny(StringComparison comparisonType, int expected, string text, string? values)
         {
+            Span<char> textSpan = text.ToArray(); // Test non-readonly Span<char> overloads
+
             string[] valuesArray = values is null ? Array.Empty<string>() : values.Split(", ");
 
             SearchValues<string> stringValues = SearchValues.Create(valuesArray, comparisonType);
 
             Assert.Equal(expected, text.AsSpan().IndexOfAny(stringValues));
+            Assert.Equal(expected, textSpan.IndexOfAny(stringValues));
 
             Assert.Equal(expected, IndexOfAnyReferenceImpl(text, valuesArray, comparisonType));
+
+            Assert.Equal(expected >= 0, text.AsSpan().ContainsAny(stringValues));
+            Assert.Equal(expected >= 0, textSpan.ContainsAny(stringValues));
         }
 
         [Fact]
@@ -145,6 +163,12 @@ namespace System.Memory.Tests.Span
                     Assert.Throws<ArgumentException>(() => SearchValues.Create(new[] { "abc" }, comparisonType));
                 }
             }
+        }
+
+        [Fact]
+        public static void Create_ThrowsOnNullValues()
+        {
+            Assert.Throws<ArgumentNullException>("values", () => SearchValues.Create(new[] { "foo", null, "bar" }, StringComparison.Ordinal));
         }
 
         [Fact]
@@ -183,46 +207,41 @@ namespace System.Memory.Tests.Span
         [ActiveIssue("Manual execution only. Worth running any time SearchValues<string> logic is modified.")]
         public static void TestIndexOfAny_RandomInputs_Stress()
         {
-            foreach (int maxNeedleCount in new[] { 2, 8, 20, 70 })
-            {
-                foreach (int maxNeedleValueLength in new[] { 8, 40 })
-                {
-                    foreach (int haystackLength in new[] { 100, 1024 })
-                    {
-                        var helper = new StringSearchValuesTestHelper(
-                            expected: IndexOfAnyReferenceImpl,
-                            searchValues: (searchSpace, values) => searchSpace.IndexOfAny(values))
-                        {
-                            MaxNeedleCount = maxNeedleCount,
-                            MaxNeedleValueLength = maxNeedleValueLength,
-                            MaxHaystackLength = haystackLength,
-                            HaystackIterationsPerNeedle = 1_000,
-                        };
+            RunStress();
 
-                        helper.StressRandomInputs(TimeSpan.FromSeconds(15));
+            if (CanTestInvariantCulture)
+            {
+                RunUsingInvariantCulture(static () => RunStress(), timeout: 10 * 60);
+            }
+
+            if (CanTestNls)
+            {
+                RunUsingNLS(static () => RunStress(), timeout: 10 * 60);
+            }
+
+            static void RunStress()
+            {
+                foreach (int maxNeedleCount in new[] { 2, 8, 20, 70 })
+                {
+                    foreach (int maxNeedleValueLength in new[] { 8, 40 })
+                    {
+                        foreach (int haystackLength in new[] { 100, 1024 })
+                        {
+                            var helper = new StringSearchValuesTestHelper(
+                                expected: IndexOfAnyReferenceImpl,
+                                searchValues: (searchSpace, values) => searchSpace.IndexOfAny(values))
+                            {
+                                MaxNeedleCount = maxNeedleCount,
+                                MaxNeedleValueLength = maxNeedleValueLength,
+                                MaxHaystackLength = haystackLength,
+                                HaystackIterationsPerNeedle = 1_000,
+                            };
+
+                            helper.StressRandomInputs(TimeSpan.FromSeconds(15));
+                        }
                     }
                 }
             }
-        }
-
-        [ConditionalFact(nameof(CanTestInvariantCulture))]
-        [ActiveIssue("Manual execution only. Worth running any time SearchValues<string> logic is modified.")]
-        public static void TestIndexOfAny_RandomInputs_Stress_InvariantCulture()
-        {
-            RunUsingInvariantCulture(static () =>
-            {
-                TestIndexOfAny_RandomInputs_Stress();
-            }, timeout: 10 * 60);
-        }
-
-        [ConditionalFact(nameof(CanTestNls))]
-        [ActiveIssue("Manual execution only. Worth running any time SearchValues<string> logic is modified.")]
-        public static void TestIndexOfAny_RandomInputs_Stress_Nls()
-        {
-            RunUsingNLS(static () =>
-            {
-                TestIndexOfAny_RandomInputs_Stress();
-            }, timeout: 10 * 60);
         }
 
         private static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
@@ -393,14 +412,25 @@ namespace System.Memory.Tests.Span
 
                 if (expectedIndex != searchValuesIndex)
                 {
-                    Type implType = searchValuesInstance.GetType();
-                    string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
-
-                    string readableHaystack = ReadableAsciiOrSerialized(haystack.ToString());
-                    string readableNeedle = string.Join(", ", needle.Select(ReadableAsciiOrSerialized));
-
-                    Assert.True(false, $"Expected {expectedIndex}, got {searchValuesIndex} for impl='{impl}' comparison={comparisonType} needle='{readableNeedle}', haystack='{readableHaystack}'");
+                    AssertionFailed(haystack, needle, searchValuesInstance, comparisonType, expectedIndex, searchValuesIndex);
                 }
+            }
+
+            private static ReadOnlySpan<T> GetRandomSlice<T>(Random rng, ReadOnlySpan<T> span, int maxLength)
+            {
+                ReadOnlySpan<T> slice = span.Slice(rng.Next(span.Length + 1));
+                return slice.Slice(0, Math.Min(slice.Length, rng.Next(maxLength + 1)));
+            }
+
+            private static void AssertionFailed(ReadOnlySpan<char> haystack, string[] needle, SearchValues<string> searchValues, StringComparison comparisonType, int expected, int actual)
+            {
+                Type implType = searchValues.GetType();
+                string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
+
+                string readableHaystack = ReadableAsciiOrSerialized(haystack.ToString());
+                string readableNeedle = string.Join(", ", needle.Select(ReadableAsciiOrSerialized));
+
+                Assert.True(false, $"Expected {expected}, got {actual} for impl='{impl}' comparison={comparisonType} needle='{readableNeedle}', haystack='{readableHaystack}'");
 
                 static string ReadableAsciiOrSerialized(string value)
                 {
@@ -414,12 +444,6 @@ namespace System.Memory.Tests.Span
 
                     return value;
                 }
-            }
-
-            private static ReadOnlySpan<T> GetRandomSlice<T>(Random rng, ReadOnlySpan<T> span, int maxLength)
-            {
-                ReadOnlySpan<T> slice = span.Slice(rng.Next(span.Length + 1));
-                return slice.Slice(0, Math.Min(slice.Length, rng.Next(maxLength + 1)));
             }
         }
     }
