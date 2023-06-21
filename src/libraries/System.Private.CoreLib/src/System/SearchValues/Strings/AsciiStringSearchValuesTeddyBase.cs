@@ -213,7 +213,7 @@ namespace System.Buffers
         [CompExactlyDependsOn(typeof(Avx512BW))]
         private int IndexOfAnyN2Avx512(ReadOnlySpan<char> span)
         {
-            Debug.Assert(span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN2);
+            Debug.Assert(span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN2);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
             ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx512);
