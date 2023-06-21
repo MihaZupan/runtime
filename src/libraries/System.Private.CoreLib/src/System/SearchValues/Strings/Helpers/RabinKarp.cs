@@ -11,24 +11,18 @@ namespace System.Buffers
 {
     internal readonly struct RabinKarp
     {
-        // Arbitrary upper bounds. These also affect when Teddy may be used.
+        // Arbitrary upper bound. This also affects when Teddy may be used.
         public const int MaxValues = 64;
 
         // This is a tradeoff between memory consumption and the number of false positives
         // we have to rule out during the verification step.
         private const nuint BucketCount = 64;
-        private const nuint BucketFlagsCount = BucketCount * 8;
 
         // 18 = Vector128<ushort>.Count + 2 (MatchStartOffset for N=3)
         // The logic in this class is not safe from overflows, but we avoid any issues by
         // only calling into it for inputs that are too short for Teddy to handle.
         private const int MaxInputLength = 18 - 1;
 
-        // We first check that the hash has a corresponding bucket via _bucketFlags to further
-        // reduce the number of false positives that make it to the verification step.
-        // While we could achieve similar results by increasing the number of buckets,
-        // storing a lot more bools takes up less memory, so we can afford to use more.
-        private readonly bool[] _bucketFlags;
         private readonly string[][] _buckets;
         private readonly int _hashLength;
         private readonly nuint _hashUpdateMultiplier;
@@ -36,8 +30,6 @@ namespace System.Buffers
         public RabinKarp(ReadOnlySpan<string> values)
         {
             Debug.Assert(values.Length <= MaxValues);
-
-            _bucketFlags = new bool[BucketFlagsCount];
 
             int minimumLength = int.MaxValue;
             foreach (string value in values)
@@ -60,9 +52,7 @@ namespace System.Buffers
                     hash = (hash << 1) + value[i];
                 }
 
-                nuint bucketFlag = hash % BucketFlagsCount;
                 nuint bucket = hash % BucketCount;
-                _bucketFlags[bucketFlag] = true;
                 var bucketList = bucketLists[bucket] ??= new List<string>();
                 bucketList.Add(value);
             }
@@ -99,7 +89,6 @@ namespace System.Buffers
             ref char current = ref MemoryMarshal.GetReference(span);
 
             int hashLength = _hashLength;
-            ref bool bucketFlags = ref MemoryMarshal.GetArrayDataReference(_bucketFlags);
 
             if (span.Length >= hashLength)
             {
@@ -113,11 +102,8 @@ namespace System.Buffers
 
                 while (true)
                 {
-                    if (Unsafe.Add(ref bucketFlags, hash % BucketFlagsCount))
+                    if (Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_buckets), hash % BucketCount) is string[] bucket)
                     {
-                        string[] bucket = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_buckets), hash % BucketCount);
-                        Debug.Assert(bucket is not null);
-
                         int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
 
                         if (StringSearchValuesHelper.StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket))

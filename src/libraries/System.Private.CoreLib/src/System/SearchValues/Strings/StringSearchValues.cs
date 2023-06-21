@@ -180,7 +180,8 @@ namespace System.Buffers
 
             if (values.Length > RabinKarp.MaxValues)
             {
-                // Rabin-Karp is likely to perform poorly with this many inputs.
+                // The more values we have, the higher the chance of hash/fingerprint collisions.
+                // To avoid spending too much time in verification steps, fallback to Aho-Corasick which guarantees O(n).
                 // If it turns out that this limit is commonly exceeded, we can tweak the number of buckets
                 // in the implementation, or use different variants depending on input.
                 return null;
