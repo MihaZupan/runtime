@@ -8,7 +8,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
-using static System.Buffers.TeddyHelper;
+using static System.Buffers.StringSearchValuesHelper;
 
 namespace System.Buffers
 {

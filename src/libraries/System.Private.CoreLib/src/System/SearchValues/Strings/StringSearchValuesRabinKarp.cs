@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 namespace System.Buffers
 {
     internal abstract class StringSearchValuesRabinKarp<TCaseSensitivity> : StringSearchValuesBase
-        where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+        where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
     {
         private readonly RabinKarp _rabinKarp;
 

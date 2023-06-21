@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 namespace System.Buffers
 {
     internal sealed class StringSearchValuesAhoCorasick<TCaseSensitivity, TFastScanVariant> : StringSearchValuesBase
-        where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+        where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
         where TFastScanVariant : struct, AhoCorasick.IFastScan
     {
         private readonly AhoCorasick _ahoCorasick;

@@ -208,7 +208,7 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int IndexOfAny<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span)
-            where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+            where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
             if (typeof(TCaseSensitivity) == typeof(TeddyHelper.CaseInsensitiveUnicode))
@@ -222,10 +222,10 @@ namespace System.Buffers
         }
 
         private readonly int IndexOfAnyCore<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span)
-            where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+            where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
-            Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
+            Debug.Assert(typeof(TCaseSensitivity) != typeof(StringSearchValuesHelper.CaseInsensitiveUnicode));
 
             ref Node nodes = ref MemoryMarshal.GetArrayDataReference(_nodes);
             int nodeIndex = 0;

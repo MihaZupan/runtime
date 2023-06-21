@@ -81,15 +81,15 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span)
-            where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity =>
-            typeof(TCaseSensitivity) == typeof(TeddyHelper.CaseInsensitiveUnicode)
+            where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity =>
+            typeof(TCaseSensitivity) == typeof(StringSearchValuesHelper.CaseInsensitiveUnicode)
                 ? IndexOfAnyCaseInsensitiveUnicode(span)
                 : IndexOfAnyCore<TCaseSensitivity>(span);
 
         private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span)
-            where TCaseSensitivity : struct, TeddyHelper.ICaseSensitivity
+            where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
         {
-            Debug.Assert(typeof(TCaseSensitivity) != typeof(TeddyHelper.CaseInsensitiveUnicode));
+            Debug.Assert(typeof(TCaseSensitivity) != typeof(StringSearchValuesHelper.CaseInsensitiveUnicode));
             Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled short inputs.");
 
             ref char current = ref MemoryMarshal.GetReference(span);
@@ -116,7 +116,7 @@ namespace System.Buffers
 
                         int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
 
-                        if (TeddyHelper.StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket))
+                        if (StringSearchValuesHelper.StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket))
                         {
                             return startOffset;
                         }
@@ -148,7 +148,7 @@ namespace System.Buffers
             Debug.Assert(charsWritten == upperCase.Length);
 
             // CaseSensitive instead of CaseInsensitiveUnicode as we've already done the case conversion.
-            return IndexOfAnyCore<TeddyHelper.CaseSensitive>(upperCase);
+            return IndexOfAnyCore<StringSearchValuesHelper.CaseSensitive>(upperCase);
         }
     }
 }
