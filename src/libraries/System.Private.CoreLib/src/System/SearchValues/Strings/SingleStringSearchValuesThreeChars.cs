@@ -33,7 +33,7 @@ namespace System.Buffers
 
             bool ignoreCase = typeof(TCaseSensitivity) != typeof(CaseSensitive);
 
-            CharacterFrequencyHelper.GetSingleStringMultiCharacterOffsets(value, ignoreCase, out int ch2Offset, out int ch3Offset);
+            CharacterFrequencyHelper.GetMultiStringThreeCharacterOffsets(new ReadOnlySpan<string>(value), ignoreCase, out int ch2Offset, out int ch3Offset);
 
             Debug.Assert(ch3Offset == 0 || ch3Offset > ch2Offset);
 
@@ -283,12 +283,12 @@ namespace System.Buffers
                 int bitPos = BitOperations.TrailingZeroCount(mask);
                 Debug.Assert(bitPos % 2 == 0);
 
-                ref char matchStart = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
+                ref char matchRef = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
 
                 if ((typeof(TCaseSensitivity) == typeof(CaseSensitive) && !TValueLength.AtLeast4Chars) ||
-                    TCaseSensitivity.Equals<TValueLength>(ref matchStart, _value))
+                    TCaseSensitivity.Equals<TValueLength>(ref matchRef, _value))
                 {
-                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchStart) / 2);
+                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / 2);
                     return true;
                 }
 
@@ -308,12 +308,12 @@ namespace System.Buffers
                 int bitPos = BitOperations.TrailingZeroCount(mask);
                 Debug.Assert(bitPos % 2 == 0);
 
-                ref char matchStart = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
+                ref char matchRef = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref Unsafe.As<char, byte>(ref searchSpace), bitPos));
 
                 if ((typeof(TCaseSensitivity) == typeof(CaseSensitive) && !TValueLength.AtLeast4Chars) ||
-                    TCaseSensitivity.Equals<TValueLength>(ref matchStart, _value))
+                    TCaseSensitivity.Equals<TValueLength>(ref matchRef, _value))
                 {
-                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchStart) / 2);
+                    resultOffset = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / 2);
                     return true;
                 }
 

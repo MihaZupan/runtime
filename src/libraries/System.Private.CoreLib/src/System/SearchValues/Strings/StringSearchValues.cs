@@ -117,6 +117,11 @@ namespace System.Buffers
                 return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
             }
 
+            if (values.Length == 2 && TryCreateTwoValuesThreeChars(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly) is { } twoStringSearchValues)
+            {
+                return twoStringSearchValues;
+            }
+
             // TODO: Should this be supported anywhere else?
             // It may be too niche and too much code for WASM, but AOT with just Vector128 may be interesting.
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
@@ -343,6 +348,58 @@ namespace System.Buffers
             if (char.IsAscii(value[0]) && value.AsSpan().LastIndexOfAnyInRange((char)0, (char)127) > 0)
             {
                 return new SingleStringSearchValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+            }
+
+            return null;
+        }
+
+        private static SearchValues<string>? TryCreateTwoValuesThreeChars(
+            ReadOnlySpan<string> values,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            bool allAscii,
+            bool asciiLettersOnly)
+        {
+            Debug.Assert(values.Length == 2);
+
+            string value0 = values[0];
+            string value1 = values[1];
+
+            // We make use of optimizations that may overflow on 32bit systems for long values.
+            int maxLength = IntPtr.Size == 4 ? 1_000_000_000 : int.MaxValue;
+
+            if (!Vector128.IsHardwareAccelerated ||
+                value0.Length < 2 || value0.Length > maxLength ||
+                value1.Length < 2 || value1.Length > maxLength)
+            {
+                return null;
+            }
+
+            if (!ignoreCase)
+            {
+                return new TwoStringSearchValuesThreeChars<CaseSensitive>(values, uniqueValues);
+            }
+
+            if (asciiLettersOnly)
+            {
+                return new TwoStringSearchValuesThreeChars<CaseInensitiveAsciiLetters>(values, uniqueValues);
+            }
+
+            if (allAscii)
+            {
+                return new TwoStringSearchValuesThreeChars<CaseInensitiveAscii>(values, uniqueValues);
+            }
+
+            // When ignoring casing, all anchor chars we search for must be ASCII.
+            if (char.IsAscii(value0[0]) && char.IsAscii(value1[0]))
+            {
+                for (int i = 1; i < value0.Length && i < value1.Length; i++)
+                {
+                    if (char.IsAscii(value0[i]) && char.IsAscii(value1[i]))
+                    {
+                        return new TwoStringSearchValuesThreeChars<CaseInsensitiveUnicode>(values, uniqueValues);
+                    }
+                }
             }
 
             return null;

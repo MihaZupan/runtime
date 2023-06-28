@@ -1,7 +1,9 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 
 namespace System.Buffers
 {
@@ -29,12 +31,21 @@ namespace System.Buffers
             0.992f /* '   x' */, 1.067f /* '   y' */, 0.181f /* '   z' */, 0.391f /* '   {' */, 0.056f /* '   |' */, 0.391f /* '   }' */, 0.002f /* '   ~' */, 0.000f /* '\x7F' */,
         };
 
-        public static void GetSingleStringMultiCharacterOffsets(string value, bool ignoreCase, out int ch2Offset, out int ch3Offset)
+        public static void GetMultiStringThreeCharacterOffsets(ReadOnlySpan<string> values, bool ignoreCase, out int ch2Offset, out int ch3Offset)
         {
-            Debug.Assert(value.Length > 1);
-            Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
+            Debug.Assert(values.Length > 0);
 
-            ch2Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase);
+            int minLength = int.MaxValue;
+
+            foreach (string value in values)
+            {
+                Debug.Assert(value.Length > 1);
+                Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
+
+                minLength = Math.Min(minLength, value.Length);
+            }
+
+            ch2Offset = IndexOfAsciiCharWithLowestFrequency(values, minLength, ignoreCase);
             ch3Offset = 0;
 
             if (ch2Offset < 0)
@@ -43,12 +54,12 @@ namespace System.Buffers
                 Debug.Assert(!ignoreCase);
 
                 // We don't have a frequency table for non-ASCII characters, pick a random one.
-                ch2Offset = value.Length - 1;
+                ch2Offset = minLength - 1;
             }
 
-            if (value.Length > 2)
+            if (minLength > 2)
             {
-                ch3Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase, excludeIndex: ch2Offset);
+                ch3Offset = IndexOfAsciiCharWithLowestFrequency(values, minLength, ignoreCase, excludeIndex: ch2Offset);
 
                 if (ch3Offset < 0)
                 {
@@ -61,7 +72,7 @@ namespace System.Buffers
                     else
                     {
                         // We don't have a frequency table for non-ASCII characters, pick a random one.
-                        ch3Offset = value.Length - 1;
+                        ch3Offset = minLength - 1;
 
                         if (ch2Offset == ch3Offset)
                         {
@@ -80,30 +91,53 @@ namespace System.Buffers
             }
         }
 
-        private static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
+        private static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<string> values, int minLength, bool ignoreCase, int excludeIndex = -1)
         {
+            Debug.Assert(values.Length is 1 or 2);
+            var charsFound = new ValueListBuilder<char>(stackalloc char[4]);
+
             float minFrequency = float.MaxValue;
             int minIndex = -1;
 
             // Exclude i = 0 as we've already decided to use the first character.
-            for (int i = 1; i < span.Length; i++)
+            for (int i = 1; i < minLength; i++)
             {
                 if (i == excludeIndex)
                 {
                     continue;
                 }
 
-                char c = span[i];
+                charsFound.Length = 0;
 
-                // We don't have a frequency table for non-ASCII characters, so they are ignored.
-                if (char.IsAscii(c))
+                foreach (string value in values)
                 {
-                    float frequency = AsciiFrequency[c];
+                    char c = value[i];
+
+                    charsFound.Append(c);
 
                     if (ignoreCase)
                     {
                         // Include the alternative character that will also match.
-                        frequency += AsciiFrequency[c ^ 0x20];
+                        charsFound.Append((char)(c ^ 0x20));
+                    }
+                }
+
+                // We don't have a frequency table for non-ASCII characters, so they are ignored.
+                if (Ascii.IsValid(charsFound.AsSpan()))
+                {
+                    float frequency = 0;
+
+                    ReadOnlySpan<char> chars = charsFound.AsSpan();
+
+                    for (int j = 0; j < chars.Length; j++)
+                    {
+                        char c = chars[j];
+
+                        // Avoid counting the same character multiple times.
+                        if (!chars.Slice(0, j).Contains(c))
+                        {
+                            frequency += AsciiFrequency[c];
+                        }
                     }
 
                     // Avoiding characters from the front of the value for the 2nd and 3rd character
@@ -118,6 +152,7 @@ namespace System.Buffers
                 }
             }
 
+            charsFound.Dispose();
             return minIndex;
         }
     }
