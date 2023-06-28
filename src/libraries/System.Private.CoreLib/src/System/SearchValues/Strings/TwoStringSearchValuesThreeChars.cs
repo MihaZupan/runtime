@@ -95,7 +95,7 @@ namespace System.Buffers
 
                 while (true)
                 {
-                    Vector512<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch1_1);
+                    Vector512<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch3_1);
 
                     if (result != Vector512<byte>.Zero)
                     {
@@ -138,7 +138,7 @@ namespace System.Buffers
 
                 while (true)
                 {
-                    Vector256<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch1_1);
+                    Vector256<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch3_1);
 
                     if (result != Vector256<byte>.Zero)
                     {
@@ -181,7 +181,7 @@ namespace System.Buffers
 
                 while (true)
                 {
-                    Vector128<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch1_1);
+                    Vector128<byte> result = GetComparisonResult(ref searchSpace, ch2ByteOffset, ch3ByteOffset, ch1_0, ch1_1, ch2_0, ch2_1, ch3_0, ch3_1);
 
                     if (result != Vector128<byte>.Zero)
                     {
@@ -253,30 +253,36 @@ namespace System.Buffers
             if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
             {
                 Vector128<ushort> input1 = Vector128.LoadUnsafe(ref searchSpace);
-                Vector128<ushort> cmpCh1 = Vector128.Equals(ch1_0, input1) | Vector128.Equals(ch1_1, input1);
+                Vector128<ushort> result0 = Vector128.Equals(ch1_0, input1);
+                Vector128<ushort> result1 = Vector128.Equals(ch1_1, input1);
 
                 Vector128<ushort> input2 = Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16();
-                Vector128<ushort> cmpCh2 = Vector128.Equals(ch2_0, input2) | Vector128.Equals(ch2_1, input2);
+                result0 &= Vector128.Equals(ch2_0, input2);
+                result1 &= Vector128.Equals(ch2_1, input2);
 
                 Vector128<ushort> input3 = Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16();
-                Vector128<ushort> cmpCh3 = Vector128.Equals(ch3_0, input3) | Vector128.Equals(ch3_1, input3);
+                result0 &= Vector128.Equals(ch3_0, input3);
+                result1 &= Vector128.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
             else
             {
                 Vector128<ushort> caseConversion = Vector128.Create(CaseConversionMask);
 
                 Vector128<ushort> input1 = Vector128.LoadUnsafe(ref searchSpace) & caseConversion;
-                Vector128<ushort> cmpCh1 = Vector128.Equals(ch1_0, input1) | Vector128.Equals(ch1_1, input1);
+                Vector128<ushort> result0 = Vector128.Equals(ch1_0, input1);
+                Vector128<ushort> result1 = Vector128.Equals(ch1_1, input1);
 
                 Vector128<ushort> input2 = Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion;
-                Vector128<ushort> cmpCh2 = Vector128.Equals(ch2_0, input2) | Vector128.Equals(ch2_1, input2);
+                result0 &= Vector128.Equals(ch2_0, input2);
+                result1 &= Vector128.Equals(ch2_1, input2);
 
                 Vector128<ushort> input3 = Vector128.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16() & caseConversion;
-                Vector128<ushort> cmpCh3 = Vector128.Equals(ch3_0, input3) | Vector128.Equals(ch3_1, input3);
+                result0 &= Vector128.Equals(ch3_0, input3);
+                result1 &= Vector128.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
         }
 
@@ -289,30 +295,36 @@ namespace System.Buffers
             if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
             {
                 Vector256<ushort> input1 = Vector256.LoadUnsafe(ref searchSpace);
-                Vector256<ushort> cmpCh1 = Vector256.Equals(ch1_0, input1) | Vector256.Equals(ch1_1, input1);
+                Vector256<ushort> result0 = Vector256.Equals(ch1_0, input1);
+                Vector256<ushort> result1 = Vector256.Equals(ch1_1, input1);
 
                 Vector256<ushort> input2 = Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16();
-                Vector256<ushort> cmpCh2 = Vector256.Equals(ch2_0, input2) | Vector256.Equals(ch2_1, input2);
+                result0 &= Vector256.Equals(ch2_0, input2);
+                result1 &= Vector256.Equals(ch2_1, input2);
 
                 Vector256<ushort> input3 = Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16();
-                Vector256<ushort> cmpCh3 = Vector256.Equals(ch3_0, input3) | Vector256.Equals(ch3_1, input3);
+                result0 &= Vector256.Equals(ch3_0, input3);
+                result1 &= Vector256.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
             else
             {
                 Vector256<ushort> caseConversion = Vector256.Create(CaseConversionMask);
 
                 Vector256<ushort> input1 = Vector256.LoadUnsafe(ref searchSpace) & caseConversion;
-                Vector256<ushort> cmpCh1 = Vector256.Equals(ch1_0, input1) | Vector256.Equals(ch1_1, input1);
+                Vector256<ushort> result0 = Vector256.Equals(ch1_0, input1);
+                Vector256<ushort> result1 = Vector256.Equals(ch1_1, input1);
 
                 Vector256<ushort> input2 = Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion;
-                Vector256<ushort> cmpCh2 = Vector256.Equals(ch2_0, input2) | Vector256.Equals(ch2_1, input2);
+                result0 &= Vector256.Equals(ch2_0, input2);
+                result1 &= Vector256.Equals(ch2_1, input2);
 
                 Vector256<ushort> input3 = Vector256.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16() & caseConversion;
-                Vector256<ushort> cmpCh3 = Vector256.Equals(ch3_0, input3) | Vector256.Equals(ch3_1, input3);
+                result0 &= Vector256.Equals(ch3_0, input3);
+                result1 &= Vector256.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
         }
 
@@ -325,30 +337,36 @@ namespace System.Buffers
             if (typeof(TCaseSensitivity) == typeof(CaseSensitive))
             {
                 Vector512<ushort> input1 = Vector512.LoadUnsafe(ref searchSpace);
-                Vector512<ushort> cmpCh1 = Vector512.Equals(ch1_0, input1) | Vector512.Equals(ch1_1, input1);
+                Vector512<ushort> result0 = Vector512.Equals(ch1_0, input1);
+                Vector512<ushort> result1 = Vector512.Equals(ch1_1, input1);
 
                 Vector512<ushort> input2 = Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16();
-                Vector512<ushort> cmpCh2 = Vector512.Equals(ch2_0, input2) | Vector512.Equals(ch2_1, input2);
+                result0 &= Vector512.Equals(ch2_0, input2);
+                result1 &= Vector512.Equals(ch2_1, input2);
 
                 Vector512<ushort> input3 = Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16();
-                Vector512<ushort> cmpCh3 = Vector512.Equals(ch3_0, input3) | Vector512.Equals(ch3_1, input3);
+                result0 &= Vector512.Equals(ch3_0, input3);
+                result1 &= Vector512.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
             else
             {
                 Vector512<ushort> caseConversion = Vector512.Create(CaseConversionMask);
 
                 Vector512<ushort> input1 = Vector512.LoadUnsafe(ref searchSpace) & caseConversion;
-                Vector512<ushort> cmpCh1 = Vector512.Equals(ch1_0, input1) | Vector512.Equals(ch1_1, input1);
+                Vector512<ushort> result0 = Vector512.Equals(ch1_0, input1);
+                Vector512<ushort> result1 = Vector512.Equals(ch1_1, input1);
 
                 Vector512<ushort> input2 = Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch2ByteOffset).AsUInt16() & caseConversion;
-                Vector512<ushort> cmpCh2 = Vector512.Equals(ch2_0, input2) | Vector512.Equals(ch2_1, input2);
+                result0 &= Vector512.Equals(ch2_0, input2);
+                result1 &= Vector512.Equals(ch2_1, input2);
 
                 Vector512<ushort> input3 = Vector512.LoadUnsafe(ref Unsafe.As<char, byte>(ref searchSpace), ch3ByteOffset).AsUInt16() & caseConversion;
-                Vector512<ushort> cmpCh3 = Vector512.Equals(ch3_0, input3) | Vector512.Equals(ch3_1, input3);
+                result0 &= Vector512.Equals(ch3_0, input3);
+                result1 &= Vector512.Equals(ch3_1, input3);
 
-                return (cmpCh1 & cmpCh2 & cmpCh3).AsByte();
+                return (result0 | result1).AsByte();
             }
         }
 
