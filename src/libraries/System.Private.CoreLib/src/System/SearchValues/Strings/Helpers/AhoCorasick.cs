@@ -27,14 +27,31 @@ namespace System.Buffers
         {
             get
             {
-                if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && _startingCharsAsciiBitmap != default)
+                Vector256<byte> bitmap = _startingCharsAsciiBitmap;
+
+                if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && bitmap != default)
                 {
-                    // TODO: Should we avoid using the fast scan if there are too many starting values?
-                    // int uniqueStartingChars =
-                    //     BitOperations.PopCount(_startingCharsAsciiBitmap.AsUInt64()[0]) +
-                    //     BitOperations.PopCount(_startingCharsAsciiBitmap.AsUInt64()[1]);
-                    // return uniqueStartingChars <= 42;
-                    return true;
+                    // If there are a lot of starting characters such that we often find one early,
+                    // the ASCII fast scan may end up performing worse than checking one character at a time.
+                    // Avoid using this optimization if the combined frequency of starting chars is too high.
+
+                    // Combined frequency of
+                    // - All digits is ~ 5
+                    // - All lowercase letters is ~ 57.2
+                    // - All uppercase letters is ~ 7.4
+                    const float MaxCombinedFrequency = 50f;
+
+                    float frequency = 0;
+
+                    for (int i = 0; i < 128; i++)
+                    {
+                        if (IndexOfAnyAsciiSearcher.BitmapContains(ref bitmap, (char)i))
+                        {
+                            frequency += CharacterFrequencyHelper.AsciiFrequency[i];
+                        }
+                    }
+
+                    return frequency < MaxCombinedFrequency;
                 }
 
                 return false;
@@ -321,8 +338,10 @@ namespace System.Buffers
                 Span<char> upperCaseBuffer = buffer.Slice(0, leftoverFromPreviousIteration + toConvert);
 
                 // CaseSensitive instead of CaseInsensitiveUnicode as we've already done the case conversion.
-                result = IndexOfAny<StringSearchValuesHelper.CaseSensitive, TFastScanVariant>(upperCaseBuffer);
+                result = IndexOfAnyCore<StringSearchValuesHelper.CaseSensitive, TFastScanVariant>(upperCaseBuffer);
 
+                // Even if we found a result, it is possible that an earlier match exists if we ran out of upperCaseBuffer.
+                // If that is the case, we will find the correct result in the next loop iteration.
                 if (result >= 0 && (span.IsEmpty || result <= buffer.Length - _maxValueLength))
                 {
                     result += offsetFromStart;

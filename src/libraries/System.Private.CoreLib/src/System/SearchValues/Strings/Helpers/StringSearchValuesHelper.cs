@@ -275,7 +275,6 @@ namespace System.Buffers
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate)
             {
-                // TODO: Would Ordinal.CompareStringIgnoreCaseNonAscii == 0 be better?
                 return Ordinal.EqualsIgnoreCase(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
             }
 

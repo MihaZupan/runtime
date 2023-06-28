@@ -105,6 +105,7 @@ namespace System.Buffers
 
                 while (true)
                 {
+                    // TODO Should buckets be a local
                     if (Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_buckets), hash % BucketCount) is string[] bucket)
                     {
                         int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
@@ -132,7 +133,7 @@ namespace System.Buffers
             return -1;
         }
 
-        private int IndexOfAnyCaseInsensitiveUnicode(ReadOnlySpan<char> span)
+        private readonly int IndexOfAnyCaseInsensitiveUnicode(ReadOnlySpan<char> span)
         {
             Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled long inputs.");
 

@@ -8,6 +8,7 @@ namespace System.Buffers
     internal static class CharacterFrequencyHelper
     {
         // Same as RegexPrefixAnalyzer.Frequency.
+        // https://github.com/dotnet/runtime/blob/a355d5f7db162714ee19533ca55074aa2cbd8a8c/src/libraries/System.Text.RegularExpressions/src/System/Text/RegularExpressions/RegexPrefixAnalyzer.cs#L956C43-L956C53
         public static ReadOnlySpan<float> AsciiFrequency => new float[]
         {
             0.000f /* '\x00' */, 0.000f /* '\x01' */, 0.000f /* '\x02' */, 0.000f /* '\x03' */, 0.000f /* '\x04' */, 0.000f /* '\x05' */, 0.000f /* '\x06' */, 0.000f /* '\x07' */,
@@ -77,46 +78,47 @@ namespace System.Buffers
             {
                 (ch2Offset, ch3Offset) = (ch3Offset, ch2Offset);
             }
+        }
 
-            static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
+        private static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
+        {
+            float minFrequency = float.MaxValue;
+            int minIndex = -1;
+
+            // Exclude i = 0 as we've already decided to use the first character.
+            for (int i = 1; i < span.Length; i++)
             {
-                float minFrequency = float.MaxValue;
-                int minIndex = -1;
-
-                // Exclude i = 0 as we've already decided to use the first character.
-                for (int i = 1; i < span.Length; i++)
+                if (i == excludeIndex)
                 {
-                    if (i == excludeIndex)
-                    {
-                        continue;
-                    }
-
-                    char c = span[i];
-
-                    if (char.IsAscii(c))
-                    {
-                        float frequency = AsciiFrequency[c];
-
-                        if (ignoreCase)
-                        {
-                            // Include the alternative character that will also match.
-                            frequency += AsciiFrequency[c ^ 0x20];
-                        }
-
-                        // Avoiding characters from the front of the value for the 2nd and 3rd character
-                        // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
-                        if (i <= 2) frequency *= 1.5f;
-
-                        if (frequency <= minFrequency)
-                        {
-                            minFrequency = frequency;
-                            minIndex = i;
-                        }
-                    }
+                    continue;
                 }
 
-                return minIndex;
+                char c = span[i];
+
+                // We don't have a frequency table for non-ASCII characters, so they are ignored.
+                if (char.IsAscii(c))
+                {
+                    float frequency = AsciiFrequency[c];
+
+                    if (ignoreCase)
+                    {
+                        // Include the alternative character that will also match.
+                        frequency += AsciiFrequency[c ^ 0x20];
+                    }
+
+                    // Avoiding characters from the front of the value for the 2nd and 3rd character
+                    // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
+                    if (i <= 2) frequency *= 1.5f;
+
+                    if (frequency <= minFrequency)
+                    {
+                        minFrequency = frequency;
+                        minIndex = i;
+                    }
+                }
             }
+
+            return minIndex;
         }
     }
 }
