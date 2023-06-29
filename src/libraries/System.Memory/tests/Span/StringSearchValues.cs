@@ -5,6 +5,8 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -18,6 +20,83 @@ namespace System.Memory.Tests.Span
     {
         public static bool CanTestInvariantCulture => RemoteExecutor.IsSupported;
         public static bool CanTestNls => RemoteExecutor.IsSupported && OperatingSystem.IsWindows();
+
+        private static readonly string s_haystack = new HttpClient().GetStringAsync("https://www.gutenberg.org/files/1661/1661-0.txt").Result;
+
+        public static readonly SearchValues<string> s_names = SearchValues.Create(
+            new[] { "Sherlock", "Holmes", "Watson", "Irene", "Adler", "John", "Baker" }, StringComparison.Ordinal);
+
+        private static readonly SearchValues<string> s_namesIgnoreCase = SearchValues.Create(
+            new[] { "Sherlock", "Holmes", "Watson", "Irene", "Adler", "John", "Baker" }, StringComparison.OrdinalIgnoreCase);
+
+        [Fact]
+        public static void Benchmark_Ordinal() => Benchmark(false);
+
+        [Fact]
+        public static void Benchmark_OrdinalIgnoreCase() => Benchmark(true);
+
+        private static void Benchmark(bool ignoreCase)
+        {
+            for (int outer = 0; outer < 20; outer++)
+            {
+                long start = Stopwatch.GetTimestamp();
+
+                for (int i = 0; i < 10; i++)
+                {
+                    RunBenchmarkLoop(ignoreCase);
+                }
+
+                const int TotalIterations = 1000 * 10;
+
+                TimeSpan elapsed = Stopwatch.GetElapsedTime(start);
+                Console.WriteLine($"Elapsed: {elapsed.TotalMicroseconds / TotalIterations:N2} microseconds");
+
+                Thread.Sleep(16);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int RunBenchmarkLoop(bool ignoreCase)
+        {
+            int total = 0;
+
+            for (int i = 0; i < 1000; i++)
+            {
+                total += ignoreCase ? SearchValues_CountIgnoreCase() : SearchValues_Count();
+            }
+
+            return total;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static int SearchValues_Count()
+        {
+            int count = 0;
+            ReadOnlySpan<char> haystack = s_haystack;
+            while (true)
+            {
+                int pos = haystack.IndexOfAny(s_names);
+                if (pos < 0) break;
+                count++;
+                haystack = haystack.Slice(pos + 1);
+            }
+            return count;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static int SearchValues_CountIgnoreCase()
+        {
+            int count = 0;
+            ReadOnlySpan<char> haystack = s_haystack;
+            while (true)
+            {
+                int pos = haystack.IndexOfAny(s_namesIgnoreCase);
+                if (pos < 0) break;
+                count++;
+                haystack = haystack.Slice(pos + 1);
+            }
+            return count;
+        }
 
         [Theory]
         [InlineData(StringComparison.Ordinal, "a", "ab", "abc", "bc")]
