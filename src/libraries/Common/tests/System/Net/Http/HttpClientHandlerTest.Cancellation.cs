@@ -448,6 +448,7 @@ namespace System.Net.Http.Functional.Tests
                 });
         }
 
+#if !NETFRAMEWORK
         public static IEnumerable<object[]> PostAsync_Cancel_CancellationTokenPassedToContent_MemberData()
         {
             // Note: For HTTP2, the actual token will be a linked token and will not be an exact match for the original token.
@@ -456,7 +457,6 @@ namespace System.Net.Http.Functional.Tests
             // StreamContent
             {
                 CancellationTokenSource tokenSource = new CancellationTokenSource();
-                var actualToken = new StrongBox<CancellationToken>();
                 bool called = false;
                 var content = new StreamContent(new DelegateStream(
                     canReadFunc: () => true,
@@ -470,10 +470,10 @@ namespace System.Net.Http.Functional.Tests
                             tokenSource.Cancel();
 
                             // Wait for cancellation to occur.  It should be very quickly after it's been requested.
-                            var tcs = new TaskCompletionSource<bool>();
-                            using (cancellationToken.Register(() => tcs.SetResult(true)))
+                            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                            using (cancellationToken.Register(() => tcs.SetResult()))
                             {
-                                await tcs.Task;
+                                await tcs.Task.WaitAsync(TestHelper.PassingTestTimeout);
                             }
                         }
 
@@ -487,7 +487,6 @@ namespace System.Net.Http.Functional.Tests
             // MultipartContent
             {
                 CancellationTokenSource tokenSource = new CancellationTokenSource();
-                var actualToken = new StrongBox<CancellationToken>();
                 bool called = false;
                 var content = new MultipartContent();
                 content.Add(new StreamContent(new DelegateStream(
@@ -506,10 +505,10 @@ namespace System.Net.Http.Functional.Tests
                             tokenSource.Cancel();
 
                             // Wait for cancellation to occur.  It should be very quickly after it's been requested.
-                            var tcs = new TaskCompletionSource<bool>();
-                            using (cancellationToken.Register(() => tcs.SetResult(true)))
+                            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                            using (cancellationToken.Register(() => tcs.SetResult()))
                             {
-                                await tcs.Task;
+                                await tcs.Task.WaitAsync(TestHelper.PassingTestTimeout);
                             }
                         }
 
@@ -523,7 +522,6 @@ namespace System.Net.Http.Functional.Tests
             // MultipartFormDataContent
             {
                 CancellationTokenSource tokenSource = new CancellationTokenSource();
-                var actualToken = new StrongBox<CancellationToken>();
                 bool called = false;
                 var content = new MultipartFormDataContent();
                 content.Add(new StreamContent(new DelegateStream(
@@ -542,10 +540,10 @@ namespace System.Net.Http.Functional.Tests
                             tokenSource.Cancel();
 
                             // Wait for cancellation to occur.  It should be very quickly after it's been requested.
-                            var tcs = new TaskCompletionSource<bool>();
-                            using (cancellationToken.Register(() => tcs.SetResult(true)))
+                            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                            using (cancellationToken.Register(() => tcs.SetResult()))
                             {
-                                await tcs.Task;
+                                await tcs.Task.WaitAsync(TestHelper.PassingTestTimeout);
                             }
                         }
 
@@ -557,9 +555,6 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
-#if !NETFRAMEWORK
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/41531")]
-        [OuterLoop("Uses Task.Delay")]
         [Theory]
         [MemberData(nameof(PostAsync_Cancel_CancellationTokenPassedToContent_MemberData))]
         public async Task PostAsync_Cancel_CancellationTokenPassedToContent(HttpContent content, CancellationTokenSource cancellationTokenSource)
@@ -578,24 +573,39 @@ namespace System.Net.Http.Functional.Tests
             await LoopbackServerFactory.CreateClientAndServerAsync(
                 async uri =>
                 {
-                    using (var invoker = new HttpMessageInvoker(CreateHttpClientHandler()))
-                    using (var req = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content, Version = UseVersion })
-                        try
-                        {
-                            using (HttpResponseMessage resp = await invoker.SendAsync(TestAsync, req, cancellationTokenSource.Token))
-                            {
-                                Assert.Equal("Hello World", await resp.Content.ReadAsStringAsync());
-                            }
-                        }
-                        catch (OperationCanceledException) { }
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                    {
+                        using HttpClientHandler handler = CreateHttpClientHandler();
+                        using HttpMessageInvoker invoker = new(handler);
+
+                        using HttpRequestMessage request = CreateRequest(HttpMethod.Post, uri, UseVersion);
+                        request.Content = content;
+
+                        using HttpResponseMessage response = await invoker.SendAsync(TestAsync, request, cancellationTokenSource.Token);
+
+                        cancellationTokenSource.Token.ThrowIfCancellationRequested();
+                    });
+
+                    Assert.True(cancellationTokenSource.IsCancellationRequested);
                 },
                 async server =>
                 {
-                    try
+                    // Once cancellationTokenSource is signaled, this server task will complete and the loopback connection will be disposed.
+                    // The below task will be completed once the underlying IO fails.
+                    _ = Task.Run(async () =>
                     {
-                        await server.HandleRequestAsync(content: "Hello World");
-                    }
-                    catch (Exception) { }
+                        try
+                        {
+                            await server.HandleRequestAsync(content: "Hello World");
+                        }
+                        catch (Exception ex)
+                        {
+                            _output.WriteLine($"Ignored exception: {ex}");
+                        }
+                    });
+
+                    await Assert.ThrowsAsync<TaskCanceledException>(
+                        () => Task.Delay(-1).WaitAsync(TestHelper.PassingTestTimeout, cancellationTokenSource.Token));
                 });
         }
 #endif
