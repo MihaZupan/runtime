@@ -8,6 +8,9 @@ using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.Wasm;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 using Xunit;
 
@@ -20,6 +23,154 @@ namespace System.SpanTests
 
         private static readonly Func<SearchValues<char>, char[]> s_getValuesCharMethod =
             typeof(SearchValues<char>).GetMethod("GetValues", BindingFlags.NonPublic | BindingFlags.Instance).CreateDelegate<Func<SearchValues<char>, char[]>>();
+
+        [Fact]
+        public static void Create_ChoosesOptimalImplementation_Char()
+        {
+            bool asciiVectorized = Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported;
+            bool probMapVectorized = Sse41.IsSupported || AdvSimd.Arm64.IsSupported;
+            string packedIndexOfSupported = Sse2.IsSupported ? "TrueConst" : "FalseConst";
+            string asciiZeroOptimizations = Ssse3.IsSupported || PackedSimd.IsSupported ? "Ssse3AndWasmHandleZeroInNeedle" : "Default";
+
+            Test("", "EmptySearchValues [Char]");
+
+            Test("\0", "SingleCharSearchValues [FalseConst]");
+            Test("a", $"SingleCharSearchValues [{packedIndexOfSupported}]");
+            Test("\u0001", $"SingleCharSearchValues [{packedIndexOfSupported}]");
+            Test("\u007F", $"SingleCharSearchValues [{packedIndexOfSupported}]");
+            Test("\u0081", $"SingleCharSearchValues [{packedIndexOfSupported}]");
+            Test("\u00FE", $"SingleCharSearchValues [{packedIndexOfSupported}]");
+            Test("\u00FF", "SingleCharSearchValues [FalseConst]");
+            Test("\uFFFF", "SingleCharSearchValues [FalseConst]");
+
+            Test("\0a", "Any2CharSearchValues [FalseConst]");
+            Test("a\0", "Any2CharSearchValues [FalseConst]");
+            Test("ac", $"Any2CharSearchValues [{packedIndexOfSupported}]");
+            Test("ca", $"Any2CharSearchValues [{packedIndexOfSupported}]");
+            Test("\u0080a", $"Any2CharSearchValues [{packedIndexOfSupported}]");
+            Test("\u00FFa", "Any2CharSearchValues [FalseConst]");
+            Test("\u0080\uFFFF", "Any2CharSearchValues [FalseConst]");
+
+            Test("\0ab", "Any3CharSearchValues [FalseConst]");
+            Test("ab\0", "Any3CharSearchValues [FalseConst]");
+            Test("acd", $"Any3CharSearchValues [{packedIndexOfSupported}]");
+            Test("cad", $"Any3CharSearchValues [{packedIndexOfSupported}]");
+            Test("a\u0080b", $"Any3CharSearchValues [{packedIndexOfSupported}]");
+            Test("a\u00FFb", "Any3CharSearchValues [FalseConst]");
+            Test("\u0080\u0082\uFFFF", "Any3CharSearchValues [FalseConst]");
+
+            Test("\u0080\u0082\u0083\uFFFF", "Any4SearchValues [Char, Int16]");
+
+            Test("\u0080\u0082\u0083\u0084\uFFFF", "Any5SearchValues [Char, Int16]");
+
+            Test("acde", asciiVectorized ? "AsciiCharSearchValues [Default]" : "Any4SearchValues [Char, Int16]");
+            Test("\0abc", asciiVectorized ? $"AsciiCharSearchValues [{asciiZeroOptimizations}]" : "Any4SearchValues [Char, Int16]");
+            Test("abc\0", asciiVectorized ? $"AsciiCharSearchValues [{asciiZeroOptimizations}]" : "Any4SearchValues [Char, Int16]");
+
+            Test("acdef", asciiVectorized ? "AsciiCharSearchValues [Default]" : "Any5SearchValues [Char, Int16]");
+            Test("\0abcd", asciiVectorized ? $"AsciiCharSearchValues [{asciiZeroOptimizations}]" : "Any5SearchValues [Char, Int16]");
+            Test("abcd\0", asciiVectorized ? $"AsciiCharSearchValues [{asciiZeroOptimizations}]" : "Any5SearchValues [Char, Int16]");
+
+            Test("ab", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("abc", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("abcd", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("abcde", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("cab", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("cabac", $"RangeCharSearchValues [{packedIndexOfSupported}]");
+            Test("\0\u0001", "RangeCharSearchValues [FalseConst]");
+            Test("\0\u0001\u0002", "RangeCharSearchValues [FalseConst]");
+            Test(GetRange('a', '\u1234'), "RangeCharSearchValues [FalseConst]");
+            Test(GetRange('\u1234', '\uFFFF'), "RangeCharSearchValues [FalseConst]");
+
+            Test("aeiouAEIOU", asciiVectorized ? "AsciiCharSearchValues [Default]" : "Latin1CharSearchValues");
+            Test('\0' + GetRange('\u0002', '\u007F'), asciiVectorized ? $"AsciiCharSearchValues [{asciiZeroOptimizations}]" : "Latin1CharSearchValues");
+
+            Test("\u0080\u0082\u0083\u0084\u0085\uFFFF", "ProbabilisticCharSearchValues");
+            Test("a\u0080\u0082\u0083\u0084\u0085\uFFFF", asciiVectorized ? "ProbabilisticWithAsciiCharSearchValues [Default]" : "ProbabilisticCharSearchValues");
+            Test("\0\u0080\u0082\u0083\u0084\u0085\uFFFF", asciiVectorized ? $"ProbabilisticWithAsciiCharSearchValues [{asciiZeroOptimizations}]" : "ProbabilisticCharSearchValues");
+
+            //Test("abcde\u0080", asciiVectorized ? "ProbabilisticWithAsciiCharSearchValues [Default]" : probMapVectorized ? "ProbabilisticCharSearchValues" : "Latin1CharSearchValues");
+            //Test("\0abcde\u0080", asciiVectorized ? $"ProbabilisticWithAsciiCharSearchValues [{asciiZeroOptimizations}]" : probMapVectorized ? "ProbabilisticCharSearchValues" : "Latin1CharSearchValues");
+            //Test("abcde\u0100", asciiVectorized ? "ProbabilisticWithAsciiCharSearchValues [Default]" : probMapVectorized ? "ProbabilisticCharSearchValues" : "Latin1CharSearchValues");
+            //Test("\0abcde\u0100", asciiVectorized ? $"ProbabilisticWithAsciiCharSearchValues [{asciiZeroOptimizations}]" : probMapVectorized ? "ProbabilisticCharSearchValues" : "Latin1CharSearchValues");
+
+            Test("abcde\u0080", "Latin1CharSearchValues");
+            Test("\0abcde\u0080", "Latin1CharSearchValues");
+            Test("abcde\u0100", asciiVectorized ? "ProbabilisticWithAsciiCharSearchValues [Default]" : "ProbabilisticCharSearchValues");
+            Test("\0abcde\u0100", asciiVectorized ? $"ProbabilisticWithAsciiCharSearchValues [{asciiZeroOptimizations}]" : "ProbabilisticCharSearchValues");
+
+            //Test("\u0080" + GetRange('\u0082', '\u008F'), probMapVectorized ? "ProbabilisticCharSearchValues" : "Latin1CharSearchValues");
+            Test("\u0080" + GetRange('\u0082', '\u008F'), "Latin1CharSearchValues");
+
+            static string GetRange(char start, char endInclusive) =>
+                string.Concat(Enumerable.Range(start, endInclusive - start + 1).Select(c => (char)c));
+
+            static void Test(string needle, string expectedType) =>
+                Assert.Equal(expectedType, GetSearchValuesTypeName(SearchValues.Create(needle)));
+        }
+
+        [Fact]
+        public static void Create_ChoosesOptimalImplementation_Byte()
+        {
+            bool asciiVectorized = Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported;
+
+            Test(""u8, "EmptySearchValues [Byte]");
+
+            Test("\0"u8, "SingleByteSearchValues");
+            Test("a"u8, "SingleByteSearchValues");
+            Test([0xFF], "SingleByteSearchValues");
+
+            Test("\0\u0001"u8, "RangeByteSearchValues");
+            Test("ab"u8, "RangeByteSearchValues");
+            Test("abc"u8, "RangeByteSearchValues");
+            Test("abcd"u8, "RangeByteSearchValues");
+            Test("abcde"u8, "RangeByteSearchValues");
+            Test("cab"u8, "RangeByteSearchValues");
+            Test("cabac"u8, "RangeByteSearchValues");
+            Test([254, 255], "RangeByteSearchValues");
+
+            Test("ac"u8, "Any2ByteSearchValues");
+            Test([0, 0xFF], "Any2ByteSearchValues");
+            Test([(byte)'a', 0xFF], "Any2ByteSearchValues");
+
+            Test("acd"u8, "Any3ByteSearchValues");
+            Test([0, 1, 0xFF], "Any3ByteSearchValues");
+            Test([(byte)'a', 42, 0xFF], "Any3ByteSearchValues");
+
+            Test("acde"u8, "Any4SearchValues [Byte, Byte]");
+            Test([0, 1, 2, 0xFF], "Any4SearchValues [Byte, Byte]");
+            Test([(byte)'a', 42, 43, 0xFF], "Any4SearchValues [Byte, Byte]");
+
+            Test("acdef"u8, "Any5SearchValues [Byte, Byte]");
+            Test([0, 1, 2, 3, 0xFF], "Any5SearchValues [Byte, Byte]");
+            Test([(byte)'a', 42, 43, 44, 0xFF], "Any5SearchValues [Byte, Byte]");
+
+            Test("acdefg"u8, asciiVectorized ? "AsciiByteSearchValues" : "AnyByteSearchValues");
+            Test("\0abcde"u8, asciiVectorized ? "AsciiByteSearchValues" : "AnyByteSearchValues");
+            Test("\0abcd\u007F"u8, asciiVectorized ? "AsciiByteSearchValues" : "AnyByteSearchValues");
+
+            Test("\0abcd\u0080"u8, "AnyByteSearchValues");
+            Test([128, 129, 130, 132, 133, 134], "AnyByteSearchValues");
+
+            static void Test(ReadOnlySpan<byte> needle, string expectedType) =>
+                Assert.Equal(expectedType, GetSearchValuesTypeName(SearchValues.Create(needle)));
+        }
+
+        private static string GetSearchValuesTypeName(object searchValues)
+        {
+            Type implType = searchValues.GetType();
+
+            string name = implType.Name;
+            if (name.Contains('`'))
+            {
+                name = name.Substring(0, name.Length - 2);
+            }
+
+            string[] genericTypeArgs = implType.GenericTypeArguments.Select(t => t.Name).ToArray();
+            string genericArgs = genericTypeArgs.Length == 0 ? "" : $" [{string.Join(", ", genericTypeArgs)}]";
+
+            return $"{name}{genericArgs}";
+        }
 
         public static IEnumerable<object[]> Values_MemberData()
         {
@@ -498,17 +649,17 @@ namespace System.SpanTests
 
                 if (expectedIndex != indexOfAnyIndex)
                 {
-                    AssertionFailed(haystack, needle, expectedIndex, indexOfAnyIndex, nameof(indexOfAny));
+                    AssertionFailed(haystack, needle, searchValuesInstance, expectedIndex, indexOfAnyIndex, nameof(indexOfAny));
                 }
 
                 if (expectedIndex != searchValuesIndex)
                 {
-                    AssertionFailed(haystack, needle, expectedIndex, searchValuesIndex, nameof(searchValues));
+                    AssertionFailed(haystack, needle, searchValuesInstance, expectedIndex, searchValuesIndex, nameof(searchValues));
                 }
 
                 if ((expectedIndex >= 0) != searchValuesContainsResult)
                 {
-                    AssertionFailed(haystack, needle, expectedIndex, searchValuesContainsResult ? 0 : -1, nameof(searchValuesContainsResult));
+                    AssertionFailed(haystack, needle, searchValuesInstance, expectedIndex, searchValuesContainsResult ? 0 : -1, nameof(searchValuesContainsResult));
                 }
             }
 
@@ -518,13 +669,14 @@ namespace System.SpanTests
                 return slice.Slice(0, Math.Min(slice.Length, rng.Next(maxLength + 1)));
             }
 
-            private static void AssertionFailed<T>(ReadOnlySpan<T> haystack, ReadOnlySpan<T> needle, int expected, int actual, string approach)
+            private static void AssertionFailed<T>(ReadOnlySpan<T> haystack, ReadOnlySpan<T> needle, SearchValues<T> searchValues, int expected, int actual, string approach)
                 where T : INumber<T>
             {
                 string readableHaystack = string.Join(", ", haystack.ToArray().Select(c => int.CreateChecked(c)));
                 string readableNeedle = string.Join(", ", needle.ToArray().Select(c => int.CreateChecked(c)));
+                string impl = GetSearchValuesTypeName(searchValues);
 
-                Assert.True(false, $"Expected {expected}, got {approach}={actual} for needle='{readableNeedle}', haystack='{readableHaystack}'");
+                Assert.True(false, $"Expected {expected}, got {approach}={actual} for impl='{impl}' needle='{readableNeedle}', haystack='{readableHaystack}'");
             }
         }
     }
