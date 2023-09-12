@@ -196,19 +196,36 @@ namespace System.Buffers
         {
             ref short currentSearchSpace = ref searchSpace;
 
-            if (searchSpaceLength < Vector128<ushort>.Count)
+            if (searchSpaceLength <= Vector128<ushort>.Count)
             {
-                ref short searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
-
-                while (!Unsafe.AreSame(ref currentSearchSpace, ref searchSpaceEnd))
+                if (searchSpaceLength < 4)
                 {
-                    char c = (char)currentSearchSpace;
-                    if (TNegator.NegateIfNeeded(state.Lookup.Contains128(c)))
-                    {
-                        return (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref currentSearchSpace) / sizeof(char));
-                    }
+                    ref short searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
 
-                    currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 1);
+                    while (!Unsafe.AreSame(ref currentSearchSpace, ref searchSpaceEnd))
+                    {
+                        char c = (char)currentSearchSpace;
+                        if (TNegator.NegateIfNeeded(state.Lookup.Contains128(c)))
+                        {
+                            return (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref currentSearchSpace) / sizeof(char));
+                        }
+
+                        currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 1);
+                    }
+                }
+                else
+                {
+                    // We have 4-8 characters remaining. Process the first and last half vectors in the search space.
+                    // They may overlap, but we'll handle that in the index calculation if we do get a match.
+                    ulong source0 = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<short, byte>(ref searchSpace));
+                    ulong source1 = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<short, byte>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4)));
+                    Vector128<short> source = Vector128.Create(source0, source1).AsInt16();
+
+                    Vector128<byte> result = IndexOfAnyLookupLower<TNegator, TOptimizations>(source, state.Bitmap._lower);
+                    if (result != Vector128<byte>.Zero)
+                    {
+                        return ComputeFirstIndexOverlappedFirst4To8<TNegator>(result, searchSpaceLength);
+                    }
                 }
 
                 return -1;
@@ -329,14 +346,31 @@ namespace System.Buffers
             where TNegator : struct, INegator
             where TOptimizations : struct, IOptimizations
         {
-            if (searchSpaceLength < Vector128<ushort>.Count)
+            if (searchSpaceLength <= Vector128<ushort>.Count)
             {
-                for (int i = searchSpaceLength - 1; i >= 0; i--)
+                if (searchSpaceLength < 4)
                 {
-                    char c = (char)Unsafe.Add(ref searchSpace, i);
-                    if (TNegator.NegateIfNeeded(state.Lookup.Contains128(c)))
+                    for (int i = searchSpaceLength - 1; i >= 0; i--)
                     {
-                        return i;
+                        char c = (char)Unsafe.Add(ref searchSpace, i);
+                        if (TNegator.NegateIfNeeded(state.Lookup.Contains128(c)))
+                        {
+                            return i;
+                        }
+                    }
+                }
+                else
+                {
+                    // We have 4-8 characters remaining. Process the first and last half vectors in the search space.
+                    // They may overlap, but we'll handle that in the index calculation if we do get a match.
+                    ulong source0 = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<short, byte>(ref searchSpace));
+                    ulong source1 = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<short, byte>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4)));
+                    Vector128<short> source = Vector128.Create(source0, source1).AsInt16();
+
+                    Vector128<byte> result = IndexOfAnyLookupLower<TNegator, TOptimizations>(source, state.Bitmap._lower);
+                    if (result != Vector128<byte>.Zero)
+                    {
+                        return ComputeLastIndexOverlappedFirst4To8<TNegator>(result, searchSpaceLength);
                     }
                 }
 
@@ -459,19 +493,37 @@ namespace System.Buffers
         {
             ref byte currentSearchSpace = ref searchSpace;
 
-            if (searchSpaceLength < sizeof(ulong))
+            if (searchSpaceLength <= sizeof(ulong))
             {
-                ref byte searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
-
-                while (!Unsafe.AreSame(ref currentSearchSpace, ref searchSpaceEnd))
+                if (searchSpaceLength < 4)
                 {
-                    byte b = currentSearchSpace;
-                    if (TNegator.NegateIfNeeded(state.Lookup.Contains(b)))
-                    {
-                        return (int)Unsafe.ByteOffset(ref searchSpace, ref currentSearchSpace);
-                    }
+                    ref byte searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
 
-                    currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 1);
+                    while (!Unsafe.AreSame(ref currentSearchSpace, ref searchSpaceEnd))
+                    {
+                        byte b = currentSearchSpace;
+                        if (TNegator.NegateIfNeeded(state.Lookup.Contains(b)))
+                        {
+                            return (int)Unsafe.ByteOffset(ref searchSpace, ref currentSearchSpace);
+                        }
+
+                        currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 1);
+                    }
+                }
+                else
+                {
+                    // We have 4-8 bytes remaining. Process the first and last half vectors in the search space.
+                    // They may overlap, but we'll handle that in the index calculation if we do get a match.
+                    uint source0 = Unsafe.ReadUnaligned<uint>(ref searchSpace);
+                    uint source1 = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4));
+                    ulong sourceLower = ((ulong)source0 << 32) | source1;
+                    Vector128<byte> source = Vector128.Create(sourceLower).AsByte();
+
+                    Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, state.Bitmap._lower));
+                    if (result != Vector128<byte>.Zero)
+                    {
+                        return ComputeFirstIndexOverlappedFirst4To8<TNegator>(result, searchSpaceLength);
+                    }
                 }
 
                 return -1;
@@ -585,14 +637,32 @@ namespace System.Buffers
         internal static int LastIndexOfAnyVectorized<TNegator>(ref byte searchSpace, int searchSpaceLength, ref AsciiState state)
             where TNegator : struct, INegator
         {
-            if (searchSpaceLength < sizeof(ulong))
+            if (searchSpaceLength <= sizeof(ulong))
             {
-                for (int i = searchSpaceLength - 1; i >= 0; i--)
+                if (searchSpaceLength < 4)
                 {
-                    byte b = Unsafe.Add(ref searchSpace, i);
-                    if (TNegator.NegateIfNeeded(state.Lookup.Contains(b)))
+                    for (int i = searchSpaceLength - 1; i >= 0; i--)
                     {
-                        return i;
+                        byte b = Unsafe.Add(ref searchSpace, i);
+                        if (TNegator.NegateIfNeeded(state.Lookup.Contains(b)))
+                        {
+                            return i;
+                        }
+                    }
+                }
+                else
+                {
+                    // We have 4-8 bytes remaining. Process the first and last half vectors in the search space.
+                    // They may overlap, but we'll handle that in the index calculation if we do get a match.
+                    uint source0 = Unsafe.ReadUnaligned<uint>(ref searchSpace);
+                    uint source1 = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4));
+                    ulong sourceLower = ((ulong)source0 << 32) | source1;
+                    Vector128<byte> source = Vector128.Create(sourceLower).AsByte();
+
+                    Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, state.Bitmap._lower));
+                    if (result != Vector128<byte>.Zero)
+                    {
+                        return ComputeLastIndexOverlappedFirst4To8<TNegator>(result, searchSpaceLength);
                     }
                 }
 
@@ -979,6 +1049,21 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        private static Vector128<byte> IndexOfAnyLookupLower<TNegator, TOptimizations>(Vector128<short> source0, Vector128<byte> bitmapLookup)
+            where TNegator : struct, INegator
+            where TOptimizations : struct, IOptimizations
+        {
+            Vector128<byte> source = TOptimizations.PackSourcesLower(source0.AsUInt16());
+
+            Vector128<byte> result = IndexOfAnyLookupCore(source, bitmapLookup);
+
+            return TNegator.NegateIfNeeded(result);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -1103,6 +1188,36 @@ namespace System.Buffers
                 offsetInVector -= Vector128<short>.Count;
             }
             return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / (nuint)sizeof(T));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int ComputeFirstIndexOverlappedFirst4To8<TNegator>(Vector128<byte> result, int searchSpaceLength)
+            where TNegator : struct, INegator
+        {
+            Debug.Assert(searchSpaceLength is >= 4 and <= 8);
+            uint mask = TNegator.ExtractMask(result);
+            int offsetInVector = BitOperations.TrailingZeroCount(mask);
+            if (offsetInVector >= 4)
+            {
+                // We matched within the second half of the vector
+                offsetInVector += searchSpaceLength - 8;
+            }
+            return offsetInVector;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int ComputeLastIndexOverlappedFirst4To8<TNegator>(Vector128<byte> result, int searchSpaceLength)
+            where TNegator : struct, INegator
+        {
+            Debug.Assert(searchSpaceLength is >= 4 and <= 8);
+            uint mask = TNegator.ExtractMask(result) & 0xFFFFFF;
+            int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
+            if (offsetInVector >= 4)
+            {
+                // We matched within the second half of the vector
+                offsetInVector += searchSpaceLength - 8;
+            }
+            return offsetInVector;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1242,12 +1357,25 @@ namespace System.Buffers
             // - Values  > 32767 result in 0. Because of this we must do more work to handle needles that contain 0.
             // Otherwise: Do narrowing saturation over unsigned values.
             // - All values result in min(value, 255)
+            static abstract Vector128<byte> PackSourcesLower(Vector128<ushort> lower);
             static abstract Vector128<byte> PackSources(Vector128<ushort> lower, Vector128<ushort> upper);
             static abstract Vector256<byte> PackSources(Vector256<ushort> lower, Vector256<ushort> upper);
         }
 
         internal readonly struct Ssse3AndWasmHandleZeroInNeedle : IOptimizations
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Sse2))]
+            [CompExactlyDependsOn(typeof(PackedSimd))]
+            public static Vector128<byte> PackSourcesLower(Vector128<ushort> lower)
+            {
+                Vector128<short> lowerMin = Vector128.Min(lower, Vector128.Create((ushort)255)).AsInt16();
+
+                return Sse2.IsSupported
+                    ? Sse2.PackUnsignedSaturate(lowerMin, lowerMin)
+                    : PackedSimd.ConvertNarrowingSaturateUnsigned(lowerMin, lowerMin);
+            }
+
             // Replace with Vector128.NarrowWithSaturation once https://github.com/dotnet/runtime/issues/75724 is implemented.
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             [CompExactlyDependsOn(typeof(Sse2))]
@@ -1275,6 +1403,18 @@ namespace System.Buffers
 
         internal readonly struct Default : IOptimizations
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Sse2))]
+            [CompExactlyDependsOn(typeof(AdvSimd))]
+            [CompExactlyDependsOn(typeof(PackedSimd))]
+            public static Vector128<byte> PackSourcesLower(Vector128<ushort> lower)
+            {
+                return
+                    Sse2.IsSupported ? Sse2.PackUnsignedSaturate(lower.AsInt16(), lower.AsInt16()) :
+                    AdvSimd.IsSupported ? AdvSimd.ExtractNarrowingLower(lower).ToVector128() :
+                    PackedSimd.ConvertNarrowingSaturateUnsigned(lower.AsInt16(), lower.AsInt16());
+            }
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             [CompExactlyDependsOn(typeof(Sse2))]
             [CompExactlyDependsOn(typeof(AdvSimd))]
