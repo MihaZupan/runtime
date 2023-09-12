@@ -516,7 +516,7 @@ namespace System.Buffers
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     uint source0 = Unsafe.ReadUnaligned<uint>(ref searchSpace);
                     uint source1 = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4));
-                    ulong sourceLower = ((ulong)source0 << 32) | source1;
+                    ulong sourceLower = BitConverter.IsLittleEndian ? ((ulong)source1 << 32) | source0 : ((ulong)source0 << 32) | source1;
                     Vector128<byte> source = Vector128.Create(sourceLower).AsByte();
 
                     Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, state.Bitmap._lower));
@@ -656,7 +656,7 @@ namespace System.Buffers
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     uint source0 = Unsafe.ReadUnaligned<uint>(ref searchSpace);
                     uint source1 = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref searchSpace, searchSpaceLength - 4));
-                    ulong sourceLower = ((ulong)source0 << 32) | source1;
+                    ulong sourceLower = BitConverter.IsLittleEndian ? ((ulong)source1 << 32) | source0 : ((ulong)source0 << 32) | source1;
                     Vector128<byte> source = Vector128.Create(sourceLower).AsByte();
 
                     Vector128<byte> result = TNegator.NegateIfNeeded(IndexOfAnyLookupCore(source, state.Bitmap._lower));
