@@ -1224,7 +1224,7 @@ namespace System.Buffers
         private static unsafe int ComputeLastIndex<T, TNegator>(ref T searchSpace, ref T current, Vector128<byte> result)
             where TNegator : struct, INegator
         {
-            uint mask = TNegator.ExtractMask(result) & 0xFFFF;
+            uint mask = TNegator.ExtractMask(result);
             int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
             return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / (nuint)sizeof(T));
         }
@@ -1233,7 +1233,7 @@ namespace System.Buffers
         private static unsafe int ComputeLastIndexOverlapped<T, TNegator>(ref T searchSpace, ref T secondVector, Vector128<byte> result)
             where TNegator : struct, INegator
         {
-            uint mask = TNegator.ExtractMask(result) & 0xFFFF;
+            uint mask = TNegator.ExtractMask(result);
             int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
             if (offsetInVector < Vector128<short>.Count)
             {
@@ -1334,8 +1334,8 @@ namespace System.Buffers
             public static bool NegateIfNeeded(bool result) => result;
             public static Vector128<byte> NegateIfNeeded(Vector128<byte> result) => result;
             public static Vector256<byte> NegateIfNeeded(Vector256<byte> result) => result;
-            public static uint ExtractMask(Vector128<byte> result) => ~Vector128.Equals(result, Vector128<byte>.Zero).ExtractMostSignificantBits();
-            public static uint ExtractMask(Vector256<byte> result) => ~Vector256.Equals(result, Vector256<byte>.Zero).ExtractMostSignificantBits();
+            public static uint ExtractMask(Vector128<byte> result) => (~Vector128.Equals(result, Vector128<byte>.Zero)).ExtractMostSignificantBits();
+            public static uint ExtractMask(Vector256<byte> result) => (~Vector256.Equals(result, Vector256<byte>.Zero)).ExtractMostSignificantBits();
         }
 
         internal readonly struct Negate : INegator
