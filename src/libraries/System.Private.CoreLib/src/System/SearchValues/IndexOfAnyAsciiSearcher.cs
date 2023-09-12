@@ -1210,7 +1210,7 @@ namespace System.Buffers
             where TNegator : struct, INegator
         {
             Debug.Assert(searchSpaceLength is >= 4 and <= 8);
-            uint mask = TNegator.ExtractMask(result) & 0xFFFFFF;
+            uint mask = TNegator.ExtractMask(result) & 0xFF;
             int offsetInVector = 31 - BitOperations.LeadingZeroCount(mask);
             if (offsetInVector >= 4)
             {
