@@ -560,16 +560,17 @@ namespace System
                 return string.Empty;
 
             int position = stringToUnescape.IndexOf('%');
-            if (position == -1)
+            if (position < 0)
                 return stringToUnescape;
 
             var vsb = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
             vsb.EnsureCapacity(stringToUnescape.Length);
 
             vsb.Append(stringToUnescape.AsSpan(0, position));
+
             UriHelper.UnescapeString(
-                stringToUnescape, position, stringToUnescape.Length, ref vsb,
-                c_DummyChar, c_DummyChar, c_DummyChar,
+                stringToUnescape.AsSpan(position),
+                ref vsb, c_DummyChar, c_DummyChar, c_DummyChar,
                 UnescapeMode.Unescape | UnescapeMode.UnescapeAll,
                 syntax: null, isQuery: false);
 

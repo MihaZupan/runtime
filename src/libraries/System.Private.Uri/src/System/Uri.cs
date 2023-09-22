@@ -990,63 +990,62 @@ namespace System
                     }
 
                     // check for all back slashes
-                    str = str.Replace('/', '\\');
-
-                    return str;
+                    return str.Replace('/', '\\');
                 }
 
-                char[] result;
-                int count = 0;
-                start = _info.Offset.Path;
+                var dest = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
 
+                start = _info.Offset.Path;
                 string host = _info.Host;
-                result = new char[host.Length + 3 + _info.Offset.Fragment - _info.Offset.Path];
 
                 if (IsUncPath)
                 {
-                    result[0] = '\\';
-                    result[1] = '\\';
-                    count = 2;
-
-                    UriHelper.UnescapeString(host, 0, host.Length, result, ref count, c_DummyChar, c_DummyChar,
-                        c_DummyChar, UnescapeMode.CopyOnly, _syntax, false);
+                    dest.Append('\\');
+                    dest.Append('\\');
+                    dest.Append(host);
                 }
                 else
                 {
                     // Dos path
-                    if (_string[start] == '/' || _string[start] == '\\')
+                    if (_string[start] is '/' or '\\')
                     {
                         // Skip leading slash for a DOS path
-                        ++start;
+                        start++;
                     }
                 }
 
 
-                ushort pathStart = (ushort)count; //save for optional Compress() call
+                int pathStart = dest.Length; // save for optional Compress() call
 
                 UnescapeMode mode = (InFact(Flags.PathNotCanonical) && !IsImplicitFile)
                     ? (UnescapeMode.Unescape | UnescapeMode.UnescapeAll) : UnescapeMode.CopyOnly;
-                UriHelper.UnescapeString(_string, start, _info.Offset.Query, result, ref count, c_DummyChar,
-                    c_DummyChar, c_DummyChar, mode, _syntax, true);
+
+                UriHelper.UnescapeString(_string.AsSpan(start, _info.Offset.Query - start),
+                    ref dest, c_DummyChar, c_DummyChar, c_DummyChar,
+                    mode, _syntax, true);
 
                 // Possibly convert c|\ into c:\
-                if (result[1] == '|')
-                    result[1] = ':';
+                if (dest[1] == '|')
+                    dest[1] = ':';
 
                 if (InFact(Flags.ShouldBeCompressed))
                 {
                     // suspecting not compressed path
                     // For a dos path we won't compress the "x:" part if found /../ sequences
-                    Compress(result, IsDosPath ? pathStart + 2 : pathStart, ref count, _syntax);
+                    Span<char> slice = dest.RawChars.Slice(0, dest.Length);
+                    slice = slice.Slice(IsDosPath ? pathStart + 2 : pathStart);
+
+                    int newLength = Compress(slice, _syntax);
+
+                    dest.Length -= slice.Length - newLength;
                 }
 
                 // We don't know whether all slashes were the back ones
                 // Plus going through Compress will turn them into / anyway
                 // Converting / back into \
-                Span<char> slashSpan = result.AsSpan(0, count);
-                slashSpan.Replace('/', '\\');
+                dest.RawChars.Slice(0, dest.Length).Replace('/', '\\');
 
-                return new string(result, 0, count);
+                return dest.ToString();
             }
             else
             {
@@ -1199,8 +1198,8 @@ namespace System
                         // Unescape everything
                         var dest = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
 
-                        UriHelper.UnescapeString(host, 0, host.Length, ref dest,
-                            c_DummyChar, c_DummyChar, c_DummyChar,
+                        UriHelper.UnescapeString(host,
+                            ref dest, c_DummyChar, c_DummyChar, c_DummyChar,
                             UnescapeMode.Unescape | UnescapeMode.UnescapeAll,
                             _syntax, isQuery: false);
 
@@ -2953,7 +2952,7 @@ namespace System
                     }
                 }
 
-                UriHelper.UnescapeString(str, offset, _info.Offset.Fragment,
+                UriHelper.UnescapeString(str.AsSpan(offset, _info.Offset.Fragment - offset),
                     ref dest, '#', c_DummyChar, c_DummyChar,
                     mode, _syntax, isQuery: true);
             }
@@ -2992,7 +2991,7 @@ namespace System
                     }
                 }
 
-                UriHelper.UnescapeString(str, offset, _info.Offset.End,
+                UriHelper.UnescapeString(str.AsSpan(offset, _info.Offset.End - offset),
                     ref dest, '#', c_DummyChar, c_DummyChar,
                     mode, _syntax, isQuery: false);
             }
@@ -4483,13 +4482,11 @@ namespace System
                     copy.Append(dest.AsSpan(start, dest.Length - start));
 
                     dest.Length = start;
-                    fixed (char* pCopy = copy)
-                    {
-                        UriHelper.UnescapeString(pCopy, 0, copy.Length,
-                            ref dest, '?', '#', c_DummyChar,
-                            mode,
-                            _syntax, isQuery: false);
-                    }
+
+                    UriHelper.UnescapeString(copy.AsSpan(),
+                        ref dest, '?', '#', c_DummyChar,
+                        mode,
+                        _syntax, isQuery: false);
 
                     copy.Dispose();
                 }
@@ -5048,11 +5045,14 @@ namespace System
             // to the derived class without any permission demand.
             // Should be deprecated and removed asap.
 
-            char[] dest = new char[path.Length];
-            int count = 0;
-            dest = UriHelper.UnescapeString(path, 0, path.Length, dest, ref count, c_DummyChar, c_DummyChar,
-                c_DummyChar, UnescapeMode.Unescape | UnescapeMode.UnescapeAll, null, false);
-            return new string(dest, 0, count);
+            var dest = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
+
+            UriHelper.UnescapeString(path,
+                ref dest, c_DummyChar, c_DummyChar, c_DummyChar,
+                UnescapeMode.Unescape | UnescapeMode.UnescapeAll,
+                syntax: null, isQuery: false);
+
+            return dest.ToString();
         }
 
         [Obsolete("Uri.EscapeString has been deprecated. Use GetComponents() or Uri.EscapeDataString to escape a Uri component or a string.")]

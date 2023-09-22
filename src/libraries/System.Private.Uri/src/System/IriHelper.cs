@@ -125,8 +125,7 @@ namespace System
                         {
                             // possibly utf8 encoded sequence of unicode
                             int charactersRead = PercentEncodingHelper.UnescapePercentEncodedUTF8Sequence(
-                                pInput + i,
-                                end - i,
+                                new ReadOnlySpan<char>(pInput + i, end - i),
                                 ref dest,
                                 component == UriComponents.Query,
                                 iriParsing: true);
