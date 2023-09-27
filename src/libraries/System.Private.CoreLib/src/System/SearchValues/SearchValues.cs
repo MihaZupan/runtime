@@ -55,7 +55,7 @@ namespace System.Buffers
                 };
             }
 
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && maxInclusive < 128)
+            if (Vector128.IsHardwareAccelerated && maxInclusive < 128)
             {
                 return new AsciiByteSearchValues(values);
             }
@@ -111,7 +111,7 @@ namespace System.Buffers
             }
 
             // IndexOfAnyAsciiSearcher for chars is slower than Any3CharSearchValues, but faster than Any4SearchValues
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && maxInclusive < 128)
+            if (Vector128.IsHardwareAccelerated && maxInclusive < 128)
             {
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
                     ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
@@ -145,7 +145,7 @@ namespace System.Buffers
                 probabilisticValues = newValues;
             }
 
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && minInclusive < 128)
+            if (Vector128.IsHardwareAccelerated && minInclusive < 128)
             {
                 // If we have both ASCII and non-ASCII characters, use an implementation that
                 // does an optimistic ASCII fast-path and then falls back to the ProbabilisticMap.
