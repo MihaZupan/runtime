@@ -124,6 +124,13 @@ namespace System.Buffers
                 return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
             }
 
+            if (Vector128.IsHardwareAccelerated &&
+                values.Length == 2 &&
+                TryCreateForTwoValues(values[0], values[1], uniqueValues, ignoreCase, minLength) is { } twoStringSearchValues)
+            {
+                return twoStringSearchValues;
+            }
+
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
                 TryGetTeddyAcceleratedValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } searchValues)
             {
@@ -336,6 +343,30 @@ namespace System.Buffers
             return ignoreCase
                 ? new SingleStringSearchValuesFallback<SearchValues.TrueConst>(value, uniqueValues)
                 : new SingleStringSearchValuesFallback<SearchValues.FalseConst>(value, uniqueValues);
+        }
+
+        private static SearchValues<string>? TryCreateForTwoValues(
+            string value0,
+            string value1,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            int minLength)
+        {
+            if (ignoreCase)
+            {
+                // Adding an ignoreCase variant is possible if the scenario turns out to be sufficiently common.
+                return null;
+            }
+
+            if (minLength < 2)
+            {
+                // Need at least 2 chars to anchor on
+                return null;
+            }
+
+            return PackedSpanHelpers.PackedIndexOfIsSupported && PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1)
+                ? new TwoStringSearchValuesThreeChars<SearchValues.TrueConst>(uniqueValues, value0, value1)
+                : new TwoStringSearchValuesThreeChars<SearchValues.FalseConst>(uniqueValues, value0, value1);
         }
 
         private static void AnalyzeValues(

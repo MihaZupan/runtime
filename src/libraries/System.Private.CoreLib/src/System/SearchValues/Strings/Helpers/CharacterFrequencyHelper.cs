@@ -29,12 +29,21 @@ namespace System.Buffers
             0.992f /* '   x' */, 1.067f /* '   y' */, 0.181f /* '   z' */, 0.391f /* '   {' */, 0.056f /* '   |' */, 0.391f /* '   }' */, 0.002f /* '   ~' */, 0.000f /* '\x7F' */,
         };
 
-        public static void GetSingleStringMultiCharacterOffsets(string value, bool ignoreCase, out int ch2Offset, out int ch3Offset)
+        public static void GetMultiStringMultiCharacterOffsets(ReadOnlySpan<string> values, bool ignoreCase, out int ch2Offset, out int ch3Offset)
         {
-            Debug.Assert(value.Length > 1);
-            Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
+            Debug.Assert(values.Length >= 1);
 
-            ch2Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase);
+            int minLength = int.MaxValue;
+
+            foreach (string value in values)
+            {
+                Debug.Assert(values.Length > 1);
+                Debug.Assert(!ignoreCase || char.IsAscii(value[0]));
+
+                minLength = Math.Min(minLength, value.Length);
+            }
+
+            ch2Offset = IndexOfAsciiCharWithLowestFrequency(values, minLength, ignoreCase);
             ch3Offset = 0;
 
             if (ch2Offset < 0)
@@ -43,12 +52,12 @@ namespace System.Buffers
                 Debug.Assert(!ignoreCase);
 
                 // We don't have a frequency table for non-ASCII characters, pick a random one.
-                ch2Offset = value.Length - 1;
+                ch2Offset = minLength - 1;
             }
 
-            if (value.Length > 2)
+            if (minLength > 2)
             {
-                ch3Offset = IndexOfAsciiCharWithLowestFrequency(value, ignoreCase, excludeIndex: ch2Offset);
+                ch3Offset = IndexOfAsciiCharWithLowestFrequency(values, minLength, ignoreCase, excludeIndex: ch2Offset);
 
                 if (ch3Offset < 0)
                 {
@@ -61,7 +70,7 @@ namespace System.Buffers
                     else
                     {
                         // We don't have a frequency table for non-ASCII characters, pick a random one.
-                        ch3Offset = value.Length - 1;
+                        ch3Offset = minLength - 1;
 
                         if (ch2Offset == ch3Offset)
                         {
@@ -80,44 +89,67 @@ namespace System.Buffers
             }
         }
 
-        private static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<char> span, bool ignoreCase, int excludeIndex = -1)
+        private static int IndexOfAsciiCharWithLowestFrequency(ReadOnlySpan<string> values, int minLength, bool ignoreCase, int excludeIndex = -1)
         {
             float minFrequency = float.MaxValue;
             int minIndex = -1;
 
             // Exclude i = 0 as we've already decided to use the first character.
-            for (int i = 1; i < span.Length; i++)
+            for (int i = 1; i < minLength; i++)
             {
                 if (i == excludeIndex)
                 {
                     continue;
                 }
 
-                char c = span[i];
+                float frequency = 0;
 
-                // We don't have a frequency table for non-ASCII characters, so they are ignored.
-                if (char.IsAscii(c))
+                foreach (string value in values)
                 {
-                    float frequency = AsciiFrequency[c];
+                    char c = value[i];
 
-                    if (ignoreCase)
+                    if (char.IsAscii(c))
                     {
-                        // Include the alternative character that will also match.
-                        frequency += AsciiFrequency[c ^ 0x20];
-                    }
+                        frequency += AsciiFrequency[c];
 
-                    // Avoiding characters from the front of the value for the 2nd and 3rd character
-                    // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
-                    if (i <= 2)
-                    {
-                        frequency *= 1.5f;
-                    }
+                        if (ignoreCase)
+                        {
+                            // Include the alternative character that will also match.
+                            frequency += AsciiFrequency[c ^ 0x20];
+                        }
 
-                    if (frequency <= minFrequency)
-                    {
-                        minFrequency = frequency;
-                        minIndex = i;
+                        // Avoiding characters from the front of the value for the 2nd and 3rd character
+                        // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
+                        if (i <= 2)
+                        {
+                            frequency *= 1.5f;
+                        }
+
+                        if (frequency <= minFrequency)
+                        {
+                            minFrequency = frequency;
+                            minIndex = i;
+                        }
                     }
+                    else
+                    {
+                        // We don't have a frequency table for non-ASCII characters, so they are ignored.
+                        // Add a high frequency in order to prefer offsets with all-ASCII chars.
+                        frequency += 1;
+                    }
+                }
+
+                // Avoiding characters from the front of the value for the 2nd and 3rd character
+                // results in 18 % fewer false positive 3-char matches on "The Adventures of Sherlock Holmes".
+                if (i <= 2)
+                {
+                    frequency *= 1.5f;
+                }
+
+                if (frequency <= minFrequency)
+                {
+                    minFrequency = frequency;
+                    minIndex = i;
                 }
             }
 

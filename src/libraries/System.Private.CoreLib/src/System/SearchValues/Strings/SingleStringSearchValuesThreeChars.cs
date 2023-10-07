@@ -35,7 +35,7 @@ namespace System.Buffers
             // We could have more than one entry in 'uniqueValues' if this value is an exact prefix of all the others.
             Debug.Assert(value.Length > 1);
 
-            CharacterFrequencyHelper.GetSingleStringMultiCharacterOffsets(value, IgnoreCase, out int ch2Offset, out int ch3Offset);
+            CharacterFrequencyHelper.GetMultiStringMultiCharacterOffsets([value], IgnoreCase, out int ch2Offset, out int ch3Offset);
 
             Debug.Assert(ch3Offset == 0 || ch3Offset > ch2Offset);
 
