@@ -364,9 +364,7 @@ namespace System.Buffers
                 return null;
             }
 
-            return PackedSpanHelpers.PackedIndexOfIsSupported && PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1)
-                ? new TwoStringSearchValuesThreeChars<SearchValues.TrueConst>(uniqueValues, value0, value1)
-                : new TwoStringSearchValuesThreeChars<SearchValues.FalseConst>(uniqueValues, value0, value1);
+            return new TwoStringSearchValuesThreeChars(uniqueValues, value0, value1);
         }
 
         private static void AnalyzeValues(
