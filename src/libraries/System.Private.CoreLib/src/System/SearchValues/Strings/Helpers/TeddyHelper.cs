@@ -1,6 +1,8 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -15,28 +17,27 @@ namespace System.Buffers
     internal static class TeddyHelper
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Ssse3))]
-        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        public static (Vector128<byte> Result, Vector128<byte> Prev0) ProcessInputN2(
-            Vector128<byte> input,
-            Vector128<byte> prev0,
-            Vector128<byte> n0Low, Vector128<byte> n0High,
-            Vector128<byte> n1Low, Vector128<byte> n1High)
+        public static (TVector Result, TVector Prev0) ProcessInputN2<TVector>(
+            TVector input,
+            TVector prev0,
+            TVector n0Low, TVector n0High,
+            TVector n1Low, TVector n1High)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
             // See the full description of ProcessInputN3 below for more details.
             // This method follows the same pattern as ProcessInputN3, but compares 2 bytes of each bucket at a time instead of 3.
             // We are dealing with 4 input nibble bitmaps instead of 6, and only 1 result from the previous iteration instead of 2.
-            (Vector128<byte> low, Vector128<byte> high) = GetNibbles(input);
+            (TVector low, TVector high) = GetNibbles(input);
 
             // Shuffle each nibble with the 2 corresponding bitmaps to determine which positions match any bucket.
-            Vector128<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector128<byte> result1 = Shuffle(n1Low, n1High, low, high);
+            TVector match0 = Shuffle(n0Low, n0High, low, high);
+            TVector result1 = Shuffle(n1Low, n1High, low, high);
 
             // RightShift1 shifts the match0 vector to the right by 1 place and shifts in 1 byte from the previous iteration.
-            Vector128<byte> result0 = RightShift1(prev0, match0);
+            TVector result0 = RightShift1(prev0, match0);
 
             // AND the results together to obtain a list of only buckets that match at all 4 nibble positions.
-            Vector128<byte> result = result0 & result1;
+            TVector result = result0 & result1;
 
             // Return the result and the current matches for byte 0.
             // The next loop iteration, 'match0' will be passed back to this method as 'prev0'.
@@ -44,70 +45,25 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        public static (Vector256<byte> Result, Vector256<byte> Prev0) ProcessInputN2(
-            Vector256<byte> input,
-            Vector256<byte> prev0,
-            Vector256<byte> n0Low, Vector256<byte> n0High,
-            Vector256<byte> n1Low, Vector256<byte> n1High)
-        {
-            // See comments in 'ProcessInputN2' for Vector128<byte> above.
-            // This method is the same, but operates on 32 input characters at a time.
-            (Vector256<byte> low, Vector256<byte> high) = GetNibbles(input);
-
-            Vector256<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector256<byte> result1 = Shuffle(n1Low, n1High, low, high);
-
-            Vector256<byte> result0 = RightShift1(prev0, match0);
-
-            Vector256<byte> result = result0 & result1;
-
-            return (result, match0);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512BW))]
-        public static (Vector512<byte> Result, Vector512<byte> Prev0) ProcessInputN2(
-            Vector512<byte> input,
-            Vector512<byte> prev0,
-            Vector512<byte> n0Low, Vector512<byte> n0High,
-            Vector512<byte> n1Low, Vector512<byte> n1High)
-        {
-            // See comments in 'ProcessInputN2' for Vector128<byte> above.
-            // This method is the same, but operates on 64 input characters at a time.
-            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
-
-            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector512<byte> result1 = Shuffle(n1Low, n1High, low, high);
-
-            Vector512<byte> result0 = RightShift1(prev0, match0);
-
-            Vector512<byte> result = result0 & result1;
-
-            return (result, match0);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Ssse3))]
-        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        public static (Vector128<byte> Result, Vector128<byte> Prev0, Vector128<byte> Prev1) ProcessInputN3(
-            Vector128<byte> input,
-            Vector128<byte> prev0, Vector128<byte> prev1,
-            Vector128<byte> n0Low, Vector128<byte> n0High,
-            Vector128<byte> n1Low, Vector128<byte> n1High,
-            Vector128<byte> n2Low, Vector128<byte> n2High)
+        public static (TVector Result, TVector Prev0, TVector Prev1) ProcessInputN3<TVector>(
+            TVector input,
+            TVector prev0, TVector prev1,
+            TVector n0Low, TVector n0High,
+            TVector n1Low, TVector n1High,
+            TVector n2Low, TVector n2High)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
             // This is the core operation of the Teddy algorithm that determines which of the buckets contain potential matches.
             // Every input bitmap argument (n0Low, n0High, ...) encodes a mapping of each of the possible 16 nibble values into an 8-bit bitmap.
             // We test each nibble in the input against these bitmaps to determine which buckets match a given nibble.
             // We then AND together these results to obtain only a list of buckets that match at all 6 nibble positions.
             // Each byte of the result represents an 8-bit bitmask of buckets that may match at each position.
-            (Vector128<byte> low, Vector128<byte> high) = GetNibbles(input);
+            (TVector low, TVector high) = GetNibbles(input);
 
             // Shuffle each nibble with the 3 corresponding bitmaps to determine which positions match any bucket.
-            Vector128<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector128<byte> match1 = Shuffle(n1Low, n1High, low, high);
-            Vector128<byte> result2 = Shuffle(n2Low, n2High, low, high);
+            TVector match0 = Shuffle(n0Low, n0High, low, high);
+            TVector match1 = Shuffle(n1Low, n1High, low, high);
+            TVector result2 = Shuffle(n2Low, n2High, low, high);
 
             // match0 contain the information for bucket matches at position 0.
             // match1 contain the information for bucket matches at position 1.
@@ -142,174 +98,153 @@ namespace System.Buffers
             //
             // RightShift1 and RightShift2 perform the above operation of shifting the match vectors
             // to the right by 1 and 2 places and shifting in the bytes from the previous iteration.
-            Vector128<byte> result0 = RightShift2(prev0, match0);
-            Vector128<byte> result1 = RightShift1(prev1, match1);
+            TVector result0 = RightShift2(prev0, match0);
+            TVector result1 = RightShift1(prev1, match1);
 
             // AND the results together to obtain a list of only buckets that match at all 6 nibble positions.
             // result:  [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
             //              ^                          ^
             // Note that we found the match at index 1, even though that match started 2 bytes earlier, at the end of the previous iteration.
             // The caller must account for that when verifying potential matches, see 'MatchStartOffsetN3 = 2' in 'AsciiStringSearchValuesTeddyBase'.
-            Vector128<byte> result = result0 & result1 & result2;
+            TVector result = result0 & result1 & result2;
 
             // Return the result and the current matches for byte 0 and 1.
             // The next loop iteration, 'match0' and 'match1' will be passed back to this method as 'prev0' and 'prev1'.
             return (result, match0, match1);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        public static (Vector256<byte> Result, Vector256<byte> Prev0, Vector256<byte> Prev1) ProcessInputN3(
-            Vector256<byte> input,
-            Vector256<byte> prev0, Vector256<byte> prev1,
-            Vector256<byte> n0Low, Vector256<byte> n0High,
-            Vector256<byte> n1Low, Vector256<byte> n1High,
-            Vector256<byte> n2Low, Vector256<byte> n2High)
-        {
-            // See comments in 'ProcessInputN3' for Vector128<byte> above.
-            // This method is the same, but operates on 32 input characters at a time.
-            (Vector256<byte> low, Vector256<byte> high) = GetNibbles(input);
-
-            Vector256<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector256<byte> match1 = Shuffle(n1Low, n1High, low, high);
-            Vector256<byte> result2 = Shuffle(n2Low, n2High, low, high);
-
-            Vector256<byte> result0 = RightShift2(prev0, match0);
-            Vector256<byte> result1 = RightShift1(prev1, match1);
-
-            Vector256<byte> result = result0 & result1 & result2;
-
-            return (result, match0, match1);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512BW))]
-        public static (Vector512<byte> Result, Vector512<byte> Prev0, Vector512<byte> Prev1) ProcessInputN3(
-            Vector512<byte> input,
-            Vector512<byte> prev0, Vector512<byte> prev1,
-            Vector512<byte> n0Low, Vector512<byte> n0High,
-            Vector512<byte> n1Low, Vector512<byte> n1High,
-            Vector512<byte> n2Low, Vector512<byte> n2High)
-        {
-            // See comments in 'ProcessInputN3' for Vector128<byte> above.
-            // This method is the same, but operates on 64 input characters at a time.
-            (Vector512<byte> low, Vector512<byte> high) = GetNibbles(input);
-
-            Vector512<byte> match0 = Shuffle(n0Low, n0High, low, high);
-            Vector512<byte> match1 = Shuffle(n1Low, n1High, low, high);
-            Vector512<byte> result2 = Shuffle(n2Low, n2High, low, high);
-
-            Vector512<byte> result0 = RightShift2(prev0, match0);
-            Vector512<byte> result1 = RightShift1(prev1, match1);
-
-            Vector512<byte> result = result0 & result1 & result2;
-
-            return (result, match0, match1);
-        }
-
-        // Read two Vector512<ushort> and concatenate their lower bytes together into a single Vector512<byte>.
+        // Read two TVector<ushort> and concatenate their lower bytes together into a single TVector<byte>.
         // On X86, characters above 32767 are turned into 0, but we account for that by not using Teddy if any of the string values contain a 0.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Sse2))]
-        [CompExactlyDependsOn(typeof(AdvSimd))]
-        public static Vector128<byte> LoadAndPack16AsciiChars(ref char source)
+        public static TVector LoadAndPackAsciiChars<TVector>(ref char source)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            Vector128<ushort> source0 = Vector128.LoadUnsafe(ref source);
-            Vector128<ushort> source1 = Vector128.LoadUnsafe(ref source, (nuint)Vector128<ushort>.Count);
+            if (TVector.Count == 16)
+            {
+                Vector128<ushort> source0 = Vector128.LoadUnsafe(ref source);
+                Vector128<ushort> source1 = Vector128.LoadUnsafe(ref source, (nuint)Vector128<ushort>.Count);
 
-            return Sse2.IsSupported
-                ? Sse2.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16())
-                : AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(source0), source1);
-        }
+                return Unsafe.BitCast<Vector128<byte>, TVector>(Sse2.IsSupported
+                    ? Sse2.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16())
+                    : AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(source0), source1));
+            }
 
-        // Read two Vector512<ushort> and concatenate their lower bytes together into a single Vector512<byte>.
-        // Characters above 32767 are turned into 0, but we account for that by not using Teddy if any of the string values contain a 0.
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        public static Vector256<byte> LoadAndPack32AsciiChars(ref char source)
-        {
-            Vector256<ushort> source0 = Vector256.LoadUnsafe(ref source);
-            Vector256<ushort> source1 = Vector256.LoadUnsafe(ref source, (nuint)Vector256<ushort>.Count);
+            if (TVector.Count == 32)
+            {
+                Vector256<ushort> source0 = Vector256.LoadUnsafe(ref source);
+                Vector256<ushort> source1 = Vector256.LoadUnsafe(ref source, (nuint)Vector256<ushort>.Count);
 
-            Vector256<byte> packed = Avx2.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
+                Vector256<byte> packed = Avx2.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
 
-            return PackedSpanHelpers.FixUpPackedVector256Result(packed);
-        }
+                return Unsafe.BitCast<Vector256<byte>, TVector>(PackedSpanHelpers.FixUpPackedVector256Result(packed));
+            }
 
-        // Read two Vector512<ushort> and concatenate their lower bytes together into a single Vector512<byte>.
-        // Characters above 32767 are turned into 0, but we account for that by not using Teddy if any of the string values contain a 0.
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512BW))]
-        public static Vector512<byte> LoadAndPack64AsciiChars(ref char source)
-        {
-            Vector512<ushort> source0 = Vector512.LoadUnsafe(ref source);
-            Vector512<ushort> source1 = Vector512.LoadUnsafe(ref source, (nuint)Vector512<ushort>.Count);
+            Debug.Assert(typeof(TVector) == typeof(Vector512<byte>));
+            {
+                Vector512<ushort> source0 = Vector512.LoadUnsafe(ref source);
+                Vector512<ushort> source1 = Vector512.LoadUnsafe(ref source, (nuint)Vector512<ushort>.Count);
 
-            Vector512<byte> packed = Avx512BW.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
+                Vector512<byte> packed = Avx512BW.PackUnsignedSaturate(source0.AsInt16(), source1.AsInt16());
 
-            return PackedSpanHelpers.FixUpPackedVector512Result(packed);
+                return Unsafe.BitCast<Vector512<byte>, TVector>(PackedSpanHelpers.FixUpPackedVector512Result(packed));
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Ssse3))]
-        [CompExactlyDependsOn(typeof(AdvSimd))]
-        private static (Vector128<byte> Low, Vector128<byte> High) GetNibbles(Vector128<byte> input)
+        private static (TVector Low, TVector High) GetNibbles<TVector>(TVector input)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            // 'low' is not strictly correct here, but we take advantage of Ssse3.Shuffle's behavior
+            // 'low' is not strictly correct here, but we take advantage of X86's Shuffle behavior
             // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
-            Vector128<byte> low = Ssse3.IsSupported
+            TVector low = Ssse3.IsSupported
                 ? input
-                : input & Vector128.Create((byte)0xF);
+                : input & TVector.Create(0xF);
 
-            Vector128<byte> high = input >>> 4;
-
-            return (low, high);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static (Vector256<byte> Low, Vector256<byte> High) GetNibbles(Vector256<byte> input)
-        {
-            // 'low' is not strictly correct here, but we take advantage of Avx2.Shuffle's behavior
-            // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
-            Vector256<byte> low = input;
-
-            Vector256<byte> high = input >>> 4;
+            TVector high = input >>> 4;
 
             return (low, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static (Vector512<byte> Low, Vector512<byte> High) GetNibbles(Vector512<byte> input)
+        private static TVector Shuffle<TVector>(TVector maskLow, TVector maskHigh, TVector low, TVector high)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            // 'low' is not strictly correct here, but we take advantage of Avx512BW.Shuffle's behavior
-            // of doing an implicit 'AND 0xF' in order to skip the redundant AND.
-            Vector512<byte> low = input;
-
-            Vector512<byte> high = input >>> 4;
-
-            return (low, high);
+            return ShuffleUnsafeSingleLane(maskLow, low) & ShuffleUnsafeSingleLane(maskHigh, high);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Ssse3))]
-        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        private static Vector128<byte> Shuffle(Vector128<byte> maskLow, Vector128<byte> maskHigh, Vector128<byte> low, Vector128<byte> high)
+        private static TVector ShuffleUnsafeSingleLane<TVector>(TVector vector, TVector indices)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            return Vector128.ShuffleUnsafe(maskLow, low) & Vector128.ShuffleUnsafe(maskHigh, high);
+            if (typeof(TVector) == typeof(Vector128<byte>))
+            {
+                return Unsafe.BitCast<Vector128<byte>, TVector>(Vector128.ShuffleUnsafe(
+                    Unsafe.BitCast<TVector, Vector128<byte>>(vector),
+                    Unsafe.BitCast<TVector, Vector128<byte>>(indices)));
+            }
+
+            if (typeof(TVector) == typeof(Vector256<byte>))
+            {
+                return Unsafe.BitCast<Vector256<byte>, TVector>(Avx2.Shuffle(
+                    Unsafe.BitCast<TVector, Vector256<byte>>(vector),
+                    Unsafe.BitCast<TVector, Vector256<byte>>(indices)));
+            }
+
+            Debug.Assert(typeof(TVector) == typeof(Vector512<byte>));
+
+            return Unsafe.BitCast<Vector512<byte>, TVector>(Avx512BW.Shuffle(
+                Unsafe.BitCast<TVector, Vector512<byte>>(vector),
+                Unsafe.BitCast<TVector, Vector512<byte>>(indices)));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static Vector256<byte> Shuffle(Vector256<byte> maskLow, Vector256<byte> maskHigh, Vector256<byte> low, Vector256<byte> high)
+        private static TVector RightShift1<TVector>(TVector left, TVector right)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            return Avx2.Shuffle(maskLow, low) & Avx2.Shuffle(maskHigh, high);
+            if (typeof(TVector) == typeof(Vector128<byte>))
+            {
+                return Unsafe.BitCast<Vector128<byte>, TVector>(RightShift1(
+                    Unsafe.BitCast<TVector, Vector128<byte>>(left),
+                    Unsafe.BitCast<TVector, Vector128<byte>>(right)));
+            }
+
+            if (typeof(TVector) == typeof(Vector256<byte>))
+            {
+                return Unsafe.BitCast<Vector256<byte>, TVector>(RightShift1(
+                    Unsafe.BitCast<TVector, Vector256<byte>>(left),
+                    Unsafe.BitCast<TVector, Vector256<byte>>(right)));
+            }
+
+            Debug.Assert(typeof(TVector) == typeof(Vector512<byte>));
+
+            return Unsafe.BitCast<Vector512<byte>, TVector>(RightShift1(
+                Unsafe.BitCast<TVector, Vector512<byte>>(left),
+                Unsafe.BitCast<TVector, Vector512<byte>>(right)));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512BW))]
-        private static Vector512<byte> Shuffle(Vector512<byte> maskLow, Vector512<byte> maskHigh, Vector512<byte> low, Vector512<byte> high)
+        private static TVector RightShift2<TVector>(TVector left, TVector right)
+            where TVector : struct, ISimdVector<TVector, byte>
         {
-            return Avx512BW.Shuffle(maskLow, low) & Avx512BW.Shuffle(maskHigh, high);
+            if (typeof(TVector) == typeof(Vector128<byte>))
+            {
+                return Unsafe.BitCast<Vector128<byte>, TVector>(RightShift2(
+                    Unsafe.BitCast<TVector, Vector128<byte>>(left),
+                    Unsafe.BitCast<TVector, Vector128<byte>>(right)));
+            }
+
+            if (typeof(TVector) == typeof(Vector256<byte>))
+            {
+                return Unsafe.BitCast<Vector256<byte>, TVector>(RightShift2(
+                    Unsafe.BitCast<TVector, Vector256<byte>>(left),
+                    Unsafe.BitCast<TVector, Vector256<byte>>(right)));
+            }
+
+            Debug.Assert(typeof(TVector) == typeof(Vector512<byte>));
+
+            return Unsafe.BitCast<Vector512<byte>, TVector>(RightShift2(
+                Unsafe.BitCast<TVector, Vector512<byte>>(left),
+                Unsafe.BitCast<TVector, Vector512<byte>>(right)));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

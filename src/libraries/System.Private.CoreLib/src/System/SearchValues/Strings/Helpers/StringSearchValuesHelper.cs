@@ -82,9 +82,7 @@ namespace System.Buffers
         public interface ICaseSensitivity
         {
             static abstract char TransformInput(char input);
-            static abstract Vector128<byte> TransformInput(Vector128<byte> input);
-            static abstract Vector256<byte> TransformInput(Vector256<byte> input);
-            static abstract Vector512<byte> TransformInput(Vector512<byte> input);
+            static abstract TVector TransformInput<TVector>(TVector input) where TVector : struct, ISimdVector<TVector, byte>;
             static abstract bool Equals(ref char matchStart, string candidate);
         }
 
@@ -95,13 +93,9 @@ namespace System.Buffers
             public static char TransformInput(char input) => input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector128<byte> TransformInput(Vector128<byte> input) => input;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector256<byte> TransformInput(Vector256<byte> input) => input;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector512<byte> TransformInput(Vector512<byte> input) => input;
+            public static TVector TransformInput<TVector>(TVector input)
+                where TVector : struct, ISimdVector<TVector, byte> =>
+                input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate) =>
@@ -116,13 +110,9 @@ namespace System.Buffers
             public static char TransformInput(char input) => (char)(input & ~0x20);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector128<byte> TransformInput(Vector128<byte> input) => input & Vector128.Create(unchecked((byte)~0x20));
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector256<byte> TransformInput(Vector256<byte> input) => input & Vector256.Create(unchecked((byte)~0x20));
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector512<byte> TransformInput(Vector512<byte> input) => input & Vector512.Create(unchecked((byte)~0x20));
+            public static TVector TransformInput<TVector>(TVector input)
+                where TVector : struct, ISimdVector<TVector, byte> =>
+                input & TVector.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate) =>
@@ -137,35 +127,37 @@ namespace System.Buffers
             public static char TransformInput(char input) => TextInfo.ToUpperAsciiInvariant(input);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector128<byte> TransformInput(Vector128<byte> input)
+            public static TVector TransformInput<TVector>(TVector input)
+                where TVector : struct, ISimdVector<TVector, byte>
             {
-                Vector128<byte> subtraction = Vector128.Create((byte)(128 + 'a'));
-                Vector128<byte> comparison = Vector128.Create((byte)(128 + 26));
-                Vector128<byte> caseConversion = Vector128.Create((byte)0x20);
+                TVector subtraction = TVector.Create(128 + 'a');
+                TVector comparison = TVector.Create(128 + 26);
+                TVector caseConversion = TVector.Create(0x20);
 
-                Vector128<byte> matches = Vector128.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
-                return input ^ (matches & caseConversion);
-            }
+                TVector offsetInput = input - subtraction;
+                TVector matches;
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector256<byte> TransformInput(Vector256<byte> input)
-            {
-                Vector256<byte> subtraction = Vector256.Create((byte)(128 + 'a'));
-                Vector256<byte> comparison = Vector256.Create((byte)(128 + 26));
-                Vector256<byte> caseConversion = Vector256.Create((byte)0x20);
+                if (typeof(TVector) == typeof(Vector128<byte>))
+                {
+                    matches = Unsafe.BitCast<Vector128<sbyte>, TVector>(Vector128.LessThan(
+                        Unsafe.BitCast<TVector, Vector128<sbyte>>(offsetInput),
+                        Unsafe.BitCast<TVector, Vector128<sbyte>>(subtraction)));
+                }
+                else if (typeof(TVector) == typeof(Vector256<byte>))
+                {
+                    matches = Unsafe.BitCast<Vector256<sbyte>, TVector>(Vector256.LessThan(
+                        Unsafe.BitCast<TVector, Vector256<sbyte>>(offsetInput),
+                        Unsafe.BitCast<TVector, Vector256<sbyte>>(subtraction)));
+                }
+                else
+                {
+                    Debug.Assert(typeof(TVector) == typeof(Vector512<byte>));
 
-                Vector256<byte> matches = Vector256.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
-                return input ^ (matches & caseConversion);
-            }
+                    matches = Unsafe.BitCast<Vector512<sbyte>, TVector>(Vector512.LessThan(
+                        Unsafe.BitCast<TVector, Vector512<sbyte>>(offsetInput),
+                        Unsafe.BitCast<TVector, Vector512<sbyte>>(subtraction)));
+                }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static Vector512<byte> TransformInput(Vector512<byte> input)
-            {
-                Vector512<byte> subtraction = Vector512.Create((byte)(128 + 'a'));
-                Vector512<byte> comparison = Vector512.Create((byte)(128 + 26));
-                Vector512<byte> caseConversion = Vector512.Create((byte)0x20);
-
-                Vector512<byte> matches = Vector512.LessThan((input - subtraction).AsSByte(), comparison.AsSByte()).AsByte();
                 return input ^ (matches & caseConversion);
             }
 
@@ -179,9 +171,10 @@ namespace System.Buffers
         public readonly struct CaseInsensitiveUnicode : ICaseSensitivity
         {
             public static char TransformInput(char input) => throw new UnreachableException();
-            public static Vector128<byte> TransformInput(Vector128<byte> input) => throw new UnreachableException();
-            public static Vector256<byte> TransformInput(Vector256<byte> input) => throw new UnreachableException();
-            public static Vector512<byte> TransformInput(Vector512<byte> input) => throw new UnreachableException();
+
+            public static TVector TransformInput<TVector>(TVector input)
+                where TVector : struct, ISimdVector<TVector, byte> =>
+                throw new UnreachableException();
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static bool Equals(ref char matchStart, string candidate) =>
