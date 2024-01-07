@@ -10,39 +10,48 @@ using System.Runtime.Intrinsics.X86;
 
 namespace System.Buffers
 {
-    internal sealed class Any2CharPackedIgnoreCaseSearchValues : SearchValues<char>
+    internal sealed class RangeCharPackedIgnoreCaseSearchValues : SearchValues<char>
     {
-        private readonly char _e0, _e1;
+        private readonly char _lowInclusive, _rangeInclusive;
+        private readonly uint _lowUint, _highMinusLow;
         private IndexOfAnyAsciiSearcher.AsciiState _state;
 
-        public Any2CharPackedIgnoreCaseSearchValues(ReadOnlySpan<char> values, char value0, char value1)
+        public RangeCharPackedIgnoreCaseSearchValues(ReadOnlySpan<char> values, char lowInclusive, char highInclusive)
         {
-            Debug.Assert((value0 | 0x20) == value0 && char.IsAscii(value0));
-            Debug.Assert((value1 | 0x20) == value1 && char.IsAscii(value1));
+            Debug.Assert((lowInclusive | 0x20) == lowInclusive);
 
-            (_e0, _e1) = (value0, value1);
+            (_lowInclusive, _rangeInclusive) = (lowInclusive, (char)(highInclusive - lowInclusive));
+            _lowUint = lowInclusive;
+            _highMinusLow = (uint)(highInclusive - lowInclusive);
             IndexOfAnyAsciiSearcher.ComputeAsciiState(values, out _state);
         }
 
-        internal override char[] GetValues() =>
-            [(char)(_e0 & ~0x20), _e0, (char)(_e1 & ~0x20), _e1];
+        internal override char[] GetValues()
+        {
+            char[] values = new char[_rangeInclusive + 1];
+
+            int low = _lowInclusive;
+            for (int i = 0; i < values.Length; i++)
+            {
+                values[i] = (char)(low + i);
+            }
+
+            return values;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal override bool ContainsCore(char value)
-        {
-            value = (char)(value | 0x20);
-            return value == _e0 || value == _e1;
-        }
+        internal override bool ContainsCore(char value) =>
+            (uint)(value | 0x20) - _lowUint <= _highMinusLow;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         internal override int IndexOfAny(ReadOnlySpan<char> span) =>
-            PackedSpanHelpers.IndexOfAnyIgnoreCase(ref MemoryMarshal.GetReference(span), _e0, _e1, span.Length);
+            PackedSpanHelpers.IndexOfAnyInRangeIgnoreCase(ref MemoryMarshal.GetReference(span), _lowInclusive, _rangeInclusive, span.Length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         internal override int IndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            PackedSpanHelpers.IndexOfAnyExceptIgnoreCase(ref MemoryMarshal.GetReference(span), _e0, _e1, span.Length);
+            PackedSpanHelpers.IndexOfAnyExceptInRangeIgnoreCase(ref MemoryMarshal.GetReference(span), _lowInclusive, _rangeInclusive, span.Length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]

@@ -126,20 +126,29 @@ namespace System.Buffers
             // IndexOfAnyAsciiSearcher for chars is slower than Any3CharSearchValues, but faster than Any4SearchValues
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && maxInclusive < 128)
             {
-                // If the values are sets of 2 ASCII letters with both cases, we can use an approach that
-                // reduces the number of comparisons by masking off the bit that differs between lower and upper case (0x20).
-                // While this most commonly applies to ASCII letters, it also works for other values that differ by 0x20 (e.g. "[]{}" => "{}").
-                if (PackedSpanHelpers.PackedIndexOfIsSupported && values.Length == 4 && minInclusive > 0)
+                if (PackedSpanHelpers.PackedIndexOfIsSupported && minInclusive > 0)
                 {
-                    Span<char> copy = stackalloc char[4];
-                    values.CopyTo(copy);
-                    copy.Sort();
-
-                    if ((copy[0] ^ copy[2]) == 0x20 &&
-                        (copy[1] ^ copy[3]) == 0x20)
+                    if (values.Length == 4)
                     {
-                        // "AaBb" => 'a', 'b'
-                        return new Any2CharPackedIgnoreCaseSearchValues(copy[2], copy[3]);
+                        // If the values are sets of 2 ASCII letters with both cases, we can use an approach that
+                        // reduces the number of comparisons by masking off the bit that differs between lower and upper case (0x20).
+                        // While this most commonly applies to ASCII letters, it also works for other values that differ by 0x20 (e.g. "[]{}" => "{}").
+                        Span<char> copy = stackalloc char[4];
+                        values.CopyTo(copy);
+                        copy.Sort();
+
+                        if ((copy[0] ^ copy[2]) == 0x20 &&
+                            (copy[1] ^ copy[3]) == 0x20)
+                        {
+                            // "AaBb" => 'a', 'b'
+                            return new Any2CharPackedIgnoreCaseSearchValues(values, copy[2], copy[3]);
+                        }
+                    }
+                    else if (TryGetSingleAsciiIgnoreCaseRange(values, minInclusive, maxInclusive) is { } searchValues)
+                    {
+                        // If we have two ranges of characters offset by the 0x20 bit, we can use a similar approach
+                        // of masking off that bit and searching for just one range.
+                        return searchValues;
                     }
                 }
 
@@ -222,10 +231,62 @@ namespace System.Buffers
             minInclusive = min;
             maxInclusive = max;
 
-            uint range = uint.CreateChecked(max - min) + 1;
+            return !RangeHasGaps(values, min, max);
+        }
+
+        private static SearchValues<char>? TryGetSingleAsciiIgnoreCaseRange(ReadOnlySpan<char> values, char minInclusive, char maxInclusive)
+        {
+            Debug.Assert(minInclusive > 0 && maxInclusive < 128);
+
+            // The whole first range must have the 0x20 bit unset.
+            // The whole second range must have the 0x20 bit set.
+            if ((minInclusive & 0x20) != 0 || (maxInclusive & 0x20) == 0)
+            {
+                return null;
+            }
+
+            int secondRangeMin = minInclusive | 0x20;
+
+            if (secondRangeMin >= maxInclusive)
+            {
+                return null;
+            }
+
+            int rangeLength = maxInclusive - secondRangeMin + 1;
+            int firstRangeMax = minInclusive + rangeLength - 1;
+
+            if (rangeLength * 2 > values.Length || (firstRangeMax & 0x20) != 0 || (secondRangeMin & 0x20) == 0)
+            {
+                return null;
+            }
+
+            if (firstRangeMax + 1 >= secondRangeMin)
+            {
+                // Ranges can't touch.
+                return null;
+            }
+
+            if (values.ContainsAnyInRange((char)(firstRangeMax + 1), (char)(secondRangeMin - 1)))
+            {
+                // Saw values between the two ranges.
+                return null;
+            }
+
+            if (RangeHasGaps(values, minInclusive, (char)firstRangeMax) || RangeHasGaps(values, (char)secondRangeMin, maxInclusive))
+            {
+                return null;
+            }
+
+            return new RangeCharPackedIgnoreCaseSearchValues(values, (char)secondRangeMin, maxInclusive);
+        }
+
+        private static bool RangeHasGaps<T>(ReadOnlySpan<T> values, T minInclusive, T maxInclusive)
+            where T : struct, INumber<T>, IMinMaxValue<T>
+        {
+            uint range = uint.CreateChecked(maxInclusive - minInclusive) + 1;
             if (range > values.Length)
             {
-                return false;
+                return true;
             }
 
             Span<bool> seenValues = range <= 256 ? stackalloc bool[256] : new bool[range];
@@ -234,16 +295,15 @@ namespace System.Buffers
 
             foreach (T value in values)
             {
-                int offset = int.CreateChecked(value - min);
-                seenValues[offset] = true;
+                int offset = int.CreateChecked(value - minInclusive);
+
+                if ((uint)offset < (uint)seenValues.Length)
+                {
+                    seenValues[offset] = true;
+                }
             }
 
-            if (seenValues.Contains(false))
-            {
-                return false;
-            }
-
-            return true;
+            return seenValues.Contains(false);
         }
 
         internal interface IRuntimeConst
