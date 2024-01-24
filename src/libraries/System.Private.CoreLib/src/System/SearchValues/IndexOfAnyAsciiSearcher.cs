@@ -28,7 +28,7 @@ namespace System.Buffers
             public readonly Vector256<byte> Bitmap256() => Bitmap512._lower;
 
             public readonly AsciiState CreateInverse() =>
-                new AsciiState(~Bitmap128, Lookup.CreateInverse());
+                new AsciiState(~Bitmap128(), Lookup.CreateInverse());
         }
 
         public struct AnyByteState(Vector128<byte> bitmap0, Vector128<byte> bitmap1, BitVector256 lookup)
@@ -172,7 +172,7 @@ namespace System.Buffers
                 {
                     // Only initializing the bitmap here is okay as we can only get here if the search space is long enough
                     // and we support vectorization, so the IndexOfAnyVectorized implementation will never touch state.Lookup.
-                    state.Bitmap512 = DuplicateTo512(state.Bitmap128);
+                    state.Bitmap512 = DuplicateTo512(state.Bitmap128());
 
                     index = (Ssse3.IsSupported || PackedSimd.IsSupported) && needleContainsZero
                         ? IndexOfAny<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref state)
@@ -199,7 +199,7 @@ namespace System.Buffers
                 {
                     // Only initializing the bitmap here is okay as we can only get here if the search space is long enough
                     // and we support vectorization, so the LastIndexOfAnyVectorized implementation will never touch state.Lookup.
-                    state.Bitmap512 = DuplicateTo512(state.Bitmap128);
+                    state.Bitmap512 = DuplicateTo512(state.Bitmap128());
 
                     index = (Ssse3.IsSupported || PackedSimd.IsSupported) && needleContainsZero
                         ? LastIndexOfAny<TNegator, Ssse3AndWasmHandleZeroInNeedle>(ref searchSpace, searchSpaceLength, ref state)
