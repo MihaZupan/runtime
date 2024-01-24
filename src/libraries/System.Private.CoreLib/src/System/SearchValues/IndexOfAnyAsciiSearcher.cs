@@ -21,9 +21,11 @@ namespace System.Buffers
             public Vector512<byte> Bitmap512 = DuplicateTo512(bitmap);
             public BitVector256 Lookup = lookup;
 
-            public readonly Vector128<byte> Bitmap128 => Bitmap512._lower._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector128<byte> Bitmap128() => Bitmap512._lower._lower;
 
-            public readonly Vector256<byte> Bitmap256 => Bitmap512._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector256<byte> Bitmap256() => Bitmap512._lower;
 
             public readonly AsciiState CreateInverse() =>
                 new AsciiState(~Bitmap128, Lookup.CreateInverse());
@@ -35,13 +37,17 @@ namespace System.Buffers
             public Vector512<byte> Bitmap1_512 = DuplicateTo512(bitmap1);
             public BitVector256 Lookup = lookup;
 
-            public readonly Vector128<byte> Bitmap0_128 => Bitmap0_512._lower._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector128<byte> Bitmap0_128() => Bitmap0_512._lower._lower;
 
-            public readonly Vector128<byte> Bitmap1_128 => Bitmap1_512._lower._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector128<byte> Bitmap1_128() => Bitmap1_512._lower._lower;
 
-            public readonly Vector256<byte> Bitmap0_256 => Bitmap0_512._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector256<byte> Bitmap0_256() => Bitmap0_512._lower;
 
-            public readonly Vector256<byte> Bitmap1_256 => Bitmap1_512._lower;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public readonly Vector256<byte> Bitmap1_256() => Bitmap1_512._lower;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -312,7 +318,7 @@ namespace System.Buffers
                     return TResultMapper.NotFound;
                 }
 
-                Vector256<byte> bitmap256 = state.Bitmap256;
+                Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
@@ -367,7 +373,7 @@ namespace System.Buffers
                 return TResultMapper.NotFound;
             }
 
-            Vector128<byte> bitmap = state.Bitmap128;
+            Vector128<byte> bitmap = state.Bitmap128();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx2.IsSupported is false
             if (!Avx2.IsSupported && searchSpaceLength > 2 * Vector128<short>.Count)
@@ -500,7 +506,7 @@ namespace System.Buffers
                     return -1;
                 }
 
-                Vector256<byte> bitmap256 = state.Bitmap256;
+                Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
                 if (!Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
@@ -553,7 +559,7 @@ namespace System.Buffers
                 return -1;
             }
 
-            Vector128<byte> bitmap = state.Bitmap128;
+            Vector128<byte> bitmap = state.Bitmap128();
 
             if (!Avx2.IsSupported && searchSpaceLength > 2 * Vector128<short>.Count)
             {
@@ -703,7 +709,7 @@ namespace System.Buffers
                     return TResultMapper.NotFound;
                 }
 
-                Vector256<byte> bitmap256 = state.Bitmap256;
+                Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
                 if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
@@ -754,7 +760,7 @@ namespace System.Buffers
                 return TResultMapper.NotFound;
             }
 
-            Vector128<byte> bitmap = state.Bitmap128;
+            Vector128<byte> bitmap = state.Bitmap128();
 
             if (!Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
             {
@@ -880,7 +886,7 @@ namespace System.Buffers
                     return -1;
                 }
 
-                Vector256<byte> bitmap256 = state.Bitmap256;
+                Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
                 if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
@@ -931,7 +937,7 @@ namespace System.Buffers
                 return -1;
             }
 
-            Vector128<byte> bitmap = state.Bitmap128;
+            Vector128<byte> bitmap = state.Bitmap128();
 
             if (!Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
             {
@@ -1082,8 +1088,8 @@ namespace System.Buffers
                     return TResultMapper.NotFound;
                 }
 
-                Vector256<byte> bitmap256_0 = state.Bitmap0_256;
-                Vector256<byte> bitmap256_1 = state.Bitmap1_256;
+                Vector256<byte> bitmap256_0 = state.Bitmap0_256();
+                Vector256<byte> bitmap256_1 = state.Bitmap1_256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
@@ -1136,8 +1142,8 @@ namespace System.Buffers
                 return TResultMapper.NotFound;
             }
 
-            Vector128<byte> bitmap0 = state.Bitmap0_128;
-            Vector128<byte> bitmap1 = state.Bitmap1_128;
+            Vector128<byte> bitmap0 = state.Bitmap0_128();
+            Vector128<byte> bitmap1 = state.Bitmap1_128();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx2.IsSupported is false
             if (!Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
@@ -1268,8 +1274,8 @@ namespace System.Buffers
                     return -1;
                 }
 
-                Vector256<byte> bitmap256_0 = state.Bitmap0_256;
-                Vector256<byte> bitmap256_1 = state.Bitmap1_256;
+                Vector256<byte> bitmap256_0 = state.Bitmap0_256();
+                Vector256<byte> bitmap256_1 = state.Bitmap1_256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
@@ -1322,8 +1328,8 @@ namespace System.Buffers
                 return -1;
             }
 
-            Vector128<byte> bitmap0 = state.Bitmap0_128;
-            Vector128<byte> bitmap1 = state.Bitmap1_128;
+            Vector128<byte> bitmap0 = state.Bitmap0_128();
+            Vector128<byte> bitmap1 = state.Bitmap1_128();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx2.IsSupported is false
             if (!Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
