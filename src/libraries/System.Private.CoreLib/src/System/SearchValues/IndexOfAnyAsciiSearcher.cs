@@ -264,7 +264,7 @@ namespace System.Buffers
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
                 {
                     Vector512<byte> bitmap512 = state.Bitmap512;
@@ -322,7 +322,7 @@ namespace System.Buffers
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (!Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > 2 * Vector256<short>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
@@ -453,7 +453,7 @@ namespace System.Buffers
             if (Avx2.IsSupported && searchSpaceLength > 2 * Vector128<short>.Count)
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
-                if (Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
                 {
                     Vector512<byte> bitmap512 = state.Bitmap512;
 
@@ -509,7 +509,7 @@ namespace System.Buffers
                 Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
-                if (!Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > 2 * Vector256<short>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
                     // Process the input in chunks of 32 characters (2 * Vector256<short>).
@@ -658,7 +658,7 @@ namespace System.Buffers
             if (Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
-                if (Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
                 {
                     Vector512<byte> bitmap512 = state.Bitmap512;
 
@@ -712,7 +712,7 @@ namespace System.Buffers
                 Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
-                if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
                     // Process the input in chunks of 32 bytes.
@@ -835,7 +835,7 @@ namespace System.Buffers
             if (Avx2.IsSupported && searchSpaceLength > Vector128<byte>.Count)
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
-                if (Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
                 {
                     Vector512<byte> bitmap512 = state.Bitmap512;
 
@@ -889,7 +889,7 @@ namespace System.Buffers
                 Vector256<byte> bitmap256 = state.Bitmap256();
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
-                if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
                     // Process the input in chunks of 32 bytes.
@@ -1035,7 +1035,7 @@ namespace System.Buffers
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
                 {
                     Vector512<byte> bitmap512_0 = state.Bitmap0_512;
@@ -1093,7 +1093,7 @@ namespace System.Buffers
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
@@ -1221,7 +1221,7 @@ namespace System.Buffers
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
                 {
                     Vector512<byte> bitmap512_0 = state.Bitmap0_512;
@@ -1279,7 +1279,7 @@ namespace System.Buffers
 
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (!Avx512BW.IsSupported && searchSpaceLength > Vector256<byte>.Count)
+                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > Vector256<byte>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
                 {
