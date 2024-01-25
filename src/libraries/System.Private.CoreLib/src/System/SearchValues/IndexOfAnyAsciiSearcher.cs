@@ -263,21 +263,57 @@ namespace System.Buffers
             if (Avx2.IsSupported && searchSpaceLength > 2 * Vector128<short>.Count)
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             {
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > 2 * Vector256<short>.Count)
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
-                {
-                    Vector512<byte> bitmap512 = state.Bitmap512;
+                Vector256<byte> bitmap256 = state.Bitmap256();
 
-                    if (searchSpaceLength > 2 * Vector512<short>.Count)
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
+                if (searchSpaceLength > 2 * Vector256<short>.Count)
+#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
+#pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
+                {
+                    // Process the input in chunks of 32 characters (2 * Vector256<short>).
+                    // We're mainly interested in a single byte of each character, and the core lookup operates on a Vector256<byte>.
+                    // As packing two Vector256<short>s into a Vector256<byte> is cheap compared to the lookup, we can effectively double the throughput.
+                    // If the input length is a multiple of 32, don't consume the last 32 characters in this loop.
+                    // Let the fallback below handle it instead. This is why the condition is
+                    // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
+
+                    const int MaxAvx2LengthWhenAvx512Supported = 128;
+
+                    int lengthToProcess = searchSpaceLength - (2 * Vector256<short>.Count);
+
+#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
+                    if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && lengthToProcess > MaxAvx2LengthWhenAvx512Supported)
                     {
-                        // Process the input in chunks of 64 characters (2 * Vector512<short>).
-                        // We're mainly interested in a single byte of each character, and the core lookup operates on a Vector512<byte>.
-                        // As packing two Vector512<short>s into a Vector512<byte> is cheap compared to the lookup, we can effectively double the throughput.
-                        // If the input length is a multiple of 64, don't consume the last 64 characters in this loop.
-                        // Let the fallback below handle it instead. This is why the condition is
-                        // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
+                        lengthToProcess = MaxAvx2LengthWhenAvx512Supported;
+                    }
+
+                    {
+                        ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, lengthToProcess);
+
+                        do
+                        {
+                            Vector256<short> source0 = Vector256.LoadUnsafe(ref currentSearchSpace);
+                            Vector256<short> source1 = Vector256.LoadUnsafe(ref currentSearchSpace, (nuint)Vector256<short>.Count);
+
+                            Vector256<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap256);
+                            if (result != Vector256<byte>.Zero)
+                            {
+                                return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
+                            }
+
+                            currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
+                        }
+                        while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
+                    }
+
+                    if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && searchSpaceLength > MaxAvx2LengthWhenAvx512Supported + 2 * Vector256<short>.Count)
+#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
+                    {
+                        currentSearchSpace = ref Unsafe.Subtract(ref currentSearchSpace, 64 - (searchSpaceLength & 63));
                         ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector512<short>.Count));
+
+                        Vector512<byte> bitmap512 = state.Bitmap512;
 
                         do
                         {
@@ -293,61 +329,9 @@ namespace System.Buffers
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
                         }
                         while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
+
+                        return TResultMapper.NotFound;
                     }
-
-                    // We have 1-64 characters remaining. Process the first and last vector in the search space.
-                    // They may overlap, but we'll handle that in the index calculation if we do get a match.
-                    Debug.Assert(searchSpaceLength >= Vector512<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
-                    {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector512<short>.Count);
-
-                        ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
-                            ? ref oneVectorAwayFromEnd
-                            : ref currentSearchSpace;
-
-                        Vector512<short> source0 = Vector512.LoadUnsafe(ref firstVector);
-                        Vector512<short> source1 = Vector512.LoadUnsafe(ref oneVectorAwayFromEnd);
-
-                        Vector512<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap512);
-                        if (result != Vector512<byte>.Zero)
-                        {
-                            return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
-                        }
-                    }
-
-                    return TResultMapper.NotFound;
-                }
-
-                Vector256<byte> bitmap256 = state.Bitmap256();
-
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The behavior of the rest of the function remains the same if Avx512BW.IsSupported is false
-                if (!(Vector512.IsHardwareAccelerated && Avx512BW.IsSupported) && searchSpaceLength > 2 * Vector256<short>.Count)
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
-                {
-                    // Process the input in chunks of 32 characters (2 * Vector256<short>).
-                    // We're mainly interested in a single byte of each character, and the core lookup operates on a Vector256<byte>.
-                    // As packing two Vector256<short>s into a Vector256<byte> is cheap compared to the lookup, we can effectively double the throughput.
-                    // If the input length is a multiple of 32, don't consume the last 32 characters in this loop.
-                    // Let the fallback below handle it instead. This is why the condition is
-                    // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
-                    ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector256<short>.Count));
-
-                    do
-                    {
-                        Vector256<short> source0 = Vector256.LoadUnsafe(ref currentSearchSpace);
-                        Vector256<short> source1 = Vector256.LoadUnsafe(ref currentSearchSpace, (nuint)Vector256<short>.Count);
-
-                        Vector256<byte> result = IndexOfAnyLookup<TNegator, TOptimizations>(source0, source1, bitmap256);
-                        if (result != Vector256<byte>.Zero)
-                        {
-                            return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, result);
-                        }
-
-                        currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
-                    }
-                    while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
                 }
 
                 // We have 1-32 characters remaining. Process the first and last vector in the search space.
