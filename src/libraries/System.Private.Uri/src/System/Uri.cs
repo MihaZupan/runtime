@@ -9,9 +9,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
@@ -153,7 +150,8 @@ namespace System
         // With the current implementation, we can have up to 15 cached properties (using 4 bits to encode indexes).
         private enum CachedProperty : byte
         {
-            IdnHost,
+            // The 0th slot is used to store the current max index.
+            IdnHost = 1,
             PrivateAbsolutePath,
             AbsoluteUri,
             Authority,
@@ -165,7 +163,7 @@ namespace System
             ScopeId,
             RemoteUrl,
             ToString,
-            PropertyCount // 12
+            PropertyCount = ToString // 12
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -241,7 +239,7 @@ namespace System
                         break;
                     }
 
-                    int nextIndex = MaxNibble(indexes) + 1;
+                    int nextIndex = (int)(indexes & 0xF) + 1;
 
                     if (nextIndex > Layer0CacheSize)
                     {
@@ -266,7 +264,14 @@ namespace System
                         // This effectively acts as a lock - other threads will not be able to enter this block
                         // until we finish the write to _propertyIndexes.
                         // They will keep reading the old max index and fail at the above compare exchange.
-                        Volatile.Write(ref _propertyIndexes, indexes | ((ulong)nextIndex << (4 * (int)property)));
+
+                        // Save the new max index
+                        indexes = (indexes & ~(ulong)0xF) | (uint)nextIndex;
+
+                        // Save the new property index
+                        indexes |= (ulong)nextIndex << (4 * (int)property);
+
+                        Volatile.Write(ref _propertyIndexes, indexes);
                         break;
                     }
 
@@ -316,33 +321,6 @@ namespace System
                     public string? Value;
                 }
             };
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private static int MaxNibble(ulong value)
-            {
-                if (Sse41.IsSupported || AdvSimd.Arm64.IsSupported)
-                {
-                    Vector128<ushort> vec = Vector128.WidenLower(Vector128.CreateScalarUnsafe(value).AsByte());
-                    Vector128<ushort> low = vec & Vector128.Create((ushort)0xF);
-                    Vector128<ushort> high = vec >>> 4;
-                    Vector128<ushort> max = Vector128.Max(low, high);
-
-                    return Sse41.IsSupported
-                        ? 15 - Sse41.MinHorizontal(Vector128.Create((ushort)15) - max).ToScalar()
-                        : AdvSimd.Arm64.MaxAcross(max).ToScalar();
-                }
-                else
-                {
-                    int max = 0;
-                    for (int i = 0; i < (int)CachedProperty.PropertyCount; i++)
-                    {
-                        max = Math.Max(max, (int)(value & 0xF));
-                        value >>= 4;
-                    }
-                    Debug.Assert(value == 0);
-                    return max;
-                }
-            }
         };
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
