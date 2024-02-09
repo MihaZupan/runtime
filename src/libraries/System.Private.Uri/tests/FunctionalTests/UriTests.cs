@@ -748,9 +748,11 @@ namespace System.PrivateUri.Tests
             Assert.Same(uri.PathAndQuery, uri.PathAndQuery);
             Assert.Same(uri.Fragment, uri.Fragment);
             Assert.Same(uri.AbsoluteUri, uri.AbsoluteUri);
-            Assert.Same(uri.Segments, uri.Segments);
             Assert.Same(uri.LocalPath, uri.LocalPath);
             Assert.Same(uri.ToString(), uri.ToString());
+
+            // Can't cache 'Segments' as it return a mutable array
+            Assert.NotSame(uri.Segments, uri.Segments);
         }
 
         [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsThreadingSupported))]

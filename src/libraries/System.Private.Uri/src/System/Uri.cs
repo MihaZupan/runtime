@@ -161,27 +161,26 @@ namespace System
             LocalPath,
             PathAndQuery,
             Query,
-            Segments,
             UserInfo,
             ScopeId,
             RemoteUrl,
             ToString,
-            PropertyCount // 13
+            PropertyCount // 12
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private T GetProperty<T>(CachedProperty property, Func<Uri, T> factory) where T : class
+        private string GetProperty(CachedProperty property, Func<Uri, string> factory)
         {
-            return _info is UriInfo info && info.TryGetCachedProperty(property, out T? result)
+            return _info is UriInfo info && info.TryGetCachedProperty(property, out string? result)
                 ? result
                 : CreateAndCacheProperty(property, factory);
         }
 
-        private T CreateAndCacheProperty<T>(CachedProperty property, Func<Uri, T> factory) where T : class
+        private string CreateAndCacheProperty(CachedProperty property, Func<Uri, string> factory)
         {
             ThrowIfNotAbsoluteUri();
 
-            T value = factory(this);
+            string value = factory(this);
             EnsureUriInfo();
             _info.StoreProperty(property, value);
             return value;
@@ -196,8 +195,8 @@ namespace System
 
             public Offset Offset;
             private ulong _propertyIndexes;
-            private object? _cachedProperty1;
-            private object? _cachedProperty2;
+            private string? _cachedProperty1;
+            private string? _cachedProperty2;
             private MoreProperties? _moreProperties;
 
             // This is practically always used, so we skip the property cache for it.
@@ -208,14 +207,14 @@ namespace System
                 (int)(indexes >> (4 * (int)property) & 0xF);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool TryGetCachedProperty<T>(CachedProperty property, [NotNullWhen(true)] out T? result) where T : class
+            public bool TryGetCachedProperty(CachedProperty property, [NotNullWhen(true)] out string? result)
             {
                 int index = GetPropertyIndex(Volatile.Read(ref _propertyIndexes), property);
 
                 if (index > 0)
                 {
-                    Debug.Assert(GetPropertySlot(index) is T);
-                    result = Unsafe.As<T>(GetPropertySlot(index))!;
+                    result = GetPropertySlot(index);
+                    Debug.Assert(result is not null);
                     return true;
                 }
                 else
@@ -225,7 +224,7 @@ namespace System
                 }
             }
 
-            public void StoreProperty(CachedProperty property, object value)
+            public void StoreProperty(CachedProperty property, string value)
             {
                 Debug.Assert(value is not null);
 
@@ -238,7 +237,7 @@ namespace System
                     if (propertyIndex > 0)
                     {
                         // We lost the race and a different thread already stored a copy of the same property.
-                        Debug.Assert(value is not string s || (string)GetPropertySlot(propertyIndex)! == s);
+                        Debug.Assert(GetPropertySlot(propertyIndex) == value);
                         break;
                     }
 
@@ -256,7 +255,7 @@ namespace System
                         {
                             if (_moreProperties.Rest is null)
                             {
-                                Interlocked.CompareExchange(ref _moreProperties.Rest, new object[RestArrayLength], null);
+                                Interlocked.CompareExchange(ref _moreProperties.Rest, new string[RestArrayLength], null);
                             }
                         }
                     }
@@ -277,7 +276,7 @@ namespace System
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private ref object? GetPropertySlot(int index)
+            private ref string? GetPropertySlot(int index)
             {
                 // Index is 1-based as we use 0 to indicate that a property has not been set.
                 Debug.Assert(index > 0 && index <= (int)CachedProperty.PropertyCount);
@@ -308,13 +307,13 @@ namespace System
 
             private sealed class MoreProperties
             {
-                public FourObjects CachedProperties3456;
-                public object?[]? Rest;
+                public FourStrings CachedProperties3456;
+                public string?[]? Rest;
 
                 [InlineArray(4)]
-                public struct FourObjects
+                public struct FourStrings
                 {
-                    public object? Value;
+                    public string? Value;
                 }
             };
 
@@ -993,29 +992,39 @@ namespace System
         });
 
         // Gets an array of the segments that make up a URI.
-        public string[] Segments => GetProperty(CachedProperty.Segments, static uri =>
+        public string[] Segments
         {
-            string path = uri.PrivateAbsolutePath;
-
-            if (path.Length == 0)
+            get
             {
-                return Array.Empty<string>();
-            }
+                ThrowIfNotAbsoluteUri();
 
-            ArrayBuilder<string> pathSegments = default;
-            int current = 0;
-            while (current < path.Length)
-            {
-                int next = path.IndexOf('/', current);
-                if (next == -1)
+                string[] segments;
+                string path = PrivateAbsolutePath;
+
+                if (path.Length == 0)
                 {
-                    next = path.Length - 1;
+                    segments = Array.Empty<string>();
                 }
-                pathSegments.Add(path.Substring(current, (next - current) + 1));
-                current = next + 1;
+                else
+                {
+                    ArrayBuilder<string> pathSegments = default;
+                    int current = 0;
+                    while (current < path.Length)
+                    {
+                        int next = path.IndexOf('/', current);
+                        if (next == -1)
+                        {
+                            next = path.Length - 1;
+                        }
+                        pathSegments.Add(path.Substring(current, (next - current) + 1));
+                        current = next + 1;
+                    }
+                    segments = pathSegments.ToArray();
+                }
+
+                return segments;
             }
-            return pathSegments.ToArray();
-        });
+        }
 
         public bool IsUnc
         {
