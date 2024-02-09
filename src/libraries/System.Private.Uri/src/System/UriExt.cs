@@ -350,8 +350,8 @@ namespace System
             {
                 if (components == UriComponents.SerializationInfoString)
                     return GetRelativeSerializationString(format);
-                else
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+
+                ThrowIfNotAbsoluteUri();
             }
 
             if (Syntax.IsSimple)

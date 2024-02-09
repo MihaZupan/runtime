@@ -64,10 +64,7 @@ namespace System
         //
         protected virtual void InitializeAndValidate(Uri uri, out UriFormatException? parsingError)
         {
-            if (uri._syntax is null)
-            {
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-            }
+            uri.ThrowIfNotAbsoluteUri();
 
             if (!ReferenceEquals(uri._syntax, this))
             {
@@ -100,8 +97,7 @@ namespace System
             if (baseUri.UserDrivenParsing)
                 throw new InvalidOperationException(SR.Format(SR.net_uri_UserDrivenParsing, this.GetType()));
 
-            if (!baseUri.IsAbsoluteUri)
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+            baseUri.ThrowIfNotAbsoluteUri();
 
             string? newUriString = null;
             bool userEscaped = false;
@@ -143,8 +139,7 @@ namespace System
             if (uri.UserDrivenParsing)
                 throw new InvalidOperationException(SR.Format(SR.net_uri_UserDrivenParsing, this.GetType()));
 
-            if (!uri.IsAbsoluteUri)
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+            uri.ThrowIfNotAbsoluteUri();
 
             if (uri.DisablePathAndQueryCanonicalization && (components & (UriComponents.Path | UriComponents.Query)) != 0)
                 throw new InvalidOperationException(SR.net_uri_GetComponentsCalledWhenCanonicalizationDisabled);

@@ -9,6 +9,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
@@ -147,29 +150,198 @@ namespace System
             Debug.Assert((_flags & Flags.Debug_LeftConstructor) == 0);
         }
 
+        // With the current implementation, we can have up to 15 cached properties (using 4 bits to encode indexes).
+        private enum CachedProperty : byte
+        {
+            IdnHost,
+            PrivateAbsolutePath,
+            AbsoluteUri,
+            Authority,
+            Fragment,
+            LocalPath,
+            PathAndQuery,
+            Query,
+            Segments,
+            UserInfo,
+            ScopeId,
+            RemoteUrl,
+            ToString,
+            PropertyCount // 13
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private T GetProperty<T>(CachedProperty property, Func<Uri, T> factory) where T : class
+        {
+            return _info is UriInfo info && info.TryGetCachedProperty(property, out T? result)
+                ? result
+                : CreateAndCacheProperty(property, factory);
+        }
+
+        private T CreateAndCacheProperty<T>(CachedProperty property, Func<Uri, T> factory) where T : class
+        {
+            ThrowIfNotAbsoluteUri();
+
+            T value = factory(this);
+            EnsureUriInfo();
+            _info.StoreProperty(property, value);
+            return value;
+        }
+
         private sealed class UriInfo
         {
+            private const int Layer0CacheSize = 2;
+            private const int Layer1CacheSize = 4;
+            private const int MaxIndexBeforeRestArray = Layer0CacheSize + Layer1CacheSize;
+            private const int RestArrayLength = (int)CachedProperty.PropertyCount - MaxIndexBeforeRestArray;
+
             public Offset Offset;
-            public string? String;
+            private ulong _propertyIndexes;
+            private object? _cachedProperty1;
+            private object? _cachedProperty2;
+            private MoreProperties? _moreProperties;
+
+            // This is practically always used, so we skip the property cache for it.
             public string? Host;
-            public string? IdnHost;
-            public string? PathAndQuery;
 
-            /// <summary>
-            /// Only IP v6 may need this
-            /// </summary>
-            public string? ScopeId;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static int GetPropertyIndex(ulong indexes, CachedProperty property) =>
+                (int)(indexes >> (4 * (int)property) & 0xF);
 
-            private MoreInfo? _moreInfo;
-            public MoreInfo MoreInfo
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool TryGetCachedProperty<T>(CachedProperty property, [NotNullWhen(true)] out T? result) where T : class
             {
-                get
+                int index = GetPropertyIndex(Volatile.Read(ref _propertyIndexes), property);
+
+                if (index > 0)
                 {
-                    if (_moreInfo is null)
+                    Debug.Assert(GetPropertySlot(index) is T);
+                    result = Unsafe.As<T>(GetPropertySlot(index))!;
+                    return true;
+                }
+                else
+                {
+                    result = null;
+                    return false;
+                }
+            }
+
+            public void StoreProperty(CachedProperty property, object value)
+            {
+                Debug.Assert(value is not null);
+
+                while (true)
+                {
+                    ulong indexes = Volatile.Read(ref _propertyIndexes);
+
+                    int propertyIndex = GetPropertyIndex(indexes, property);
+
+                    if (propertyIndex > 0)
                     {
-                        Interlocked.CompareExchange(ref _moreInfo, new MoreInfo(), null);
+                        // We lost the race and a different thread already stored a copy of the same property.
+                        Debug.Assert(value is not string s || (string)GetPropertySlot(propertyIndex)! == s);
+                        break;
                     }
-                    return _moreInfo;
+
+                    int nextIndex = MaxNibble(indexes) + 1;
+
+                    if (nextIndex > Layer0CacheSize)
+                    {
+                        // Ensure that the storage for more properties is allocated.
+                        if (_moreProperties is null)
+                        {
+                            Interlocked.CompareExchange(ref _moreProperties, new MoreProperties(), null);
+                        }
+
+                        if (nextIndex > MaxIndexBeforeRestArray)
+                        {
+                            if (_moreProperties.Rest is null)
+                            {
+                                Interlocked.CompareExchange(ref _moreProperties.Rest, new object[RestArrayLength], null);
+                            }
+                        }
+                    }
+
+                    if (Interlocked.CompareExchange(ref GetPropertySlot(nextIndex), value, null) is null)
+                    {
+                        // We won the race and stored the value.
+                        // This effectively acts as a lock - other threads will not be able to enter this block
+                        // until we finish the write to _propertyIndexes.
+                        // They will keep reading the old max index and fail at the above compare exchange.
+                        Volatile.Write(ref _propertyIndexes, indexes | ((ulong)nextIndex << (4 * (int)property)));
+                        break;
+                    }
+
+                    // A different thread won the race and stored a value.
+                    // We'll pick a higher index next time, or see that this property was already stored.
+                }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private ref object? GetPropertySlot(int index)
+            {
+                // Index is 1-based as we use 0 to indicate that a property has not been set.
+                Debug.Assert(index > 0 && index <= (int)CachedProperty.PropertyCount);
+
+                if (index == 1)
+                {
+                    return ref _cachedProperty1;
+                }
+
+                if (index == 2)
+                {
+                    return ref _cachedProperty2;
+                }
+
+                Debug.Assert(_moreProperties is not null);
+                MoreProperties moreProperties = _moreProperties;
+
+                if (index <= MaxIndexBeforeRestArray)
+                {
+                    Debug.Assert(index is 3 or 4 or 5 or 6);
+                    return ref Unsafe.Add(ref moreProperties.CachedProperties3456.Value, index - Layer0CacheSize - 1);
+                }
+
+                Debug.Assert(moreProperties.Rest is not null);
+                Debug.Assert((uint)(index - MaxIndexBeforeRestArray - 1) < (uint)moreProperties.Rest.Length);
+                return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(moreProperties.Rest), index - MaxIndexBeforeRestArray - 1);
+            }
+
+            private sealed class MoreProperties
+            {
+                public FourObjects CachedProperties3456;
+                public object?[]? Rest;
+
+                [InlineArray(4)]
+                public struct FourObjects
+                {
+                    public object? Value;
+                }
+            };
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static int MaxNibble(ulong value)
+            {
+                if (Sse41.IsSupported || AdvSimd.Arm64.IsSupported)
+                {
+                    Vector128<ushort> vec = Vector128.WidenLower(Vector128.CreateScalarUnsafe(value).AsByte());
+                    Vector128<ushort> low = vec & Vector128.Create((ushort)0xF);
+                    Vector128<ushort> high = vec >>> 4;
+                    Vector128<ushort> max = Vector128.Max(low, high);
+
+                    return Sse41.IsSupported
+                        ? 15 - Sse41.MinHorizontal(Vector128.Create((ushort)15) - max).ToScalar()
+                        : AdvSimd.Arm64.MaxAcross(max).ToScalar();
+                }
+                else
+                {
+                    int max = 0;
+                    for (int i = 0; i < (int)CachedProperty.PropertyCount; i++)
+                    {
+                        max = Math.Max(max, (int)(value & 0xF));
+                        value >>= 4;
+                    }
+                    Debug.Assert(value == 0);
+                    return max;
                 }
             }
         };
@@ -185,15 +357,6 @@ namespace System
             public ushort Query;
             public ushort Fragment;
             public ushort End;
-        };
-
-        private sealed class MoreInfo
-        {
-            public string? Path;
-            public string? Query;
-            public string? Fragment;
-            public string? AbsoluteUri;
-            public string? RemoteUrl;
         };
 
         private void InterlockedSetFlags(Flags flags)
@@ -260,6 +423,16 @@ namespace System
             get { return _syntax is null; }
         }
 
+        internal void ThrowIfNotAbsoluteUri()
+        {
+            if (IsNotAbsoluteUri)
+            {
+                Throw();
+            }
+
+            static void Throw() => throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+        }
+
         //
         // Checks if Iri parsing is allowed by the syntax & by config
         //
@@ -316,15 +489,17 @@ namespace System
         }
 
         [MemberNotNull(nameof(_info))]
-        private UriInfo EnsureUriInfo()
+        private void EnsureUriInfo()
         {
-            Flags cF = _flags;
+            Debug.Assert(sizeof(Flags) == sizeof(ulong));
+
+            Flags cF = (Flags)Volatile.Read(ref Unsafe.As<Flags, ulong>(ref _flags));
             if ((cF & Flags.MinimalUriInfoSet) == 0)
             {
                 CreateUriInfo(cF);
             }
+
             Debug.Assert(_info != null && (_flags & Flags.MinimalUriInfoSet) != 0);
-            return _info;
         }
 
         private void EnsureParseRemaining()
@@ -338,9 +513,9 @@ namespace System
         [MemberNotNull(nameof(_info))]
         private void EnsureHostString(bool allowDnsOptimization)
         {
-            UriInfo info = EnsureUriInfo();
+            EnsureUriInfo();
 
-            if (info.Host is null)
+            if (_info.Host is null)
             {
                 if (allowDnsOptimization && InFact(Flags.CanonicalDnsHost))
                 {
@@ -688,16 +863,10 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
                 string path = PrivateAbsolutePath;
-                //
+
                 // For Compat:
                 // Remove the first slash from a Dos Path if it's present
-                //
                 if (IsDosPath && path[0] == '/')
                 {
                     path = path.Substring(1);
@@ -706,30 +875,16 @@ namespace System
             }
         }
 
-        private string PrivateAbsolutePath
+        private string PrivateAbsolutePath => GetProperty(CachedProperty.PrivateAbsolutePath, static uri =>
         {
-            get
-            {
-                Debug.Assert(IsAbsoluteUri);
+            return uri.GetParts(UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
 
-                MoreInfo info = EnsureUriInfo().MoreInfo;
-                return info.Path ??= GetParts(UriComponents.Path | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-            }
-        }
+        });
 
-        public string AbsoluteUri
+        public string AbsoluteUri => GetProperty(CachedProperty.AbsoluteUri, static uri =>
         {
-            get
-            {
-                if (_syntax == null)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                MoreInfo info = EnsureUriInfo().MoreInfo;
-                return info.AbsoluteUri ??= GetParts(UriComponents.AbsoluteUri, UriFormat.UriEscaped);
-            }
-        }
+            return uri.GetParts(UriComponents.AbsoluteUri, UriFormat.UriEscaped);
+        });
 
         //
         // LocalPath
@@ -740,44 +895,24 @@ namespace System
         //
         //  The form of the returned path is in NOT Escaped
         //
-        public string LocalPath
+        public string LocalPath => GetProperty(CachedProperty.LocalPath, static uri =>
         {
-            get
-            {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-                return GetLocalPath();
-            }
-        }
+            return uri.GetLocalPath();
+        });
 
-        //
         // The result is of the form "hostname[:port]" Port is omitted if default
-        //
-        public string Authority
+        public string Authority => GetProperty(CachedProperty.Authority, static uri =>
         {
-            get
-            {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                // Note: Compatibility with V1 that does not report user info
-                return GetParts(UriComponents.Host | UriComponents.Port, UriFormat.UriEscaped);
-            }
-        }
+            // Note: Compatibility with V1 that does not report user info
+            return uri.GetParts(UriComponents.Host | UriComponents.Port, UriFormat.UriEscaped);
+        });
 
 
         public UriHostNameType HostNameType
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
                 if (_syntax.IsSimple)
                     EnsureUriInfo();
@@ -806,10 +941,8 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
+
                 if (_syntax.IsSimple)
                     EnsureUriInfo();
                 else
@@ -826,12 +959,9 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
-                return (object)_syntax.SchemeName == (object)UriSchemeFile;
+                return ReferenceEquals(_syntax.SchemeName, UriSchemeFile);
             }
         }
 
@@ -839,10 +969,7 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
                 EnsureHostString(false);
 
@@ -850,100 +977,64 @@ namespace System
             }
         }
 
-        //
-        //  Gets the escaped Uri.AbsolutePath and Uri.Query
-        //  properties separated by a "?" character.
-        public string PathAndQuery
+        // Gets the escaped Uri.AbsolutePath and Uri.Query properties separated by a '?' character.
+        public string PathAndQuery => GetProperty(CachedProperty.PathAndQuery, static uri =>
         {
-            get
+            string result = uri.GetParts(UriComponents.PathAndQuery, UriFormat.UriEscaped);
+
+            // Compatibility:
+            // Remove the first slash from a Dos Path if it's present
+            if (uri.IsDosPath && result[0] == '/')
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                UriInfo info = EnsureUriInfo();
-
-                if (info.PathAndQuery is null)
-                {
-                    string result = GetParts(UriComponents.PathAndQuery, UriFormat.UriEscaped);
-
-                    // Compatibility:
-                    // Remove the first slash from a Dos Path if it's present
-                    if (IsDosPath && result[0] == '/')
-                    {
-                        result = result.Substring(1);
-                    }
-
-                    info.PathAndQuery = result;
-                }
-
-                return info.PathAndQuery;
+                result = result.Substring(1);
             }
-        }
 
-        //
-        //  Gets an array of the segments that make up a URI.
-        public string[] Segments
+            return result;
+        });
+
+        // Gets an array of the segments that make up a URI.
+        public string[] Segments => GetProperty(CachedProperty.Segments, static uri =>
         {
-            get
+            string path = uri.PrivateAbsolutePath;
+
+            if (path.Length == 0)
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                string[] segments;
-                string path = PrivateAbsolutePath;
-
-                if (path.Length == 0)
-                {
-                    segments = Array.Empty<string>();
-                }
-                else
-                {
-                    ArrayBuilder<string> pathSegments = default;
-                    int current = 0;
-                    while (current < path.Length)
-                    {
-                        int next = path.IndexOf('/', current);
-                        if (next == -1)
-                        {
-                            next = path.Length - 1;
-                        }
-                        pathSegments.Add(path.Substring(current, (next - current) + 1));
-                        current = next + 1;
-                    }
-                    segments = pathSegments.ToArray();
-                }
-
-                return segments;
+                return Array.Empty<string>();
             }
-        }
+
+            ArrayBuilder<string> pathSegments = default;
+            int current = 0;
+            while (current < path.Length)
+            {
+                int next = path.IndexOf('/', current);
+                if (next == -1)
+                {
+                    next = path.Length - 1;
+                }
+                pathSegments.Add(path.Substring(current, (next - current) + 1));
+                current = next + 1;
+            }
+            return pathSegments.ToArray();
+        });
 
         public bool IsUnc
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
+
                 return IsUncPath;
             }
         }
 
-        //
-        // Gets a hostname part (special formatting for IPv6 form)
+        // Gets a hostname part (special formatting for IPv6 form).
         public string Host
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
+                // Not using GetProperty here as this is already cached by _info.Host.
                 return GetParts(UriComponents.Host, UriFormat.UriEscaped);
             }
         }
@@ -1056,10 +1147,7 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
                 if (_syntax.IsSimple)
                     EnsureUriInfo();
@@ -1069,57 +1157,30 @@ namespace System
                     EnsureHostString(false);
                 }
 
-                if (InFact(Flags.NotDefaultPort))
-                {
-                    return (int)_info.Offset.PortValue;
-                }
-                return _syntax.DefaultPort;
+                return InFact(Flags.NotDefaultPort)
+                    ? _info.Offset.PortValue
+                    : _syntax.DefaultPort;
             }
         }
 
-        //
-        //  Gets the escaped query.
-        public string Query
+        // Gets the escaped query.
+        public string Query => GetProperty(CachedProperty.Query, static uri =>
         {
-            get
-            {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+            return uri.GetParts(UriComponents.Query | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
+        });
 
-                MoreInfo info = EnsureUriInfo().MoreInfo;
-                return info.Query ??= GetParts(UriComponents.Query | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-            }
-        }
-
-        //
-        //    Gets the escaped fragment.
-        public string Fragment
+        // Gets the escaped fragment.
+        public string Fragment => GetProperty(CachedProperty.Fragment, static uri =>
         {
-            get
-            {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+            return uri.GetParts(UriComponents.Fragment | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
+        });
 
-                MoreInfo info = EnsureUriInfo().MoreInfo;
-                return info.Fragment ??= GetParts(UriComponents.Fragment | UriComponents.KeepDelimiter, UriFormat.UriEscaped);
-            }
-        }
-
-        //
-        //  Gets the Scheme string of this Uri
-        //
+        // Gets the Scheme string of this Uri
         public string Scheme
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
                 return _syntax.SchemeName;
             }
@@ -1141,10 +1202,7 @@ namespace System
         {
             get
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
+                ThrowIfNotAbsoluteUri();
 
                 EnsureHostString(false);
 
@@ -1161,54 +1219,41 @@ namespace System
         }
 
         // Returns the host name represented as IDN (using punycode encoding) regardless of app.config settings
-        public string IdnHost
+        public string IdnHost => GetProperty(CachedProperty.IdnHost, static uri =>
         {
-            get
+            uri.EnsureHostString(false);
+
+            string host = uri._info.Host!;
+
+            Flags hostType = uri.HostType;
+            if (hostType == Flags.DnsHostType)
             {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                if (_info?.IdnHost is null)
-                {
-                    EnsureHostString(false);
-
-                    string host = _info.Host!;
-
-                    Flags hostType = HostType;
-                    if (hostType == Flags.DnsHostType)
-                    {
-                        host = DomainNameHelper.IdnEquivalent(host);
-                    }
-                    else if (hostType == Flags.IPv6HostType)
-                    {
-                        host = _info.ScopeId != null ?
-                            string.Concat(host.AsSpan(1, host.Length - 2), _info.ScopeId) :
-                            host.Substring(1, host.Length - 2);
-                    }
-                    // Validate that this basic host qualifies as Dns safe,
-                    // It has looser parsing rules that might allow otherwise.
-                    // It might be a registry-based host from RFC 2396 Section 3.2.1
-                    else if (hostType == Flags.BasicHostType && InFact(Flags.HostNotCanonical | Flags.E_HostNotCanonical))
-                    {
-                        // Unescape everything
-                        var dest = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
-
-                        UriHelper.UnescapeString(host, 0, host.Length, ref dest,
-                            c_DummyChar, c_DummyChar, c_DummyChar,
-                            UnescapeMode.Unescape | UnescapeMode.UnescapeAll,
-                            _syntax, isQuery: false);
-
-                        host = dest.ToString();
-                    }
-
-                    _info.IdnHost = host;
-                }
-
-                return _info.IdnHost;
+                host = DomainNameHelper.IdnEquivalent(host);
             }
-        }
+            else if (hostType == Flags.IPv6HostType)
+            {
+                host = uri._info.TryGetCachedProperty(CachedProperty.ScopeId, out string? scopeId) ?
+                    string.Concat(host.AsSpan(1, host.Length - 2), scopeId) :
+                    host.Substring(1, host.Length - 2);
+            }
+            // Validate that this basic host qualifies as Dns safe,
+            // It has looser parsing rules that might allow otherwise.
+            // It might be a registry-based host from RFC 2396 Section 3.2.1
+            else if (hostType == Flags.BasicHostType && uri.InFact(Flags.HostNotCanonical | Flags.E_HostNotCanonical))
+            {
+                // Unescape everything
+                var dest = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
+
+                UriHelper.UnescapeString(host, 0, host.Length, ref dest,
+                    c_DummyChar, c_DummyChar, c_DummyChar,
+                    UnescapeMode.Unescape | UnescapeMode.UnescapeAll,
+                    uri._syntax, isQuery: false);
+
+                host = dest.ToString();
+            }
+
+            return host;
+        });
 
         //
         //  Returns false if the string passed in the constructor cannot be parsed as
@@ -1232,21 +1277,11 @@ namespace System
             }
         }
 
-        //
-        //  Gets the user name, password, and other user specific information associated
-        //  with the Uniform Resource Identifier (URI).
-        public string UserInfo
+        // Gets the user name, password, and other user specific information associated with the URI.
+        public string UserInfo => GetProperty(CachedProperty.UserInfo, static uri =>
         {
-            get
-            {
-                if (IsNotAbsoluteUri)
-                {
-                    throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                }
-
-                return GetParts(UriComponents.UserInfo, UriFormat.UriEscaped);
-            }
-        }
+            return uri.GetParts(UriComponents.UserInfo, UriFormat.UriEscaped);
+        });
 
         //
         // CheckHostName
@@ -1330,10 +1365,7 @@ namespace System
         //
         public string GetLeftPart(UriPartial part)
         {
-            if (IsNotAbsoluteUri)
-            {
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-            }
+            ThrowIfNotAbsoluteUri();
 
             EnsureUriInfo();
             const UriComponents NonPathPart = (UriComponents.Scheme | UriComponents.UserInfo | UriComponents.Host | UriComponents.Port);
@@ -1514,6 +1546,15 @@ namespace System
             return result;
         }
 
+        private string RemoteUrl => GetProperty(CachedProperty.RemoteUrl, static uri =>
+        {
+            UriComponents components = uri._syntax.InFact(UriSyntaxFlags.MailToLikeUri)
+                ? UriComponents.HttpRequestUrl | UriComponents.UserInfo
+                : UriComponents.HttpRequestUrl;
+
+            return uri.GetParts(components, UriFormat.SafeUnescaped);
+        });
+
         public override int GetHashCode()
         {
             if (IsNotAbsoluteUri)
@@ -1522,16 +1563,7 @@ namespace System
             }
             else
             {
-                MoreInfo info = EnsureUriInfo().MoreInfo;
-
-                UriComponents components = UriComponents.HttpRequestUrl;
-
-                if (_syntax.InFact(UriSyntaxFlags.MailToLikeUri))
-                {
-                    components |= UriComponents.UserInfo;
-                }
-
-                string remoteUrl = info.RemoteUrl ??= GetParts(components, UriFormat.SafeUnescaped);
+                string remoteUrl = RemoteUrl;
 
                 if (IsUncOrDosPath)
                 {
@@ -1556,11 +1588,12 @@ namespace System
                 return _string;
             }
 
-            EnsureUriInfo();
-            return _info.String ??=
-                _syntax.IsSimple ?
-                    GetComponentsHelper(UriComponents.AbsoluteUri, V1ToStringUnescape) :
-                    GetParts(UriComponents.AbsoluteUri, UriFormat.SafeUnescaped);
+            return GetProperty(CachedProperty.ToString, static uri =>
+            {
+                return uri._syntax.IsSimple ?
+                    uri.GetComponentsHelper(UriComponents.AbsoluteUri, V1ToStringUnescape) :
+                    uri.GetParts(UriComponents.AbsoluteUri, UriFormat.SafeUnescaped);
+            });
         }
 
         /// <summary>
@@ -1580,19 +1613,17 @@ namespace System
             else
             {
                 EnsureUriInfo();
-                if (_info.String is not null)
+
+                if (_info.TryGetCachedProperty(CachedProperty.ToString, out string? toString))
                 {
-                    result = _info.String;
+                    result = toString;
                 }
                 else
                 {
                     UriFormat uriFormat = V1ToStringUnescape;
                     if (!_syntax.IsSimple)
                     {
-                        if (IsNotAbsoluteUri)
-                        {
-                            throw new InvalidOperationException(SR.net_uri_NotAbsolute);
-                        }
+                        ThrowIfNotAbsoluteUri();
 
                         if (UserDrivenParsing)
                         {
@@ -1807,36 +1838,17 @@ namespace System
                 }
             }
 
-            // We want to cache RemoteUrl to improve perf for Uri as a key.
-            // We should consider reducing the overall working set by not caching some other properties mentioned in MoreInfo
-
-            MoreInfo selfInfo = _info.MoreInfo;
-            MoreInfo otherInfo = obj._info.MoreInfo;
-
-            // Fragment AND UserInfo (for non-mailto URIs) are ignored
-            UriComponents components = UriComponents.HttpRequestUrl;
-
-            if (_syntax.InFact(UriSyntaxFlags.MailToLikeUri))
-            {
-                if (!obj._syntax.InFact(UriSyntaxFlags.MailToLikeUri))
-                    return false;
-
-                components |= UriComponents.UserInfo;
-            }
-
-            string selfUrl = selfInfo.RemoteUrl ??= GetParts(components, UriFormat.SafeUnescaped);
-            string otherUrl = otherInfo.RemoteUrl ??= obj.GetParts(components, UriFormat.SafeUnescaped);
-
             // if IsUncOrDosPath is true then we ignore case in the path comparison
-            return string.Equals(selfUrl, otherUrl, IsUncOrDosPath ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            // Fragment AND UserInfo (for non-mailto URIs) are ignored
+            return string.Equals(RemoteUrl, obj.RemoteUrl, IsUncOrDosPath ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
         }
 
         public Uri MakeRelativeUri(Uri uri)
         {
             ArgumentNullException.ThrowIfNull(uri);
 
-            if (IsNotAbsoluteUri || uri.IsNotAbsoluteUri)
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+            ThrowIfNotAbsoluteUri();
+            uri.ThrowIfNotAbsoluteUri();
 
             // Note that the UserInfo part is ignored when computing a relative Uri.
             if ((Scheme == uri.Scheme) && (Host == uri.Host) && (Port == uri.Port))
@@ -2195,12 +2207,9 @@ namespace System
             return ParsingError.None;
         }
 
-        //
-        //
         // The method is called when we have to access _info members.
         // This will create the _info based on the copied parser context.
         // If multi-threading, this method may do duplicated yet harmless work.
-        //
         private unsafe void CreateUriInfo(Flags cF)
         {
             UriInfo info = new UriInfo();
@@ -2413,6 +2422,8 @@ namespace System
         // Assuming: UriInfo member is already set at this point
         private unsafe void CreateHostString()
         {
+            string? scopeId = null;
+
             if (!_syntax.IsSimple)
             {
                 lock (_info)
@@ -2423,14 +2434,22 @@ namespace System
                     {
                         _flags |= Flags.ErrorOrParsingRecursion;
                         // Need to get host string through the derived type
-                        GetHostViaCustomSyntax();
+                        GetHostViaCustomSyntax(ref scopeId);
+
+                        if (scopeId is not null)
+                        {
+                            _info.StoreProperty(CachedProperty.ScopeId, scopeId);
+                        }
+
                         _flags &= ~Flags.ErrorOrParsingRecursion;
                         return;
                     }
                 }
             }
-            Flags flags = _flags;
-            string host = CreateHostStringHelper(_string, _info.Offset.Host, _info.Offset.Path, ref flags, ref _info.ScopeId);
+
+            Flags flags = (Flags)Volatile.Read(ref Unsafe.As<Flags, ulong>(ref _flags));
+
+            string host = CreateHostStringHelper(_string, _info.Offset.Host, _info.Offset.Path, ref flags, ref scopeId);
 
             // now check on canonical host representation
             if (host.Length != 0)
@@ -2478,7 +2497,7 @@ namespace System
                 else if (NotAny(Flags.CanonicalDnsHost))
                 {
                     // Check to see if we can take the canonical host string out of _string
-                    if (_info.ScopeId is not null)
+                    if (scopeId is not null)
                     {
                         // IPv6 ScopeId is included when serializing a Uri
                         flags |= (Flags.HostNotCanonical | Flags.E_HostNotCanonical);
@@ -2496,6 +2515,11 @@ namespace System
                         }
                     }
                 }
+            }
+
+            if (scopeId is not null)
+            {
+                _info.StoreProperty(CachedProperty.ScopeId, scopeId);
             }
 
             _info.Host = host;
@@ -2562,7 +2586,7 @@ namespace System
         //
         // Called under lock()
         //
-        private unsafe void GetHostViaCustomSyntax()
+        private unsafe void GetHostViaCustomSyntax(ref string? scopeId)
         {
             // A multithreading check
             if (_info.Host != null)
@@ -2598,7 +2622,7 @@ namespace System
                 }
                 else
                 {
-                    host = CreateHostStringHelper(host, 0, host.Length, ref flags, ref _info.ScopeId);
+                    host = CreateHostStringHelper(host, 0, host.Length, ref flags, ref scopeId);
                     for (int i = 0; i < host.Length; ++i)
                     {
                         if ((_info.Offset.Host + i) >= _info.Offset.End || host[i] != _string[_info.Offset.Host + i])
@@ -2875,10 +2899,10 @@ namespace System
                     hostBuilder.Dispose();
 
                     // A fix up only for SerializationInfo and IpV6 host with a scopeID
-                    if ((parts & UriComponents.SerializationInfoString) != 0 && HostType == Flags.IPv6HostType && _info.ScopeId != null)
+                    if ((parts & UriComponents.SerializationInfoString) != 0 && HostType == Flags.IPv6HostType && _info.TryGetCachedProperty(CachedProperty.ScopeId, out string? scopeId))
                     {
                         dest.Length--;
-                        dest.Append(_info.ScopeId);
+                        dest.Append(scopeId);
                         dest.Append(']');
                     }
                 }
@@ -4967,8 +4991,8 @@ namespace System
         {
             ArgumentNullException.ThrowIfNull(toUri);
 
-            if (IsNotAbsoluteUri || toUri.IsNotAbsoluteUri)
-                throw new InvalidOperationException(SR.net_uri_NotAbsolute);
+            ThrowIfNotAbsoluteUri();
+            toUri.ThrowIfNotAbsoluteUri();
 
             if ((Scheme == toUri.Scheme) && (Host == toUri.Host) && (Port == toUri.Port))
                 return PathDifference(AbsolutePath, toUri.AbsolutePath, !IsUncOrDosPath);

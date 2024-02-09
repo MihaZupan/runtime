@@ -3,6 +3,9 @@
 
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -730,24 +733,24 @@ namespace System.PrivateUri.Tests
         }
 
         [Fact]
-        public static void Uri_CachesIdnHost()
+        public static void Uri_CachesAllProperties()
         {
-            var uri = new Uri("https://\u00FCnicode/foo");
+            var uri = new Uri("https://\u00FCnicode/foo?one=two#fragment");
+
+            Assert.Same(uri.Scheme, uri.Scheme);
+            Assert.Same(uri.UserInfo, uri.UserInfo);
+            Assert.Same(uri.Host, uri.Host);
             Assert.Same(uri.IdnHost, uri.IdnHost);
-        }
-
-        [Fact]
-        public static void Uri_CachesPathAndQuery()
-        {
-            var uri = new Uri("https://foo/bar?one=two");
-            Assert.Same(uri.PathAndQuery, uri.PathAndQuery);
-        }
-
-        [Fact]
-        public static void Uri_CachesDnsSafeHost()
-        {
-            var uri = new Uri("https://[::]/bar");
             Assert.Same(uri.DnsSafeHost, uri.DnsSafeHost);
+            Assert.Same(uri.Authority, uri.Authority);
+            Assert.Same(uri.AbsolutePath, uri.AbsolutePath);
+            Assert.Same(uri.Query, uri.Query);
+            Assert.Same(uri.PathAndQuery, uri.PathAndQuery);
+            Assert.Same(uri.Fragment, uri.Fragment);
+            Assert.Same(uri.AbsoluteUri, uri.AbsoluteUri);
+            Assert.Same(uri.Segments, uri.Segments);
+            Assert.Same(uri.LocalPath, uri.LocalPath);
+            Assert.Same(uri.ToString(), uri.ToString());
         }
 
         [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsThreadingSupported))]
@@ -777,6 +780,92 @@ namespace System.PrivateUri.Tests
 
             Assert.True(Monitor.TryEnter(uriString, TimeSpan.FromSeconds(10)));
             Assert.False(timedOut);
+        }
+
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsThreadingSupported))]
+        public static async Task Uri_IsThreadSafe()
+        {
+            if (Environment.ProcessorCount < 3)
+            {
+                return;
+            }
+
+            const int TestRunTimeMs = 100;
+
+            bool running = true;
+            Uri uri = CreateNewUri();
+
+            Task readerTask1 = Task.Run(ReaderWorker);
+            Task readerTask2 = Task.Run(ReaderWorker);
+            Task writerTask = Task.Run(() =>
+            {
+                while (Volatile.Read(ref running))
+                {
+                    Volatile.Write(ref uri, CreateNewUri());
+                }
+            });
+
+            await Task.Delay(TimeSpan.FromMilliseconds(TestRunTimeMs));
+
+            Volatile.Write(ref running, false);
+
+            await writerTask;
+            await readerTask1;
+            await readerTask2;
+
+            void ReaderWorker()
+            {
+                Action<Uri>[] tests =
+                [
+                    static uri => Assert.Contains(uri.UserInfo, new[] { "", "foo=bar" }),
+                    static uri => Assert.Contains("contos", uri.Host),
+                    static uri => Assert.Contains("contos", uri.IdnHost),
+                    static uri => Assert.Contains("contos", uri.DnsSafeHost),
+                    static uri => Assert.Contains("contos", uri.Authority),
+                    static uri => Assert.Equal("/foo/bar", uri.AbsolutePath),
+                    static uri => Assert.Equal("?a=b", uri.Query),
+                    static uri => Assert.Equal("/foo/bar?a=b", uri.PathAndQuery),
+                    static uri => Assert.Equal("#f", uri.Fragment),
+                    static uri => Assert.InRange(uri.AbsoluteUri.Length, 10, 100),
+                    static uri => Assert.Equal(new[] { "/", "foo/", "bar" }, uri.Segments),
+                    static uri => Assert.Equal("/foo/bar", uri.LocalPath),
+                    static uri => Assert.Equal(uri.IsDefaultPort, uri.Port is 80 or 443),
+                    static uri => Assert.False(uri.IsFile),
+                    static uri => Assert.False(uri.IsUnc),
+                    static uri => Assert.False(uri.IsLoopback),
+                    static uri => Assert.Equal(UriHostNameType.Dns, uri.HostNameType),
+                    static uri => Assert.InRange(uri.ToString().Length, 10, 100),
+                    static uri => Assert.Equal($"{uri}", uri.ToString()),
+                    static uri => uri.GetHashCode(),
+                    static uri => uri.Equals(CreateNewUri()),
+                    static uri => uri.MakeRelativeUri(CreateNewUri()),
+                    static uri => uri.IsWellFormedOriginalString(),
+                    static uri => uri.IsBaseOf(CreateNewUri()),
+                    static uri => Assert.StartsWith("http", uri.GetLeftPart(UriPartial.Path)),
+                    static uri => Assert.Contains("contos", uri.GetComponents(UriComponents.Host, UriFormat.UriEscaped)),
+                    static uri => Assert.Contains("contos", uri.GetComponents(UriComponents.Host, UriFormat.SafeUnescaped)),
+                ];
+
+                while (Volatile.Read(ref running))
+                {
+                    tests[Random.Shared.Next(tests.Length)](Volatile.Read(ref uri));
+                }
+            }
+
+            static Uri CreateNewUri()
+            {
+                string input = Random.Shared.Next(6) switch
+                {
+                    0 => "http://contoso.com/foo/bar?a=b#f",
+                    1 => "http://contoso.com:80/foo/bar?a=b#f",
+                    2 => "http://contoso.com:8080/foo/bar?a=b#f",
+                    3 => "http://contos\u00FC.com/foo/bar?a=b#f",
+                    4 => "https://contos\u00FC.com:8443/foo/bar?a=b#f",
+                    _ => "http://foo=bar@contoso.com:8080/foo/bar?a=b#f",
+                };
+
+                return new Uri(input);
+            }
         }
 
         [Fact]
