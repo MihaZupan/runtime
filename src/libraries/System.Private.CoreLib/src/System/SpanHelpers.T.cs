@@ -1309,7 +1309,7 @@ namespace System
         {
             if (PackedSpanHelpers.PackedIndexOfIsSupported && typeof(T) == typeof(short) && PackedSpanHelpers.CanUsePackedIndexOf(value))
             {
-                return PackedSpanHelpers.Contains(ref Unsafe.As<T, short>(ref searchSpace), *(short*)&value, length);
+                return PackedSpanHelpers.Contains(ref Unsafe.As<T, char>(ref searchSpace), *(char*)&value, length);
             }
 
             return NonPackedContainsValueType(ref searchSpace, value, length);
