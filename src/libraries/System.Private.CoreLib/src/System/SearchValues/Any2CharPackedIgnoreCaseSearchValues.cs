@@ -63,5 +63,15 @@ namespace System.Buffers
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
             IndexOfAnyAsciiSearcher.LastIndexOfAny<IndexOfAnyAsciiSearcher.Negate, IndexOfAnyAsciiSearcher.Default>(
                 ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, ref _state);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        internal override bool ContainsAny(ReadOnlySpan<char> span) =>
+            PackedSpanHelpers.ContainsAnyIgnoreCase(ref MemoryMarshal.GetReference(span), _e0, _e1, span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        internal override bool ContainsAnyExcept(ReadOnlySpan<char> span) =>
+            PackedSpanHelpers.ContainsAnyExceptIgnoreCase(ref MemoryMarshal.GetReference(span), _e0, _e1, span.Length);
     }
 }

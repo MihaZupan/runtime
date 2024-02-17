@@ -64,5 +64,17 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
             span.LastIndexOfAnyExceptInRange(_lowInclusive, _highInclusive);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAny(ReadOnlySpan<char> span) =>
+            (PackedSpanHelpers.PackedIndexOfIsSupported && TShouldUsePacked.Value)
+                ? PackedSpanHelpers.ContainsAnyInRange(ref MemoryMarshal.GetReference(span), _lowInclusive, _rangeInclusive, span.Length)
+                : IndexOfAny(span) >= 0;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override bool ContainsAnyExcept(ReadOnlySpan<char> span) =>
+            (PackedSpanHelpers.PackedIndexOfIsSupported && TShouldUsePacked.Value)
+                ? PackedSpanHelpers.ContainsAnyExceptInRange(ref MemoryMarshal.GetReference(span), _lowInclusive, _rangeInclusive, span.Length)
+                : IndexOfAnyExcept(span) >= 0;
     }
 }

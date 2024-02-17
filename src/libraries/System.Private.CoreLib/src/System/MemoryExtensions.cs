@@ -463,8 +463,40 @@ namespace System
         /// <param name="value0">One of the values to search for.</param>
         /// <param name="value1">One of the values to search for.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAny<T>(this ReadOnlySpan<T> span, T value0, T value1) where T : IEquatable<T>? =>
-            IndexOfAny(span, value0, value1) >= 0;
+        public static unsafe bool ContainsAny<T>(this ReadOnlySpan<T> span, T value0, T value1) where T : IEquatable<T>?
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(short))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1))
+                {
+                    if ((*(char*)&value0 ^ *(char*)&value1) == 0x20)
+                    {
+                        char lowerCase = (char)Math.Max(*(char*)&value0, *(char*)&value1);
+
+                        return PackedSpanHelpers.ContainsAnyIgnoreCase(
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                            lowerCase,
+                            span.Length);
+                    }
+
+                    return PackedSpanHelpers.ContainsAny(
+                        ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                        *(char*)&value0,
+                        *(char*)&value1,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyValueType<short, SpanHelpers.DontNegate<short>>(
+                        ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
+                        *(short*)&value0,
+                        *(short*)&value1,
+                        span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAny(span, value0, value1) >= 0;
+        }
 
         /// <summary>
         /// Searches for any occurrence of the specified <paramref name="value0"/>, <paramref name="value1"/>, or <paramref name="value2"/>, and returns true if found. If not found, returns false.
@@ -474,8 +506,32 @@ namespace System
         /// <param name="value1">One of the values to search for.</param>
         /// <param name="value2">One of the values to search for.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAny<T>(this ReadOnlySpan<T> span, T value0, T value1, T value2) where T : IEquatable<T>? =>
-            IndexOfAny(span, value0, value1, value2) >= 0;
+        public static unsafe bool ContainsAny<T>(this ReadOnlySpan<T> span, T value0, T value1, T value2) where T : IEquatable<T>?
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(short))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1) && PackedSpanHelpers.CanUsePackedIndexOf(value2))
+                {
+                    return PackedSpanHelpers.ContainsAny(
+                        ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                        *(char*)&value0,
+                        *(char*)&value1,
+                        *(char*)&value2,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyValueType<short, SpanHelpers.DontNegate<short>>(
+                        ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
+                        *(short*)&value0,
+                        *(short*)&value1,
+                        *(short*)&value2,
+                        span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAny(span, value0, value1, value2) >= 0;
+        }
 
         /// <summary>
         /// Searches for any occurrence of any of the specified <paramref name="values"/> and returns true if found. If not found, returns false.
@@ -521,8 +577,28 @@ namespace System
         /// If all of the values are <paramref name="value"/>, returns false.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T>? =>
-            IndexOfAnyExcept(span, value) >= 0;
+        public static unsafe bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T>?
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(short))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(value))
+                {
+                    return PackedSpanHelpers.ContainsAnyExcept(
+                        ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                        *(char*)&value,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfValueType<short, SpanHelpers.Negate<short>>(
+                        ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
+                        *(short*)&value,
+                        span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAnyExcept(span, value) >= 0;
+        }
 
         /// <summary>
         /// Searches for any value other than the specified <paramref name="value0"/> or <paramref name="value1"/>.
@@ -535,8 +611,40 @@ namespace System
         /// If all of the values are <paramref name="value0"/> or <paramref name="value1"/>, returns false.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value0, T value1) where T : IEquatable<T>? =>
-            IndexOfAnyExcept(span, value0, value1) >= 0;
+        public static unsafe bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value0, T value1) where T : IEquatable<T>?
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(short))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1))
+                {
+                    if ((*(char*)&value0 ^ *(char*)&value1) == 0x20)
+                    {
+                        char lowerCase = (char)Math.Max(*(char*)&value0, *(char*)&value1);
+
+                        return PackedSpanHelpers.ContainsAnyExceptIgnoreCase(
+                            ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                            lowerCase,
+                            span.Length);
+                    }
+
+                    return PackedSpanHelpers.ContainsAnyExcept(
+                        ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                        *(char*)&value0,
+                        *(char*)&value1,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyValueType<short, SpanHelpers.Negate<short>>(
+                        ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
+                        *(short*)&value0,
+                        *(short*)&value1,
+                        span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAnyExcept(span, value0, value1) >= 0;
+        }
 
         /// <summary>
         /// Searches for any value other than the specified <paramref name="value0"/>, <paramref name="value1"/>, or <paramref name="value2"/>.
@@ -550,8 +658,32 @@ namespace System
         /// If all of the values are <paramref name="value0"/>, <paramref name="value1"/>, or <paramref name="value2"/>, returns false.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value0, T value1, T value2) where T : IEquatable<T>? =>
-            IndexOfAnyExcept(span, value0, value1, value2) >= 0;
+        public static unsafe bool ContainsAnyExcept<T>(this ReadOnlySpan<T> span, T value0, T value1, T value2) where T : IEquatable<T>?
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(short))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1) && PackedSpanHelpers.CanUsePackedIndexOf(value2))
+                {
+                    return PackedSpanHelpers.ContainsAnyExcept(
+                        ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span)),
+                        *(char*)&value0,
+                        *(char*)&value1,
+                        *(char*)&value2,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyValueType<short, SpanHelpers.Negate<short>>(
+                        ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
+                        *(short*)&value0,
+                        *(short*)&value1,
+                        *(short*)&value2,
+                        span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAnyExcept(span, value0, value1, value2) >= 0;
+        }
 
         /// <summary>
         /// Searches for any value other than the specified <paramref name="values"/>.
@@ -593,8 +725,34 @@ namespace System
         /// <param name="lowInclusive">A lower bound, inclusive, of the range for which to search.</param>
         /// <param name="highInclusive">A upper bound, inclusive, of the range for which to search.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAnyInRange<T>(this ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : IComparable<T> =>
-            IndexOfAnyInRange(span, lowInclusive, highInclusive) >= 0;
+        public static unsafe bool ContainsAnyInRange<T>(this ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : IComparable<T>
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(ushort))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(lowInclusive) && PackedSpanHelpers.CanUsePackedIndexOf(highInclusive) && *(char*)&highInclusive >= *(char*)&lowInclusive)
+                {
+                    ref char charSearchSpace = ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span));
+                    char charLowInclusive = *(char*)&lowInclusive;
+                    char charRange = (char)(*(char*)&highInclusive - charLowInclusive);
+
+                    return PackedSpanHelpers.ContainsAnyInRange(
+                        ref charSearchSpace,
+                        charLowInclusive,
+                        charRange,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyInRangeUnsignedNumber<ushort, SpanHelpers.DontNegate<ushort>>(
+                       ref Unsafe.As<T, ushort>(ref MemoryMarshal.GetReference(span)),
+                       *(ushort*)&lowInclusive,
+                       *(ushort*)&highInclusive,
+                       span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAnyInRange(span, lowInclusive, highInclusive) >= 0;
+        }
 
         /// <summary>
         /// Searches for any value outside of the range between <paramref name="lowInclusive"/> and <paramref name="highInclusive"/>, inclusive.
@@ -607,8 +765,34 @@ namespace System
         /// If all of the values are inside of the specified range, returns false.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ContainsAnyExceptInRange<T>(this ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : IComparable<T> =>
-            IndexOfAnyExceptInRange(span, lowInclusive, highInclusive) >= 0;
+        public static unsafe bool ContainsAnyExceptInRange<T>(this ReadOnlySpan<T> span, T lowInclusive, T highInclusive) where T : IComparable<T>
+        {
+            if (PackedSpanHelpers.PackedIndexOfIsSupported && RuntimeHelpers.IsBitwiseEquatable<T>() && sizeof(T) == sizeof(ushort))
+            {
+                if (PackedSpanHelpers.CanUsePackedIndexOf(lowInclusive) && PackedSpanHelpers.CanUsePackedIndexOf(highInclusive) && *(char*)&highInclusive >= *(char*)&lowInclusive)
+                {
+                    ref char charSearchSpace = ref Unsafe.As<T, char>(ref MemoryMarshal.GetReference(span));
+                    char charLowInclusive = *(char*)&lowInclusive;
+                    char charRange = (char)(*(char*)&highInclusive - charLowInclusive);
+
+                    return PackedSpanHelpers.ContainsAnyExceptInRange(
+                        ref charSearchSpace,
+                        charLowInclusive,
+                        charRange,
+                        span.Length);
+                }
+                else
+                {
+                    return SpanHelpers.NonPackedIndexOfAnyInRangeUnsignedNumber<ushort, SpanHelpers.Negate<ushort>>(
+                       ref Unsafe.As<T, ushort>(ref MemoryMarshal.GetReference(span)),
+                       *(ushort*)&lowInclusive,
+                       *(ushort*)&highInclusive,
+                       span.Length) >= 0;
+                }
+            }
+
+            return IndexOfAnyExceptInRange(span, lowInclusive, highInclusive) >= 0;
+        }
 
         /// <summary>
         /// Searches for the specified value and returns the index of its first occurrence. If not found, returns -1. Values are compared using IEquatable{T}.Equals(T).

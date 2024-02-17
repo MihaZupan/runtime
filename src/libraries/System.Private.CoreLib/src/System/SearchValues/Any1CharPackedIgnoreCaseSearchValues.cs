@@ -48,5 +48,15 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
             span.LastIndexOfAnyExcept(_lowerCase, _upperCase);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        internal override bool ContainsAny(ReadOnlySpan<char> span) =>
+            PackedSpanHelpers.ContainsAnyIgnoreCase(ref MemoryMarshal.GetReference(span), _lowerCase, span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        internal override bool ContainsAnyExcept(ReadOnlySpan<char> span) =>
+            PackedSpanHelpers.ContainsAnyExceptIgnoreCase(ref MemoryMarshal.GetReference(span), _lowerCase, span.Length);
     }
 }

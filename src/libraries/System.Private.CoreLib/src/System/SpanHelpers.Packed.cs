@@ -15,7 +15,7 @@ namespace System
 {
     // This is a separate class instead of 'partial SpanHelpers' to hide the private helpers
     // included in this file which are specific to the packed implementation.
-    internal static partial class PackedSpanHelpers
+    internal static class PackedSpanHelpers
     {
         // We only do this optimization if we have support for X86 intrinsics (Sse2) as the packing is noticeably cheaper compared to ARM (AdvSimd).
         // While the impact on the worst-case (match at the start) is minimal on X86, it's prohibitively large on ARM.
@@ -35,32 +35,62 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOf(ref char searchSpace, char value, int length) =>
-            IndexOf<SpanHelpers.DontNegate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+            IndexOfCore<int, SpanHelpers.DontNegate<short>, NopTransform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value, int length) =>
-            IndexOf<SpanHelpers.Negate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+            IndexOfCore<int, SpanHelpers.Negate<short>, NopTransform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool Contains(ref char searchSpace, char value, int length) =>
+            IndexOfCore<bool, SpanHelpers.DontNegate<short>, NopTransform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExcept(ref char searchSpace, char value, int length) =>
+            IndexOfCore<bool, SpanHelpers.Negate<short>, NopTransform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAny(ref char searchSpace, char value0, char value1, int length) =>
-            IndexOfAny<SpanHelpers.DontNegate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+            IndexOfAnyCore<int, SpanHelpers.DontNegate<short>, NopTransform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value0, char value1, int length) =>
-            IndexOfAny<SpanHelpers.Negate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+            IndexOfAnyCore<int, SpanHelpers.Negate<short>, NopTransform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAny(ref char searchSpace, char value0, char value1, int length) =>
+            IndexOfAnyCore<bool, SpanHelpers.DontNegate<short>, NopTransform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExcept(ref char searchSpace, char value0, char value1, int length) =>
+            IndexOfAnyCore<bool, SpanHelpers.Negate<short>, NopTransform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAny(ref char searchSpace, char value0, char value1, char value2, int length) =>
-            IndexOfAny<SpanHelpers.DontNegate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
+            IndexOfAnyCore<int, SpanHelpers.DontNegate<short>, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value0, char value1, char value2, int length) =>
-            IndexOfAny<SpanHelpers.Negate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
+            IndexOfAnyCore<int, SpanHelpers.Negate<short>, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAny(ref char searchSpace, char value0, char value1, char value2, int length) =>
+            IndexOfAnyCore<bool, SpanHelpers.DontNegate<short>, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExcept(ref char searchSpace, char value0, char value1, char value2, int length) =>
+            IndexOfAnyCore<bool, SpanHelpers.Negate<short>, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
@@ -68,7 +98,7 @@ namespace System
         {
             Debug.Assert((value | 0x20) == value);
 
-            return IndexOf<SpanHelpers.DontNegate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+            return IndexOfCore<int, SpanHelpers.DontNegate<short>, Or20Transform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -77,7 +107,25 @@ namespace System
         {
             Debug.Assert((value | 0x20) == value);
 
-            return IndexOf<SpanHelpers.Negate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+            return IndexOfCore<int, SpanHelpers.Negate<short>, Or20Transform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyIgnoreCase(ref char searchSpace, char value, int length)
+        {
+            Debug.Assert((value | 0x20) == value);
+
+            return IndexOfCore<bool, SpanHelpers.DontNegate<short>, Or20Transform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExceptIgnoreCase(ref char searchSpace, char value, int length)
+        {
+            Debug.Assert((value | 0x20) == value);
+
+            return IndexOfCore<bool, SpanHelpers.Negate<short>, Or20Transform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -87,7 +135,7 @@ namespace System
             Debug.Assert((value0 | 0x20) == value0);
             Debug.Assert((value1 | 0x20) == value1);
 
-            return IndexOfAny<SpanHelpers.DontNegate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+            return IndexOfAnyCore<int, SpanHelpers.DontNegate<short>, Or20Transform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -97,225 +145,55 @@ namespace System
             Debug.Assert((value0 | 0x20) == value0);
             Debug.Assert((value1 | 0x20) == value1);
 
-            return IndexOfAny<SpanHelpers.Negate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+            return IndexOfAnyCore<int, SpanHelpers.Negate<short>, Or20Transform, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyIgnoreCase(ref char searchSpace, char value0, char value1, int length)
+        {
+            Debug.Assert((value0 | 0x20) == value0);
+            Debug.Assert((value1 | 0x20) == value1);
+
+            return IndexOfAnyCore<bool, SpanHelpers.DontNegate<short>, Or20Transform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExceptIgnoreCase(ref char searchSpace, char value0, char value1, int length)
+        {
+            Debug.Assert((value0 | 0x20) == value0);
+            Debug.Assert((value1 | 0x20) == value1);
+
+            return IndexOfAnyCore<bool, SpanHelpers.Negate<short>, Or20Transform, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
-            IndexOfAnyInRange<SpanHelpers.DontNegate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+            IndexOfAnyInRangeCore<int, SpanHelpers.DontNegate<short>, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyExceptInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
-            IndexOfAnyInRange<SpanHelpers.Negate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+            IndexOfAnyInRangeCore<int, SpanHelpers.Negate<short>, IndexOfAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
+            IndexOfAnyInRangeCore<bool, SpanHelpers.DontNegate<short>, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static bool ContainsAnyExceptInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
+            IndexOfAnyInRangeCore<bool, SpanHelpers.Negate<short>, ContainsAnyResultMapper>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
 
         [CompExactlyDependsOn(typeof(Sse2))]
-        public static bool Contains(ref short searchSpace, short value, int length)
-        {
-            Debug.Assert(CanUsePackedIndexOf(value));
-
-            if (length < Vector128<short>.Count)
-            {
-                nuint offset = 0;
-
-                if (length >= 4)
-                {
-                    length -= 4;
-
-                    if (searchSpace == value ||
-                        Unsafe.Add(ref searchSpace, 1) == value ||
-                        Unsafe.Add(ref searchSpace, 2) == value ||
-                        Unsafe.Add(ref searchSpace, 3) == value)
-                    {
-                        return true;
-                    }
-
-                    offset = 4;
-                }
-
-                while (length > 0)
-                {
-                    length -= 1;
-
-                    if (Unsafe.Add(ref searchSpace, offset) == value)
-                    {
-                        return true;
-                    }
-
-                    offset += 1;
-                }
-            }
-            else
-            {
-                ref short currentSearchSpace = ref searchSpace;
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The else condition for this if statement is identical in semantics to Avx2 specific code
-                if (Avx512BW.IsSupported && Vector512.IsHardwareAccelerated && length > Vector512<short>.Count)
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
-                {
-                    Vector512<byte> packedValue = Vector512.Create((byte)value);
-
-                    if (length > 2 * Vector512<short>.Count)
-                    {
-                        // Process the input in chunks of 64 characters (2 * Vector512<short>).
-                        // If the input length is a multiple of 64, don't consume the last 16 characters in this loop.
-                        // Let the fallback below handle it instead. This is why the condition is
-                        // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
-                        ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - (2 * Vector512<short>.Count));
-
-                        do
-                        {
-                            Vector512<short> source0 = Vector512.LoadUnsafe(ref currentSearchSpace);
-                            Vector512<short> source1 = Vector512.LoadUnsafe(ref currentSearchSpace, (nuint)Vector512<short>.Count);
-                            Vector512<byte> packedSource = PackSources(source0, source1);
-
-                            if (Vector512.EqualsAny(packedValue, packedSource))
-                            {
-                                return true;
-                            }
-
-                            currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
-                        }
-                        while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
-                    }
-
-                    // We have 1-32 characters remaining. Process the first and last vector in the search space.
-                    // They may overlap, but we're only interested in whether any value matched.
-                    {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
-
-                        ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
-                            ? ref oneVectorAwayFromEnd
-                            : ref currentSearchSpace;
-
-                        Vector512<short> source0 = Vector512.LoadUnsafe(ref firstVector);
-                        Vector512<short> source1 = Vector512.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector512<byte> packedSource = PackSources(source0, source1);
-
-                        if (Vector512.EqualsAny(packedValue, packedSource))
-                        {
-                            return true;
-                        }
-                    }
-                }
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // The else condition for this if statement is identical in semantics to Avx2 specific code
-                else if (Avx2.IsSupported && length > Vector256<short>.Count)
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
-                {
-                    Vector256<byte> packedValue = Vector256.Create((byte)value);
-
-                    if (length > 2 * Vector256<short>.Count)
-                    {
-                        // Process the input in chunks of 32 characters (2 * Vector256<short>).
-                        // If the input length is a multiple of 32, don't consume the last 16 characters in this loop.
-                        // Let the fallback below handle it instead. This is why the condition is
-                        // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
-                        ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - (2 * Vector256<short>.Count));
-
-                        do
-                        {
-                            Vector256<short> source0 = Vector256.LoadUnsafe(ref currentSearchSpace);
-                            Vector256<short> source1 = Vector256.LoadUnsafe(ref currentSearchSpace, (nuint)Vector256<short>.Count);
-                            Vector256<byte> packedSource = PackSources(source0, source1);
-                            Vector256<byte> result = Vector256.Equals(packedValue, packedSource);
-
-                            if (result != Vector256<byte>.Zero)
-                            {
-                                return true;
-                            }
-
-                            currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
-                        }
-                        while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
-                    }
-
-                    // We have 1-32 characters remaining. Process the first and last vector in the search space.
-                    // They may overlap, but we're only interested in whether any value matched.
-                    {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
-
-                        ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
-                            ? ref oneVectorAwayFromEnd
-                            : ref currentSearchSpace;
-
-                        Vector256<short> source0 = Vector256.LoadUnsafe(ref firstVector);
-                        Vector256<short> source1 = Vector256.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector256<byte> packedSource = PackSources(source0, source1);
-                        Vector256<byte> result = Vector256.Equals(packedValue, packedSource);
-
-                        if (result != Vector256<byte>.Zero)
-                        {
-                            return true;
-                        }
-                    }
-                }
-                else
-                {
-                    Vector128<byte> packedValue = Vector128.Create((byte)value);
-
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibConditionParsing // A negated IsSupported condition isn't parseable by the intrinsics analyzer, but in this case, it is only used in combination
-                                                                         // with the check above of Avx2.IsSupported && length > Vector256<short>.Count which makes the logic
-                                                                         // in this if statement dead code when Avx2.IsSupported. Presumably this negated IsSupported check is to assist the JIT in
-                                                                         // not generating dead code.
-#pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough // This is paired with the check above, and since these if statements are contained in 1 function, the code
-                                                                                   // may take a dependence on the JIT compiler producing a consistent value for the result of a call to IsSupported
-                                                                                   // This logic MUST NOT be extracted to a helper function
-                    if (!Avx2.IsSupported && length > 2 * Vector128<short>.Count)
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
-#pragma warning restore IntrinsicsInSystemPrivateCoreLibConditionParsing
-                    {
-                        // Process the input in chunks of 16 characters (2 * Vector128<short>).
-                        // If the input length is a multiple of 16, don't consume the last 16 characters in this loop.
-                        // Let the fallback below handle it instead. This is why the condition is
-                        // ">" instead of ">=" above, and why "IsAddressLessThan" is used instead of "!IsAddressGreaterThan".
-                        ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - (2 * Vector128<short>.Count));
-
-                        do
-                        {
-                            Vector128<short> source0 = Vector128.LoadUnsafe(ref currentSearchSpace);
-                            Vector128<short> source1 = Vector128.LoadUnsafe(ref currentSearchSpace, (nuint)Vector128<short>.Count);
-                            Vector128<byte> packedSource = PackSources(source0, source1);
-                            Vector128<byte> result = Vector128.Equals(packedValue, packedSource);
-
-                            if (result != Vector128<byte>.Zero)
-                            {
-                                return true;
-                            }
-
-                            currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
-                        }
-                        while (Unsafe.IsAddressLessThan(ref currentSearchSpace, ref twoVectorsAwayFromEnd));
-                    }
-
-                    // We have 1-16 characters remaining. Process the first and last vector in the search space.
-                    // They may overlap, but we're only interested in whether any value matched.
-                    {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
-
-                        ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
-                            ? ref oneVectorAwayFromEnd
-                            : ref currentSearchSpace;
-
-                        Vector128<short> source0 = Vector128.LoadUnsafe(ref firstVector);
-                        Vector128<short> source1 = Vector128.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector128<byte> packedSource = PackSources(source0, source1);
-                        Vector128<byte> result = Vector128.Equals(packedValue, packedSource);
-
-                        if (result != Vector128<byte>.Zero)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        [CompExactlyDependsOn(typeof(Sse2))]
-        private static int IndexOf<TNegator, TTransform>(ref short searchSpace, short value, int length)
+        private static TResult IndexOfCore<TResult, TNegator, TTransform, TResultMapper>(ref short searchSpace, short value, int length)
+            where TResult : struct
             where TNegator : struct, SpanHelpers.INegator<short>
             where TTransform : struct, ITransform
+            where TResultMapper : struct, IResultMapper<TResult>
         {
             Debug.Assert(CanUsePackedIndexOf(value));
 
@@ -327,10 +205,10 @@ namespace System
                 {
                     length -= 4;
 
-                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(searchSpace) == value)) return 0;
-                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 1)) == value)) return 1;
-                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 2)) == value)) return 2;
-                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 3)) == value)) return 3;
+                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(searchSpace) == value)) return TResultMapper.ScalarResult(0);
+                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 1)) == value)) return TResultMapper.ScalarResult(1);
+                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 2)) == value)) return TResultMapper.ScalarResult(2);
+                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, 3)) == value)) return TResultMapper.ScalarResult(3);
 
                     offset = 4;
                 }
@@ -339,7 +217,7 @@ namespace System
                 {
                     length -= 1;
 
-                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, offset)) == value)) return (int)offset;
+                    if (TNegator.NegateIfNeeded(TTransform.TransformInput(Unsafe.Add(ref searchSpace, offset)) == value)) return TResultMapper.ScalarResult((int)offset);
 
                     offset += 1;
                 }
@@ -370,7 +248,7 @@ namespace System
 
                             if (HasMatch<TNegator>(packedValue, packedSource))
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, GetMatchMask<TNegator>(packedValue, packedSource));
+                                return TResultMapper.FirstIndex<TNegator>(ref searchSpace, ref currentSearchSpace, packedValue, packedSource);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
@@ -393,7 +271,7 @@ namespace System
 
                         if (HasMatch<TNegator>(packedValue, packedSource))
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, GetMatchMask<TNegator>(packedValue, packedSource));
+                            return TResultMapper.FirstIndexOverlapped<TNegator>(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, packedValue, packedSource);
                         }
                     }
                 }
@@ -421,7 +299,7 @@ namespace System
 
                             if (result != Vector256<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
@@ -446,7 +324,7 @@ namespace System
 
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -481,7 +359,7 @@ namespace System
 
                             if (result != Vector128<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -506,19 +384,21 @@ namespace System
 
                         if (result != Vector128<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
-        private static int IndexOfAny<TNegator, TTransform>(ref short searchSpace, short value0, short value1, int length)
+        private static TResult IndexOfAnyCore<TResult, TNegator, TTransform, TResultMapper>(ref short searchSpace, short value0, short value1, int length)
+            where TResult : struct
             where TNegator : struct, SpanHelpers.INegator<short>
             where TTransform : struct, ITransform
+            where TResultMapper : struct, IResultMapper<TResult>
         {
             Debug.Assert(CanUsePackedIndexOf(value0));
             Debug.Assert(CanUsePackedIndexOf(value1));
@@ -533,13 +413,13 @@ namespace System
                     length -= 4;
 
                     lookUp = TTransform.TransformInput(searchSpace);
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return 0;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return TResultMapper.ScalarResult(0);
                     lookUp = TTransform.TransformInput(Unsafe.Add(ref searchSpace, 1));
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return 1;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return TResultMapper.ScalarResult(1);
                     lookUp = TTransform.TransformInput(Unsafe.Add(ref searchSpace, 2));
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return 2;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return TResultMapper.ScalarResult(2);
                     lookUp = TTransform.TransformInput(Unsafe.Add(ref searchSpace, 3));
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return 3;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return TResultMapper.ScalarResult(3);
 
                     offset = 4;
                 }
@@ -549,7 +429,7 @@ namespace System
                     length -= 1;
 
                     lookUp = TTransform.TransformInput(Unsafe.Add(ref searchSpace, offset));
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return (int)offset;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1)) return TResultMapper.ScalarResult((int)offset);
 
                     offset += 1;
                 }
@@ -581,7 +461,7 @@ namespace System
 
                             if (result != Vector512<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
@@ -605,7 +485,7 @@ namespace System
 
                         if (result != Vector512<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -634,7 +514,7 @@ namespace System
 
                             if (result != Vector256<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
@@ -659,7 +539,7 @@ namespace System
 
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -695,7 +575,7 @@ namespace System
 
                             if (result != Vector128<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -720,18 +600,20 @@ namespace System
 
                         if (result != Vector128<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
-        private static int IndexOfAny<TNegator>(ref short searchSpace, short value0, short value1, short value2, int length)
+        private static TResult IndexOfAnyCore<TResult, TNegator, TResultMapper>(ref short searchSpace, short value0, short value1, short value2, int length)
+            where TResult : struct
             where TNegator : struct, SpanHelpers.INegator<short>
+            where TResultMapper : struct, IResultMapper<TResult>
         {
             Debug.Assert(CanUsePackedIndexOf(value0));
             Debug.Assert(CanUsePackedIndexOf(value1));
@@ -747,13 +629,13 @@ namespace System
                     length -= 4;
 
                     lookUp = searchSpace;
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return 0;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return TResultMapper.ScalarResult(0);
                     lookUp = Unsafe.Add(ref searchSpace, 1);
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return 1;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return TResultMapper.ScalarResult(1);
                     lookUp = Unsafe.Add(ref searchSpace, 2);
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return 2;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return TResultMapper.ScalarResult(2);
                     lookUp = Unsafe.Add(ref searchSpace, 3);
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return 3;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return TResultMapper.ScalarResult(3);
 
                     offset = 4;
                 }
@@ -763,7 +645,7 @@ namespace System
                     length -= 1;
 
                     lookUp = Unsafe.Add(ref searchSpace, offset);
-                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return (int)offset;
+                    if (TNegator.NegateIfNeeded(lookUp == value0 || lookUp == value1 || lookUp == value2)) return TResultMapper.ScalarResult((int)offset);
 
                     offset += 1;
                 }
@@ -797,7 +679,7 @@ namespace System
 
                             if (result != Vector512<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
@@ -821,7 +703,7 @@ namespace System
 
                         if (result != Vector512<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -851,7 +733,7 @@ namespace System
 
                             if (result != Vector256<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
@@ -876,7 +758,7 @@ namespace System
 
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -913,7 +795,7 @@ namespace System
 
                             if (result != Vector128<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -938,18 +820,20 @@ namespace System
 
                         if (result != Vector128<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
-        private static int IndexOfAnyInRange<TNegator>(ref short searchSpace, short lowInclusive, short rangeInclusive, int length)
+        private static TResult IndexOfAnyInRangeCore<TResult, TNegator, TResultMapper>(ref short searchSpace, short lowInclusive, short rangeInclusive, int length)
+            where TResult : struct
             where TNegator : struct, SpanHelpers.INegator<short>
+            where TResultMapper : struct, IResultMapper<TResult>
         {
             Debug.Assert(CanUsePackedIndexOf(lowInclusive));
             Debug.Assert(CanUsePackedIndexOf((short)(lowInclusive + rangeInclusive)));
@@ -964,7 +848,7 @@ namespace System
                     uint current = (uint)Unsafe.Add(ref searchSpace, i);
                     if (TNegator.NegateIfNeeded((current - lowInclusiveUint) <= rangeInclusiveUint))
                     {
-                        return i;
+                        return TResultMapper.ScalarResult(i);
                     }
                 }
             }
@@ -995,7 +879,7 @@ namespace System
 
                             if (HasMatchInRange<TNegator>(packedSource, rangeVector))
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, GetMatchInRangeMask<TNegator>(packedSource, rangeVector));
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, GetMatchInRangeMask<TNegator>(packedSource, rangeVector));
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector512<short>.Count);
@@ -1018,7 +902,8 @@ namespace System
 
                         if (HasMatchInRange<TNegator>(packedSource, rangeVector))
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, GetMatchInRangeMask<TNegator>(packedSource, rangeVector));
+                            // TODO: Is getmatchmaskrange eliminated?
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, GetMatchInRangeMask<TNegator>(packedSource, rangeVector));
                         }
                     }
                 }
@@ -1047,7 +932,7 @@ namespace System
 
                             if (result != Vector256<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector256<short>.Count);
@@ -1072,7 +957,7 @@ namespace System
 
                         if (result != Vector256<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
@@ -1108,7 +993,7 @@ namespace System
 
                             if (result != Vector128<byte>.Zero)
                             {
-                                return ComputeFirstIndex(ref searchSpace, ref currentSearchSpace, result);
+                                return TResultMapper.FirstIndex(ref searchSpace, ref currentSearchSpace, result);
                             }
 
                             currentSearchSpace = ref Unsafe.Add(ref currentSearchSpace, 2 * Vector128<short>.Count);
@@ -1133,13 +1018,13 @@ namespace System
 
                         if (result != Vector128<byte>.Zero)
                         {
-                            return ComputeFirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
+                            return TResultMapper.FirstIndexOverlapped(ref searchSpace, ref firstVector, ref oneVectorAwayFromEnd, result);
                         }
                     }
                 }
             }
 
-            return -1;
+            return TResultMapper.NotFound;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1177,11 +1062,6 @@ namespace System
             // - Values  > 32767 result in 0. Because of this we can't accept needles that contain 0.
             return Sse2.PackUnsignedSaturate(source0, source1).AsByte();
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool NegateIfNeeded<TNegator>(bool result)
-            where TNegator : struct, SpanHelpers.INegator<short> =>
-            typeof(TNegator) == typeof(SpanHelpers.DontNegate<short>) ? result : !result;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> NegateIfNeeded<TNegator>(Vector128<byte> result)
@@ -1231,76 +1111,6 @@ namespace System
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int ComputeFirstIndex(ref short searchSpace, ref short current, Vector128<byte> equals)
-        {
-            uint notEqualsElements = equals.ExtractMostSignificantBits();
-            int index = BitOperations.TrailingZeroCount(notEqualsElements);
-            return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static int ComputeFirstIndex(ref short searchSpace, ref short current, Vector256<byte> equals)
-        {
-            uint notEqualsElements = FixUpPackedVector256Result(equals).ExtractMostSignificantBits();
-            int index = BitOperations.TrailingZeroCount(notEqualsElements);
-            return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512F))]
-        private static int ComputeFirstIndex(ref short searchSpace, ref short current, Vector512<byte> equals)
-        {
-            ulong notEqualsElements = FixUpPackedVector512Result(equals).ExtractMostSignificantBits();
-            int index = BitOperations.TrailingZeroCount(notEqualsElements);
-            return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int ComputeFirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector128<byte> equals)
-        {
-            uint notEqualsElements = equals.ExtractMostSignificantBits();
-            int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
-            if (offsetInVector >= Vector128<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector128<short>.Count;
-            }
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static int ComputeFirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector256<byte> equals)
-        {
-            uint notEqualsElements = FixUpPackedVector256Result(equals).ExtractMostSignificantBits();
-            int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
-            if (offsetInVector >= Vector256<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector256<short>.Count;
-            }
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512F))]
-        private static int ComputeFirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> equals)
-        {
-            ulong notEqualsElements = FixUpPackedVector512Result(equals).ExtractMostSignificantBits();
-            int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
-            if (offsetInVector >= Vector512<short>.Count)
-            {
-                // We matched within the second vector
-                current0 = ref current1;
-                offsetInVector -= Vector512<short>.Count;
-            }
-            return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Avx2))]
         internal static Vector256<byte> FixUpPackedVector256Result(Vector256<byte> result)
         {
@@ -1344,6 +1154,131 @@ namespace System
             public static Vector128<byte> TransformInput(Vector128<byte> input) => input | Vector128.Create((byte)0x20);
             public static Vector256<byte> TransformInput(Vector256<byte> input) => input | Vector256.Create((byte)0x20);
             public static Vector512<byte> TransformInput(Vector512<byte> input) => input | Vector512.Create((byte)0x20);
+        }
+
+        private interface IResultMapper<TResult>
+            where TResult : struct
+        {
+            static abstract TResult NotFound { get; }
+
+            static abstract TResult ScalarResult(int index);
+            static abstract TResult FirstIndex(ref short searchSpace, ref short current, Vector128<byte> result);
+            static abstract TResult FirstIndex(ref short searchSpace, ref short current, Vector256<byte> result);
+            static abstract TResult FirstIndex(ref short searchSpace, ref short current, Vector512<byte> result);
+            static abstract TResult FirstIndex<TNegator>(ref short searchSpace, ref short current, Vector512<byte> packedValue, Vector512<byte> packedSource) where TNegator : struct, SpanHelpers.INegator<short>;
+            static abstract TResult FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector128<byte> result);
+            static abstract TResult FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector256<byte> result);
+            static abstract TResult FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> result);
+            static abstract TResult FirstIndexOverlapped<TNegator>(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> packedValue, Vector512<byte> packedSource) where TNegator : struct, SpanHelpers.INegator<short>;
+        }
+
+        private readonly struct ContainsAnyResultMapper : IResultMapper<bool>
+        {
+            public static bool NotFound => false;
+
+            public static bool ScalarResult(int index) => true;
+            public static bool FirstIndex(ref short searchSpace, ref short current, Vector128<byte> result) => true;
+            public static bool FirstIndex(ref short searchSpace, ref short current, Vector256<byte> result) => true;
+            public static bool FirstIndex(ref short searchSpace, ref short current, Vector512<byte> result) => true;
+            public static bool FirstIndex<TNegator>(ref short searchSpace, ref short current, Vector512<byte> packedValue, Vector512<byte> packedSource) where TNegator : struct, SpanHelpers.INegator<short> => true;
+            public static bool FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector128<byte> result) => true;
+            public static bool FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector256<byte> result) => true;
+            public static bool FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> result) => true;
+            public static bool FirstIndexOverlapped<TNegator>(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> packedValue, Vector512<byte> packedSource) where TNegator : struct, SpanHelpers.INegator<short> => true;
+        }
+
+        private readonly struct IndexOfAnyResultMapper : IResultMapper<int>
+        {
+            public static int NotFound => -1;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int ScalarResult(int index) => index;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int FirstIndex(ref short searchSpace, ref short current, Vector128<byte> result)
+            {
+                uint notEqualsElements = result.ExtractMostSignificantBits();
+                int index = BitOperations.TrailingZeroCount(notEqualsElements);
+                return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx2))]
+            public static int FirstIndex(ref short searchSpace, ref short current, Vector256<byte> result)
+            {
+                uint notEqualsElements = FixUpPackedVector256Result(result).ExtractMostSignificantBits();
+                int index = BitOperations.TrailingZeroCount(notEqualsElements);
+                return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx512F))]
+            public static int FirstIndex(ref short searchSpace, ref short current, Vector512<byte> result)
+            {
+                ulong notEqualsElements = FixUpPackedVector512Result(result).ExtractMostSignificantBits();
+                int index = BitOperations.TrailingZeroCount(notEqualsElements);
+                return index + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx512F))]
+            public static int FirstIndex<TNegator>(ref short searchSpace, ref short current, Vector512<byte> packedValue, Vector512<byte> packedSource)
+                where TNegator : struct, SpanHelpers.INegator<short>
+            {
+                return FirstIndex(ref searchSpace, ref current, GetMatchMask<TNegator>(packedSource, packedValue));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector128<byte> result)
+            {
+                uint notEqualsElements = result.ExtractMostSignificantBits();
+                int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
+                if (offsetInVector >= Vector128<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector128<short>.Count;
+                }
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx2))]
+            public static int FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector256<byte> result)
+            {
+                uint notEqualsElements = FixUpPackedVector256Result(result).ExtractMostSignificantBits();
+                int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
+                if (offsetInVector >= Vector256<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector256<short>.Count;
+                }
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx512F))]
+            public static int FirstIndexOverlapped(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> result)
+            {
+                ulong notEqualsElements = FixUpPackedVector512Result(result).ExtractMostSignificantBits();
+                int offsetInVector = BitOperations.TrailingZeroCount(notEqualsElements);
+                if (offsetInVector >= Vector512<short>.Count)
+                {
+                    // We matched within the second vector
+                    current0 = ref current1;
+                    offsetInVector -= Vector512<short>.Count;
+                }
+                return offsetInVector + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref current0) / sizeof(short));
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [CompExactlyDependsOn(typeof(Avx512F))]
+            public static int FirstIndexOverlapped<TNegator>(ref short searchSpace, ref short current0, ref short current1, Vector512<byte> packedValue, Vector512<byte> packedSource)
+                where TNegator : struct, SpanHelpers.INegator<short>
+            {
+                return FirstIndexOverlapped(ref searchSpace, ref current0, ref current1, GetMatchMask<TNegator>(packedValue, packedSource));
+            }
         }
     }
 }
