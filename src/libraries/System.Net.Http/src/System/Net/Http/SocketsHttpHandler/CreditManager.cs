@@ -28,8 +28,6 @@ namespace System.Net.Http
             _current = initialCredit;
         }
 
-        public bool IsCreditAvailable => Volatile.Read(ref _current) > 0;
-
         private object SyncObject
         {
             // Generally locking on "this" is considered poor form, but this type is internal,

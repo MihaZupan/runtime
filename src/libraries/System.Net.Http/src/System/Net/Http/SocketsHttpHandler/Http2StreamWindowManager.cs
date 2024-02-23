@@ -77,9 +77,7 @@ namespace System.Net.Http
                 int windowUpdateIncrement = _deliveredBytes;
                 _deliveredBytes = 0;
 
-                Http2Connection connection = stream.Connection;
-                Task sendWindowUpdateTask = connection.SendWindowUpdateAsync(stream.StreamId, windowUpdateIncrement);
-                connection.LogExceptions(sendWindowUpdateTask);
+                stream.Connection._writer.SendWindowUpdate(stream.StreamId, windowUpdateIncrement);
             }
 
             private void AdjustWindowDynamic(int bytesConsumed, Http2Stream stream)
@@ -127,8 +125,7 @@ namespace System.Net.Http
 
                 _deliveredBytes = 0;
 
-                Task sendWindowUpdateTask = connection.SendWindowUpdateAsync(stream.StreamId, windowUpdateIncrement);
-                connection.LogExceptions(sendWindowUpdateTask);
+                stream.Connection._writer.SendWindowUpdate(stream.StreamId, windowUpdateIncrement);
 
                 _lastWindowUpdate = currentTime;
             }
@@ -220,7 +217,7 @@ namespace System.Net.Http
                     // Send a PING
                     _pingCounter--;
                     if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
-                    connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
+                    connection._writer.SendPing(_pingCounter, isAck: false);
                     _pingSentTimestamp = now;
                     _state = State.PingSent;
                 }
