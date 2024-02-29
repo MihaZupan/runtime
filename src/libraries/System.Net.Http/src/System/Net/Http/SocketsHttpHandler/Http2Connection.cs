@@ -54,7 +54,6 @@ namespace System.Net.Http
         private TaskCompletionSource<bool>? _availableStreamsWaiter;
 
         private readonly Channel<WriteQueueEntry> _writeChannel;
-        private bool _lastPendingWriterShouldFlush;
 
         // Server-advertised SETTINGS_MAX_HEADER_LIST_SIZE
         // https://www.rfc-editor.org/rfc/rfc9113.html#section-6.5.2-2.12.1
@@ -364,26 +363,6 @@ namespace System.Net.Http
                 Debug.Assert(_shutdown != result);
                 _availableStreamsWaiter.SetResult(result);
                 _availableStreamsWaiter = null;
-            }
-        }
-
-        private async Task FlushOutgoingBytesAsync()
-        {
-            if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(_outgoingBuffer.ActiveLength)}={_outgoingBuffer.ActiveLength}");
-
-            if (_outgoingBuffer.ActiveLength > 0)
-            {
-                try
-                {
-                    await _stream.WriteAsync(_outgoingBuffer.ActiveMemory).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    Abort(e);
-                }
-
-                _lastPendingWriterShouldFlush = false;
-                _outgoingBuffer.Discard(_outgoingBuffer.ActiveLength);
             }
         }
 
@@ -1110,9 +1089,6 @@ namespace System.Net.Http
             return (lastStreamId, errorCode);
         }
 
-        internal Task FlushAsync(CancellationToken cancellationToken) =>
-            PerformWriteAsync(0, 0, static (_, __) => true, cancellationToken);
-
         private abstract class WriteQueueEntry : TaskCompletionSource
         {
             private readonly CancellationTokenRegistration _cancellationRegistration;
@@ -1137,28 +1113,28 @@ namespace System.Net.Http
                 return !Task.IsCanceled;
             }
 
-            public abstract bool InvokeWriteAction(Memory<byte> writeBuffer);
+            public abstract void InvokeWriteAction(Memory<byte> writeBuffer);
         }
 
         private sealed class WriteQueueEntry<T> : WriteQueueEntry
         {
             private readonly T _state;
-            private readonly Func<T, Memory<byte>, bool> _writeAction;
+            private readonly Action<T, Memory<byte>> _writeAction;
 
-            public WriteQueueEntry(int writeBytes, T state, Func<T, Memory<byte>, bool> writeAction, CancellationToken cancellationToken)
+            public WriteQueueEntry(int writeBytes, T state, Action<T, Memory<byte>> writeAction, CancellationToken cancellationToken)
                 : base(writeBytes, cancellationToken)
             {
                 _state = state;
                 _writeAction = writeAction;
             }
 
-            public override bool InvokeWriteAction(Memory<byte> writeBuffer)
+            public override void InvokeWriteAction(Memory<byte> writeBuffer)
             {
-                return _writeAction(_state, writeBuffer);
+                _writeAction(_state, writeBuffer);
             }
         }
 
-        private Task PerformWriteAsync<T>(int writeBytes, T state, Func<T, Memory<byte>, bool> writeAction, CancellationToken cancellationToken = default)
+        private Task PerformWriteAsync<T>(int writeBytes, T state, Action<T, Memory<byte>> writeAction, CancellationToken cancellationToken = default)
         {
             WriteQueueEntry writeEntry = new WriteQueueEntry<T>(writeBytes, state, writeAction, cancellationToken);
 
@@ -1185,6 +1161,8 @@ namespace System.Net.Http
             {
                 while (await _writeChannel.Reader.WaitToReadAsync().ConfigureAwait(false))
                 {
+                    _outgoingBuffer.EnsureAvailableSpace(UnflushedOutgoingBufferSize);
+
                     while (_writeChannel.Reader.TryRead(out WriteQueueEntry? writeEntry))
                     {
                         if (_abortException is not null)
@@ -1198,16 +1176,21 @@ namespace System.Net.Http
                         {
                             int writeBytes = writeEntry.WriteBytes;
 
-                            // If the buffer has already grown to 32k, does not have room for the next request,
+                            // If the buffer does not have room for the next request,
                             // and is non-empty, flush the current contents to the wire.
-                            int totalBufferLength = _outgoingBuffer.Capacity;
-                            if (totalBufferLength >= UnflushedOutgoingBufferSize)
+                            if (_outgoingBuffer.AvailableLength < writeBytes && _outgoingBuffer.ActiveLength > 0)
                             {
-                                int activeBufferLength = _outgoingBuffer.ActiveLength;
-                                if (writeBytes >= totalBufferLength - activeBufferLength)
+                                if (NetEventSource.Log.IsEnabled()) Trace($"Flushing {_outgoingBuffer.ActiveLength} bytes");
+                                try
                                 {
-                                    await FlushOutgoingBytesAsync().ConfigureAwait(false);
+                                    await _stream.WriteAsync(_outgoingBuffer.ActiveMemory).ConfigureAwait(false);
                                 }
+                                catch (Exception e)
+                                {
+                                    Abort(e);
+                                }
+
+                                _outgoingBuffer.Discard(_outgoingBuffer.ActiveLength);
                             }
 
                             // We are ready to process the write, so disable write cancellation now.
@@ -1220,12 +1203,11 @@ namespace System.Net.Http
                                     if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(writeBytes)}={writeBytes}");
 
                                     // Invoke the callback with the supplied state and the target write buffer.
-                                    bool flush = writeEntry.InvokeWriteAction(_outgoingBuffer.AvailableMemorySliced(writeBytes));
+                                    writeEntry.InvokeWriteAction(_outgoingBuffer.AvailableMemorySliced(writeBytes));
 
                                     writeEntry.SetResult();
 
                                     _outgoingBuffer.Commit(writeBytes);
-                                    _lastPendingWriterShouldFlush |= flush;
                                 }
                                 catch (Exception e)
                                 {
@@ -1235,17 +1217,21 @@ namespace System.Net.Http
                         }
                     }
 
-                    // Nothing left in the queue to process.
-                    // Flush the write buffer if we need to.
-                    if (_lastPendingWriterShouldFlush)
+                    // Nothing left in the queue to process. Flush the write buffer.
+                    if (_outgoingBuffer.ActiveLength > 0)
                     {
-                        await FlushOutgoingBytesAsync().ConfigureAwait(false);
+                        if (NetEventSource.Log.IsEnabled()) Trace($"Flushing {_outgoingBuffer.ActiveLength} bytes");
+                        try
+                        {
+                            await _stream.WriteAsync(_outgoingBuffer.ActiveMemory).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            Abort(e);
+                        }
                     }
 
-                    if (_outgoingBuffer.ActiveLength == 0)
-                    {
-                        _outgoingBuffer.ClearAndReturnBuffer();
-                    }
+                    _outgoingBuffer.ClearAndReturnBuffer();
                 }
             }
             catch (Exception e)
@@ -1266,8 +1252,6 @@ namespace System.Net.Http
                 if (NetEventSource.Log.IsEnabled()) thisRef.Trace("Started writing.");
 
                 FrameHeader.WriteTo(writeBuffer.Span, 0, FrameType.Settings, FrameFlags.Ack, streamId: 0);
-
-                return true;
             });
 
         /// <param name="pingContent">The 8-byte ping content to send, read as a big-endian integer.</param>
@@ -1282,8 +1266,6 @@ namespace System.Net.Http
                 Span<byte> span = writeBuffer.Span;
                 FrameHeader.WriteTo(span, FrameHeader.PingLength, FrameType.Ping, state.isAck ? FrameFlags.Ack : FrameFlags.None, streamId: 0);
                 BinaryPrimitives.WriteInt64BigEndian(span.Slice(FrameHeader.Size), state.pingContent);
-
-                return true;
             });
 
         private Task SendRstStreamAsync(int streamId, Http2ProtocolErrorCode errorCode) =>
@@ -1294,8 +1276,6 @@ namespace System.Net.Http
                 Span<byte> span = writeBuffer.Span;
                 FrameHeader.WriteTo(span, FrameHeader.RstStreamLength, FrameType.RstStream, FrameFlags.None, s.streamId);
                 BinaryPrimitives.WriteInt32BigEndian(span.Slice(FrameHeader.Size), (int)s.errorCode);
-
-                return true;
             });
 
 
@@ -1616,7 +1596,7 @@ namespace System.Net.Http
             }
         }
 
-        private async ValueTask<Http2Stream> SendHeadersAsync(HttpRequestMessage request, CancellationToken cancellationToken, bool mustFlush)
+        private async ValueTask<Http2Stream> SendHeadersAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             ArrayBuffer headerBuffer = default;
             try
@@ -1642,7 +1622,7 @@ namespace System.Net.Http
                 // Start the write.  This serializes access to write to the connection, and ensures that HEADERS
                 // and CONTINUATION frames stay together, as they must do. We use the lock as well to ensure new
                 // streams are created and started in order.
-                await PerformWriteAsync(totalSize, (thisRef: this, http2Stream, headerBytes, endStream: (request.Content == null && !request.IsExtendedConnectRequest), mustFlush), static (s, writeBuffer) =>
+                await PerformWriteAsync(totalSize, (thisRef: this, http2Stream, headerBytes, endStream: (request.Content == null && !request.IsExtendedConnectRequest)), static (s, writeBuffer) =>
                 {
                     s.thisRef.AddStream(s.http2Stream);
 
@@ -1675,8 +1655,6 @@ namespace System.Net.Http
                     }
 
                     Debug.Assert(span.Length == 0);
-
-                    return s.mustFlush || s.endStream;
                 }, cancellationToken).ConfigureAwait(false);
 
                 if (HttpTelemetry.Log.IsEnabled()) HttpTelemetry.Log.RequestHeadersStop();
@@ -1694,7 +1672,7 @@ namespace System.Net.Http
             }
         }
 
-        private async Task SendStreamDataAsync(int streamId, ReadOnlyMemory<byte> buffer, bool finalFlush, CancellationToken cancellationToken)
+        private async Task SendStreamDataAsync(int streamId, ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
             ReadOnlyMemory<byte> remaining = buffer;
 
@@ -1707,29 +1685,15 @@ namespace System.Net.Http
                 ReadOnlyMemory<byte> current;
                 (current, remaining) = SplitBuffer(remaining, frameSize);
 
-                bool flush = false;
-                if (finalFlush && remaining.Length == 0)
-                {
-                    flush = true;
-                }
-
-                // Force a flush if we are out of credit, because we don't know that we will be sending more data any time soon
-                if (!_connectionWindow.IsCreditAvailable)
-                {
-                    flush = true;
-                }
-
                 try
                 {
-                    await PerformWriteAsync(FrameHeader.Size + current.Length, (thisRef: this, streamId, current, flush), static (s, writeBuffer) =>
+                    await PerformWriteAsync(FrameHeader.Size + current.Length, (thisRef: this, streamId, current), static (s, writeBuffer) =>
                     {
                         // Invoked while holding the lock:
                         if (NetEventSource.Log.IsEnabled()) s.thisRef.Trace(s.streamId, $"Started writing. {nameof(writeBuffer.Length)}={writeBuffer.Length}");
 
                         FrameHeader.WriteTo(writeBuffer.Span, s.current.Length, FrameType.Data, FrameFlags.None, s.streamId);
                         s.current.CopyTo(writeBuffer.Slice(FrameHeader.Size));
-
-                        return s.flush;
                     }, cancellationToken).ConfigureAwait(false);
                 }
                 catch
@@ -1747,8 +1711,6 @@ namespace System.Net.Http
                 if (NetEventSource.Log.IsEnabled()) s.thisRef.Trace(s.streamId, "Started writing.");
 
                 FrameHeader.WriteTo(writeBuffer.Span, 0, FrameType.Data, FrameFlags.EndStream, s.streamId);
-
-                return true; // finished sending request body, so flush soon (but ok to wait for pending packets)
             });
 
         private Task SendWindowUpdateAsync(int streamId, int amount)
@@ -1762,8 +1724,6 @@ namespace System.Net.Http
                 Span<byte> span = writeBuffer.Span;
                 FrameHeader.WriteTo(span, FrameHeader.WindowUpdateLength, FrameType.WindowUpdate, FrameFlags.None, s.streamId);
                 BinaryPrimitives.WriteInt32BigEndian(span.Slice(FrameHeader.Size), s.amount);
-
-                return true;
             });
         }
 
@@ -1996,8 +1956,7 @@ namespace System.Net.Http
             try
             {
                 // Send request headers
-                bool shouldExpectContinue = (request.Content != null && request.HasHeaders && request.Headers.ExpectContinue == true);
-                Http2Stream http2Stream = await SendHeadersAsync(request, cancellationToken, mustFlush: shouldExpectContinue || request.IsExtendedConnectRequest).ConfigureAwait(false);
+                Http2Stream http2Stream = await SendHeadersAsync(request, cancellationToken).ConfigureAwait(false);
 
                 bool duplex = request.Content != null && request.Content.AllowDuplex;
 

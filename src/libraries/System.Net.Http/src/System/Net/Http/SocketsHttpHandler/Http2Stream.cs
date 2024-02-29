@@ -1234,19 +1234,12 @@ namespace System.Net.Http
                     while (buffer.Length > 0)
                     {
                         int sendSize = -1;
-                        bool flush = false;
                         lock (_creditSyncObject)
                         {
                             if (_availableCredit > 0)
                             {
                                 sendSize = Math.Min(buffer.Length, _availableCredit);
                                 _availableCredit -= sendSize;
-
-                                // Force a flush if we are out of credit, because we don't know that we will be sending more data any time soon
-                                if (_availableCredit == 0)
-                                {
-                                    flush = true;
-                                }
                             }
                             else
                             {
@@ -1267,15 +1260,6 @@ namespace System.Net.Http
                             // Logically this is part of the else block above, but we can't await while holding the lock.
                             Debug.Assert(_creditWaiter != null);
                             sendSize = await _creditWaiter.AsValueTask().ConfigureAwait(false);
-
-                            lock (_creditSyncObject)
-                            {
-                                // Force a flush if we are out of credit, because we don't know that we will be sending more data any time soon
-                                if (_availableCredit == 0)
-                                {
-                                    flush = true;
-                                }
-                            }
                         }
 
                         Debug.Assert(sendSize > 0);
@@ -1283,7 +1267,7 @@ namespace System.Net.Http
                         ReadOnlyMemory<byte> current;
                         (current, buffer) = SplitBuffer(buffer, sendSize);
 
-                        await _connection.SendStreamDataAsync(StreamId, current, flush, _requestBodyCancellationSource.Token).ConfigureAwait(false);
+                        await _connection.SendStreamDataAsync(StreamId, current, _requestBodyCancellationSource.Token).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException e) when (e.CancellationToken == _requestBodyCancellationSource.Token)
@@ -1573,7 +1557,6 @@ namespace System.Net.Http
 
                 public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
                 {
-
                     Http2Stream? http2Stream = _http2Stream;
 
                     if (http2Stream == null)
@@ -1591,17 +1574,8 @@ namespace System.Net.Http
                         return Task.FromCanceled(cancellationToken);
                     }
 
-                    Http2Stream? http2Stream = _http2Stream;
-
-                    if (http2Stream == null)
-                    {
-                        return Task.CompletedTask;
-                    }
-
-                    // In order to flush this stream's previous writes, we need to flush the connection. We
-                    // really only need to do any work here if the connection's buffer has any pending writes
-                    // from this stream, but we currently lack a good/efficient/safe way of doing that.
-                    return http2Stream._connection.FlushAsync(cancellationToken);
+                    // Http2Connection is already proactively flushing its write buffer.
+                    return Task.CompletedTask;
                 }
             }
         }
