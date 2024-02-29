@@ -51,7 +51,6 @@ namespace System.Net.Http
 
         private uint _maxConcurrentStreams;
         private uint _streamsInUse;
-        private TaskCompletionSource<bool>? _availableStreamsWaiter;
 
         private readonly Channel<WriteQueueEntry> _writeChannel;
         private bool _lastPendingWriterShouldFlush;
@@ -128,6 +127,23 @@ namespace System.Net.Http
         private long _nextPingRequestTimestamp;
         private long _keepAlivePingTimeoutTimestamp;
         private volatile KeepAliveState _keepAliveState;
+
+        private bool _invalidatedFromPool;
+
+        public bool TryInvalidateFromPool()
+        {
+            lock (SyncObject)
+            {
+                if (_invalidatedFromPool)
+                {
+                    return false;
+                }
+
+                _invalidatedFromPool = true;
+                Shutdown();
+                return true;
+            }
+        }
 
         public Http2Connection(HttpConnectionPool pool, Stream stream, IPEndPoint? remoteEndPoint)
             : base(pool, remoteEndPoint)
@@ -265,7 +281,6 @@ namespace System.Net.Http
                 _shutdown = true;
 
                 _pool.InvalidateHttp2Connection(this);
-                SignalAvailableStreamsWaiter(false);
 
                 if (_streamsInUse == 0)
                 {
@@ -306,16 +321,9 @@ namespace System.Net.Http
             {
                 if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(_streamsInUse)}={_streamsInUse}");
 
-                Debug.Assert(_availableStreamsWaiter is null || _streamsInUse >= _maxConcurrentStreams);
-
                 _streamsInUse--;
 
                 Debug.Assert(_streamsInUse >= _httpStreams.Count);
-
-                if (_streamsInUse < _maxConcurrentStreams)
-                {
-                    SignalAvailableStreamsWaiter(true);
-                }
 
                 if (_streamsInUse == 0)
                 {
@@ -324,47 +332,18 @@ namespace System.Net.Http
                     if (_shutdown)
                     {
                         FinalTeardown();
+                        return;
                     }
                 }
-            }
-        }
 
-        // Returns true to indicate at least one stream is available
-        // Returns false to indicate that the connection is shutting down and cannot be used anymore
-        public Task<bool> WaitForAvailableStreamsAsync()
-        {
-            lock (SyncObject)
-            {
-                Debug.Assert(_availableStreamsWaiter is null, "As used currently, shouldn't already have a waiter");
-
-                if (_shutdown)
+                if (_streamsInUse + 1 != _maxConcurrentStreams)
                 {
-                    return Task.FromResult(false);
+                    return;
                 }
-
-                if (_streamsInUse < _maxConcurrentStreams)
-                {
-                    return Task.FromResult(true);
-                }
-
-                // Need to wait for streams to become available.
-                _availableStreamsWaiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                return _availableStreamsWaiter.Task;
             }
-        }
 
-        private void SignalAvailableStreamsWaiter(bool result)
-        {
-            if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(result)}={result}, {nameof(_availableStreamsWaiter)}?={_availableStreamsWaiter is not null}");
-
-            Debug.Assert(Monitor.IsEntered(SyncObject));
-
-            if (_availableStreamsWaiter is not null)
-            {
-                Debug.Assert(_shutdown != result);
-                _availableStreamsWaiter.SetResult(result);
-                _availableStreamsWaiter = null;
-            }
+            // We were just at _maxConcurrentStreams. We may have room for more requests now.
+            _pool.ReturnExistingHttp2Connection(this);
         }
 
         private async Task FlushOutgoingBytesAsync()
@@ -907,16 +886,19 @@ namespace System.Net.Http
         {
             lock (SyncObject)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(newValue)}={newValue}, {nameof(_streamsInUse)}={_streamsInUse}, {nameof(_availableStreamsWaiter)}?={_availableStreamsWaiter is not null}");
+                if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(newValue)}={newValue}, {nameof(_streamsInUse)}={_streamsInUse}");
 
-                Debug.Assert(_availableStreamsWaiter is null || _streamsInUse >= _maxConcurrentStreams);
+                bool shouldReturnToQueue = _streamsInUse == _maxConcurrentStreams && newValue > _maxConcurrentStreams;
 
                 _maxConcurrentStreams = newValue;
-                if (_streamsInUse < _maxConcurrentStreams)
+
+                if (!shouldReturnToQueue)
                 {
-                    SignalAvailableStreamsWaiter(true);
+                    return;
                 }
             }
+
+            _pool.ReturnExistingHttp2Connection(this);
         }
 
         private void ChangeInitialWindowSize(int newSize)
@@ -2151,7 +2133,7 @@ namespace System.Net.Http
         internal void Trace(int streamId, string message, [CallerMemberName] string? memberName = null) =>
             NetEventSource.Log.HandlerMessage(
                 _pool?.GetHashCode() ?? 0,    // pool ID
-                GetHashCode(),                // connection ID
+                (int)Id,                      // connection ID
                 streamId,                     // stream ID
                 memberName,                   // method name
                 message);                     // message
