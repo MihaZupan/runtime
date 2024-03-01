@@ -919,7 +919,6 @@ namespace System.Net.Http
                         {
                             _requestBodyAbandoned = true;
                             requestBodyCancellationSource = _requestBodyCancellationSource;
-                            Debug.Assert(requestBodyCancellationSource != null);
                         }
                     }
                     else

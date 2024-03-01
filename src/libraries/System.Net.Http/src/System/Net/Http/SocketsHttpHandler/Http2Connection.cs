@@ -28,9 +28,10 @@ namespace System.Net.Http
 
                 Exception exception =
                     thisRef.Stream.ReplaceExceptionOnRequestBodyCancellationIfNeeded() ??
-                    CancellationHelper.CreateOperationCanceledException(innerException: null, cancellationToken);
+                    ExceptionDispatchInfo.SetCurrentStackTrace(
+                        CancellationHelper.CreateOperationCanceledException(innerException: null, cancellationToken));
 
-                thisRef._waitSource.SetException(ExceptionDispatchInfo.SetCurrentStackTrace(exception));
+                thisRef._waitSource.SetException(exception);
             };
 
             private static readonly Action<object?> s_cancelLinkedCtsCallback = static state =>
@@ -141,7 +142,6 @@ namespace System.Net.Http
                         if (_streamWindow > 0)
                         {
                             windowAvailable = Math.Min(_streamWindow, data.Length);
-                            _streamWindow -= windowAvailable;
                         }
                         else
                         {
@@ -387,21 +387,27 @@ namespace System.Net.Http
                         // We rent a larger buffer to avoid resizing too often for many small writes.
                         _outgoingBuffer.EnsureAvailableSpace(RentedOutgoingBufferSize);
 
-                        while (_channel.Reader.TryRead(out Http2StreamWriteAwaitable? stream) ||
-                            // If we have any connection window left, we should check for any pending writes.
-                            (_connectionWindow != 0 && _waitingForMoreConnectionWindow.TryDequeue(out stream)))
+                        while (true)
                         {
-                            if (stream is null)
+                            if (_channel.Reader.TryRead(out Http2StreamWriteAwaitable? stream))
                             {
-                                // A connection window update was received.
-                                // The next loop iteration will dequeue a stream waiting on connection window, if there is one.
-                                continue;
-                            }
+                                if (stream is null)
+                                {
+                                    // A connection window update was received.
+                                    // The next loop iteration will dequeue a stream waiting on connection window, if there is one.
+                                    continue;
+                                }
 
-                            if (ReferenceEquals(stream, s_fireAndForgetSentinel))
+                                if (ReferenceEquals(stream, s_fireAndForgetSentinel))
+                                {
+                                    CopyFireAndForgetFramesToOutgoingBuffer();
+                                    continue;
+                                }
+                            }
+                            // If we have any connection window left, we should check for any pending writes.
+                            else if (_connectionWindow == 0 || !_waitingForMoreConnectionWindow.TryDequeue(out stream))
                             {
-                                CopyFireAndForgetFramesToOutgoingBuffer();
-                                continue;
+                                break;
                             }
 
                             // Flush the buffer if we've accumulated enough data.
@@ -614,7 +620,7 @@ namespace System.Net.Http
                 {
                     // This is a FlushAsync call.
                     Debug.Assert(stream.ShouldFlushAfterData);
-                    _shouldFlush = true;
+                    _shouldFlush |= _outgoingBuffer.ActiveLength != 0;
                     stream.SetResult();
                     return;
                 }
@@ -676,7 +682,7 @@ namespace System.Net.Http
 
                 // There's still more data to send, but we've exhausted the connection window.
                 // We'll need to wait for a window update before we can send more.
-                _shouldFlush = true;
+                _shouldFlush |= _outgoingBuffer.ActiveLength > 0;
 
                 // Until then the stream should still observe cancellation attempts.
                 if (!stream.TryReRegisterForCancellation())
