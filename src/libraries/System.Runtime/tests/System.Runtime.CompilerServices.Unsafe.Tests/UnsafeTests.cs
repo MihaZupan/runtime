@@ -1166,6 +1166,10 @@ namespace System.Runtime.CompilerServices
             Assert.Throws<NotSupportedException>(() => Unsafe.BitCast<int, long>(5));
             Assert.Throws<NotSupportedException>(() => Unsafe.BitCast<long, int>(5));
 
+            // Conversion from a class should fail
+
+            Assert.Throws<NotSupportedException>(() => Unsafe.BitCast<string, long>(string.Empty));
+
             // Conversion between floating-point and same sized integral should succeed
 
             Assert.Equal(0x8000_0000u, Unsafe.BitCast<float, uint>(-0.0f));

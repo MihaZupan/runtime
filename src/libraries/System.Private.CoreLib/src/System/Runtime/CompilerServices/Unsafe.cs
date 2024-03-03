@@ -241,15 +241,15 @@ namespace System.Runtime.CompilerServices
         /// <summary>
         /// Reinterprets the given value of type <typeparamref name="TFrom" /> as a value of type <typeparamref name="TTo" />.
         /// </summary>
-        /// <exception cref="NotSupportedException">The size of <typeparamref name="TFrom" /> and <typeparamref name="TTo" /> are not the same.</exception>
+        /// <exception cref="NotSupportedException">The sizes of <typeparamref name="TFrom" /> and <typeparamref name="TTo" /> are not the same
+        /// or <typeparamref name="TFrom"/> is not a struct.</exception>
         [Intrinsic]
         [NonVersionable]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TTo BitCast<TFrom, TTo>(TFrom source)
-            where TFrom : struct
             where TTo : struct
         {
-            if (sizeof(TFrom) != sizeof(TTo))
+            if (sizeof(TFrom) != sizeof(TTo) || !typeof(TFrom).IsValueType)
             {
                 ThrowHelper.ThrowNotSupportedException();
             }

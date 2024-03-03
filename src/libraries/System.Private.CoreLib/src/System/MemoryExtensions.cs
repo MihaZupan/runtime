@@ -873,16 +873,16 @@ namespace System
                 {
                     return SpanHelpers.IndexOfAnyExceptValueType(
                         ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, byte>(ref value0),
-                        Unsafe.As<T, byte>(ref value1),
+                        Unsafe.BitCast<T, byte>(value0),
+                        Unsafe.BitCast<T, byte>(value1),
                         span.Length);
                 }
                 else if (sizeof(T) == sizeof(short))
                 {
                     return SpanHelpers.IndexOfAnyExceptValueType(
                         ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, short>(ref value0),
-                        Unsafe.As<T, short>(ref value1),
+                        Unsafe.BitCast<T, short>(value0),
+                        Unsafe.BitCast<T, short>(value1),
                         span.Length);
                 }
             }
@@ -1844,16 +1844,16 @@ namespace System
                 {
                     return SpanHelpers.IndexOfAnyValueType(
                         ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, byte>(ref value0),
-                        Unsafe.As<T, byte>(ref value1),
+                        Unsafe.BitCast<T, byte>(value0),
+                        Unsafe.BitCast<T, byte>(value1),
                         span.Length);
                 }
                 else if (sizeof(T) == sizeof(short))
                 {
                     return SpanHelpers.IndexOfAnyValueType(
                         ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, short>(ref value0),
-                        Unsafe.As<T, short>(ref value1),
+                        Unsafe.BitCast<T, short>(value0),
+                        Unsafe.BitCast<T, short>(value1),
                         span.Length);
                 }
             }
@@ -1938,16 +1938,16 @@ namespace System
                 {
                     return SpanHelpers.IndexOfAnyValueType(
                         ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, byte>(ref value0),
-                        Unsafe.As<T, byte>(ref value1),
+                        Unsafe.BitCast<T, byte>(value0),
+                        Unsafe.BitCast<T, byte>(value1),
                         span.Length);
                 }
                 else if (sizeof(T) == sizeof(short))
                 {
                     return SpanHelpers.IndexOfAnyValueType(
                         ref Unsafe.As<T, short>(ref MemoryMarshal.GetReference(span)),
-                        Unsafe.As<T, short>(ref value0),
-                        Unsafe.As<T, short>(ref value1),
+                        Unsafe.BitCast<T, short>(value0),
+                        Unsafe.BitCast<T, short>(value1),
                         span.Length);
                 }
             }

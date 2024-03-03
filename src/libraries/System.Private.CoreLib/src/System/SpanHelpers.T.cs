@@ -1672,18 +1672,27 @@ namespace System
         {
             if (PackedSpanHelpers.PackedIndexOfIsSupported && typeof(TValue) == typeof(short) && PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1))
             {
-                if ((*(char*)&value0 ^ *(char*)&value1) == 0x20)
-                {
-                    char lowerCase = (char)Math.Max(*(char*)&value0, *(char*)&value1);
+                char char0 = Unsafe.BitCast<TValue, char>(value0);
+                char char1 = Unsafe.BitCast<TValue, char>(value1);
 
-                    return typeof(TNegator) == typeof(DontNegate<short>)
-                        ? PackedSpanHelpers.IndexOfAnyIgnoreCase(ref Unsafe.As<TValue, char>(ref searchSpace), lowerCase, length)
-                        : PackedSpanHelpers.IndexOfAnyExceptIgnoreCase(ref Unsafe.As<TValue, char>(ref searchSpace), lowerCase, length);
+                if (RuntimeHelpers.IsKnownConstant(value0) && RuntimeHelpers.IsKnownConstant(value1))
+                {
+                    // If the values differ only in the 0x20 bit, we can optimize the search by reducing the number of comparisons.
+                    // This optimization only applies to a small subset of values and the throughput difference is not too significant.
+                    // We avoid introducing per-call overhead for non-constant values by guarding this optimization behind RuntimeHelpers.IsKnownConstant.
+                    if ((char0 ^ char1) == 0x20)
+                    {
+                        char lowerCase = (char)Math.Max(char0, char1);
+
+                        return typeof(TNegator) == typeof(DontNegate<short>)
+                            ? PackedSpanHelpers.IndexOfAnyIgnoreCase(ref Unsafe.As<TValue, char>(ref searchSpace), lowerCase, length)
+                            : PackedSpanHelpers.IndexOfAnyExceptIgnoreCase(ref Unsafe.As<TValue, char>(ref searchSpace), lowerCase, length);
+                    }
                 }
 
                 return typeof(TNegator) == typeof(DontNegate<short>)
-                    ? PackedSpanHelpers.IndexOfAny(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length)
-                    : PackedSpanHelpers.IndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), *(char*)&value0, *(char*)&value1, length);
+                    ? PackedSpanHelpers.IndexOfAny(ref Unsafe.As<TValue, char>(ref searchSpace), char0, char1, length)
+                    : PackedSpanHelpers.IndexOfAnyExcept(ref Unsafe.As<TValue, char>(ref searchSpace), char0, char1, length);
             }
 
             return NonPackedIndexOfAnyValueType<TValue, TNegator>(ref searchSpace, value0, value1, length);
