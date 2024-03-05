@@ -12,6 +12,9 @@ namespace System.Net.Http
 {
     internal sealed partial class Http2Connection
     {
+        /// <summary>
+        /// Responsible for serializing HTTP/2 frames to the wire and managing the connection window.
+        /// </summary>
         private sealed class Http2FrameWriter
         {
             // When buffering outgoing writes, we will automatically buffer up to this number of bytes.
@@ -20,30 +23,33 @@ namespace System.Net.Http
             private const int UnflushedOutgoingBufferSize = 32 * 1024;
             private const int RentedOutgoingBufferSize = UnflushedOutgoingBufferSize * 2;
 
-            // Avoid resizing the buffer too much for many small writes.
-            private const int MinFireAndForgetBufferSize = 1024;
-
             private static readonly UnboundedChannelOptions s_channelOptions = new() { SingleReader = true };
-
-            private static readonly Http2StreamWriteAwaitable s_fireAndForgetSentinel = new(null!, null!);
 
             private readonly Http2Connection _parent;
             private ArrayBuffer _outgoingBuffer = new(initialSize: 0, usePool: true);
-            private ArrayBuffer _fireAndForgetBuffer = new(initialSize: 0, usePool: true);
-            private bool _shouldFlush;
-            private uint _flushCounter;
+            private int _shouldFlush;
+            private int _flushCounter;
 
-            // The objects written to this channel are either:
-            // - null, indicating that a connection window update was received.
-            // - s_fireAndForgetSentinel, indicating that there is data available in _fireAndForgetBuffer.
-            // - An Http2StreamWriteAwaitable representing a flush/stream data write/headers.
+            // Fire and forget frames are very small (dozen or so bytes).
+            // This buffer will be regularly cleared and is therefore very likely to stay small.
+            // As it won't have a meaningful impact on the memory footprint of a connection,
+            // we save some cycles by not renting and returning it.
+            // This is currently used for sending WINDOW_UPDATE, PING, RST_STREAM, DATA with EndStream, and SETTINGS ack frames.
+            private ArrayBuffer _fireAndForgetBuffer = new(initialSize: 32, usePool: false);
+
+            // We use null as a sentinel value to wake up the writer loop. It means that either:
+            // - there is data available in _fireAndForgetBuffer,
+            // - a connection window update was received after we were at 0, or
+            // - we should flush the outgoing buffer.
+            // A non-null value is a Http2StreamWriteAwaitable representing a write of stream data or headers.
             private readonly Channel<Http2StreamWriteAwaitable?> _channel = Channel.CreateUnbounded<Http2StreamWriteAwaitable?>(s_channelOptions);
 
             private int _connectionWindow;
+
+            // If we run out of connection window, we'll queue stream data writes here to wait until a new window update is received.
             private readonly Queue<Http2StreamWriteAwaitable> _waitingForMoreConnectionWindow = new();
 
-            private object FireAndForgetLock => _channel;
-            private object WindowUpdateLock => _waitingForMoreConnectionWindow;
+            private object FireAndForgetLock => _waitingForMoreConnectionWindow;
 
             public Http2FrameWriter(Http2Connection parent, int initialConnectionWindowSize)
             {
@@ -69,22 +75,23 @@ namespace System.Net.Http
             {
                 Debug.Assert(amount > 0);
 
-                lock (WindowUpdateLock)
+                int newValue = Interlocked.Add(ref _connectionWindow, amount);
+                if (newValue < 0)
                 {
-                    Debug.Assert(amount <= int.MaxValue - _connectionWindow);
-
-                    _connectionWindow = checked(_connectionWindow + amount);
-
-                    if (_connectionWindow != amount)
-                    {
-                        // We already had some window available, so we don't need to wake up the writer loop.
-                        return;
-                    }
+                    // Server sent a window update that overflowed the current window size.
+                    ThrowProtocolError();
                 }
 
-                // Wake up the writer loop now that we have some connection window available.
-                _channel.Writer.TryWrite(null);
+                if (newValue == amount)
+                {
+                    // The previous window was 0.
+                    // Wake up the writer loop now that we have some connection window available.
+                    WakeUpWriterLoop();
+                }
             }
+
+            private void WakeUpWriterLoop() =>
+                _channel.Writer.TryWrite(null);
 
             private async Task ProcessOutgoingFramesAsync()
             {
@@ -101,19 +108,18 @@ namespace System.Net.Http
                             {
                                 if (stream is null)
                                 {
-                                    // A connection window update was received.
-                                    // The next loop iteration will dequeue a stream waiting on connection window, if there is one.
-                                    continue;
-                                }
-
-                                if (ReferenceEquals(stream, s_fireAndForgetSentinel))
-                                {
+                                    // A null stream is a sentinel value meaning either:
+                                    // - there is data available in _fireAndForgetBuffer,
+                                    // - a connection window update was received after we were at 0, or
+                                    // - we should flush the outgoing buffer.
                                     CopyFireAndForgetFramesToOutgoingBuffer();
+
+                                    // If we now have connection window available, the next loop iterations will process any pending writes.
                                     continue;
                                 }
                             }
                             // If we have any connection window left, we should check for any pending writes.
-                            else if (_connectionWindow == 0 || !_waitingForMoreConnectionWindow.TryDequeue(out stream))
+                            else if (Volatile.Read(ref _connectionWindow) == 0 || !_waitingForMoreConnectionWindow.TryDequeue(out stream))
                             {
                                 break;
                             }
@@ -134,8 +140,8 @@ namespace System.Net.Http
                                     _parent.Abort(ex);
                                 }
 
-                                _shouldFlush = false;
                                 _outgoingBuffer.Discard(_outgoingBuffer.ActiveLength);
+                                _shouldFlush = 0;
                             }
 
                             if (!stream.TryDisableCancellation())
@@ -153,12 +159,9 @@ namespace System.Net.Http
                             }
                         }
 
-                        // Nothing left in the queue to process.
-                        // Flush the buffer if we've accumulated enough data or if we decided we should flush as soon as possible.
-                        if (_shouldFlush || _outgoingBuffer.ActiveLength > UnflushedOutgoingBufferSize)
+                        // Nothing left in the queue to process. Flush the buffer if needed.
+                        if (Volatile.Read(ref _shouldFlush) != 0 && _outgoingBuffer.ActiveLength > 0)
                         {
-                            Debug.Assert(_outgoingBuffer.ActiveLength > 0);
-
                             _flushCounter++;
                             try
                             {
@@ -171,9 +174,10 @@ namespace System.Net.Http
                                 _parent.Abort(ex);
                             }
 
-                            _shouldFlush = false;
                             _outgoingBuffer.Discard(_outgoingBuffer.ActiveLength);
                         }
+
+                        _shouldFlush = 0;
 
                         if (_outgoingBuffer.ActiveLength == 0)
                         {
@@ -228,10 +232,40 @@ namespace System.Net.Http
                 }
             }
 
-            public bool ShouldScheduleFlushAsync(Http2StreamWriteAwaitable stream)
+            public void QueueStreamDataFlushIfNeeded(Http2StreamWriteAwaitable stream)
             {
-                // This could technically give a false negative answer after ~4 billion writes to the network on the same connection, but that seems fine.
-                return _flushCounter == stream.FlushCounterAtLastDataWrite;
+                // Avoid scheduling a flush if one had already been scheduled since the last write on this stream.
+                if (_flushCounter == stream.FlushCounterAtLastDataWrite &&
+                    Interlocked.Exchange(ref _shouldFlush, 1) == 0)
+                {
+                    WakeUpWriterLoop();
+                }
+            }
+
+            private void CopyFireAndForgetFramesToOutgoingBuffer()
+            {
+                lock (FireAndForgetLock)
+                {
+                    if (_fireAndForgetBuffer.ActiveLength == 0)
+                    {
+                        // Nothing to copy.
+                        return;
+                    }
+
+                    if (NetEventSource.Log.IsEnabled()) _parent.Trace($"Copying {_fireAndForgetBuffer.ActiveLength} fire-and-forget bytes");
+
+                    ReadOnlySpan<byte> bytes = _fireAndForgetBuffer.ActiveSpan;
+
+                    _outgoingBuffer.EnsureAvailableSpace(bytes.Length);
+                    bytes.CopyTo(_outgoingBuffer.AvailableSpan);
+                    _outgoingBuffer.Commit(bytes.Length);
+
+                    _fireAndForgetBuffer.Discard(bytes.Length);
+                }
+
+                // All fire and forget frames should be flushed immediately.
+                _shouldFlush = 1;
+                _flushCounter++;
             }
 
             private void WriteHeadersCore(Http2StreamWriteAwaitable stream)
@@ -265,11 +299,11 @@ namespace System.Net.Http
                     if (request.Content is null && !request.IsExtendedConnectRequest)
                     {
                         flags |= FrameFlags.EndStream;
-                        _shouldFlush = true;
+                        _shouldFlush = 1;
                     }
                     else if (stream.Stream.ExpectContinue || request.IsExtendedConnectRequest)
                     {
-                        _shouldFlush = true;
+                        _shouldFlush = 1;
                     }
 
                     FrameHeader.WriteTo(output, current.Length, FrameType.Headers, flags, stream.Stream.StreamId);
@@ -301,12 +335,9 @@ namespace System.Net.Http
                     Debug.Assert(!stream.ShouldFlushAfterData);
                     stream.FlushCounterAtLastDataWrite = _flushCounter;
 
-                    if (_shouldFlush)
-                    {
-                        // A flush is already scheduled and we're making forward progress.
-                        // Lie about the counter to prevent the stream from wasting time trying to schedule another.
-                        stream.FlushCounterAtLastDataWrite--;
-                    }
+                    // We're making forward progress. If a flush is already scheduled, we can pretend we've
+                    // already flushed to prevent the stream from wasting time trying to schedule another flush later.
+                    _flushCounter += _shouldFlush;
 
                     stream.SetResult();
                 }
@@ -324,28 +355,24 @@ namespace System.Net.Http
                     return;
                 }
 
-                if (stream.DataRemaining.IsEmpty)
-                {
-                    // This is a FlushAsync call.
-                    Debug.Assert(stream.ShouldFlushAfterData);
-                    _shouldFlush |= _outgoingBuffer.ActiveLength != 0;
-                    stream.SetResult();
-                    return;
-                }
+                Debug.Assert(!stream.DataRemaining.IsEmpty);
 
+                // The available connection window may only be reduced by a single thread (the current one).
+                // It is okay to read a stale value here, as the real amount is always >= what we read.
                 if (_connectionWindow != 0)
                 {
                     int toWrite = Math.Min(_connectionWindow, stream.DataRemaining.Length);
                     Debug.Assert(toWrite > 0);
 
-                    stream.ConsumeStreamWindow(toWrite);
-
-                    // TODO: Lockless?
-                    lock (WindowUpdateLock)
+                    if (_waitingForMoreConnectionWindow.Count != 0)
                     {
-                        Debug.Assert(toWrite <= _connectionWindow);
-                        _connectionWindow -= toWrite;
+                        // We have streams waiting for more connection window.
+                        // Avoid consuming all of it on a single stream, give others a chance to make progress.
+                        toWrite = Math.Min(toWrite, FrameHeader.MaxPayloadLength);
                     }
+
+                    int newValue = Interlocked.Add(ref _connectionWindow, -toWrite);
+                    Debug.Assert(newValue >= 0);
 
                     ReadOnlySpan<byte> dataLeftToWrite = stream.DataRemaining.Span.Slice(0, toWrite);
                     stream.DataRemaining = stream.DataRemaining.Slice(toWrite);
@@ -355,8 +382,6 @@ namespace System.Net.Http
 
                     _outgoingBuffer.EnsureAvailableSpace(totalSize);
 
-                    // TODO: Do we need a more fair strategy for balancing the connection window between streams?
-                    // Right now we'll write as much as possible on a first-come-first-served basis.
                     do
                     {
                         ReadOnlySpan<byte> chunk = dataLeftToWrite.Slice(0, Math.Min(dataLeftToWrite.Length, FrameHeader.MaxPayloadLength));
@@ -373,15 +398,15 @@ namespace System.Net.Http
                     if (stream.DataRemaining.IsEmpty)
                     {
                         // We were able to send the last of the stream data.
-                        _shouldFlush |= stream.ShouldFlushAfterData;
+                        if (stream.ShouldFlushAfterData)
+                        {
+                            _shouldFlush = 1;
+                        }
                         stream.FlushCounterAtLastDataWrite = _flushCounter;
 
-                        if (_shouldFlush)
-                        {
-                            // A flush is already scheduled and we're making forward progress.
-                            // Lie about the counter to prevent the stream from wasting time trying to schedule another.
-                            stream.FlushCounterAtLastDataWrite--;
-                        }
+                        // We're making forward progress. If a flush is already scheduled, we can pretend we've
+                        // already flushed to prevent the stream from wasting time trying to schedule another flush later.
+                        _flushCounter += _shouldFlush;
 
                         stream.SetResult();
                         return;
@@ -390,7 +415,7 @@ namespace System.Net.Http
 
                 // There's still more data to send, but we've exhausted the connection window.
                 // We'll need to wait for a window update before we can send more.
-                _shouldFlush |= _outgoingBuffer.ActiveLength > 0;
+                _shouldFlush = 1;
 
                 // Until then the stream should still observe cancellation attempts.
                 if (!stream.TryReRegisterForCancellation())
@@ -466,7 +491,7 @@ namespace System.Net.Http
             {
                 lock (FireAndForgetLock)
                 {
-                    _fireAndForgetBuffer.EnsureAvailableSpace(_fireAndForgetBuffer.Capacity == 0 ? MinFireAndForgetBufferSize : frame.Length);
+                    _fireAndForgetBuffer.EnsureAvailableSpace(frame.Length);
                     frame.CopyTo(_fireAndForgetBuffer.AvailableSpan);
                     _fireAndForgetBuffer.Commit(frame.Length);
 
@@ -479,28 +504,7 @@ namespace System.Net.Http
                 }
 
                 // This was the first write to the buffer, so we schedule it to be copied to the outgoing buffer.
-                _channel.Writer.TryWrite(s_fireAndForgetSentinel);
-            }
-
-            private void CopyFireAndForgetFramesToOutgoingBuffer()
-            {
-                lock (FireAndForgetLock)
-                {
-                    Debug.Assert(_fireAndForgetBuffer.ActiveLength > 0);
-
-                    if (NetEventSource.Log.IsEnabled()) _parent.Trace($"Copying {_fireAndForgetBuffer.ActiveLength} fire-and-forget bytes");
-
-                    ReadOnlySpan<byte> bytes = _fireAndForgetBuffer.ActiveSpan;
-
-                    _outgoingBuffer.EnsureAvailableSpace(bytes.Length);
-                    bytes.CopyTo(_outgoingBuffer.AvailableSpan);
-                    _outgoingBuffer.Commit(bytes.Length);
-
-                    _fireAndForgetBuffer.ClearAndReturnBuffer();
-                }
-
-                // All fire and forget frames should be flushed immediately.
-                _shouldFlush = true;
+                WakeUpWriterLoop();
             }
         }
     }

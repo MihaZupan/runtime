@@ -1503,14 +1503,9 @@ namespace System.Net.Http
                         return Task.FromCanceled(cancellationToken);
                     }
 
-                    Http2Stream? http2Stream = _http2Stream;
+                    _http2Stream?._streamWriteAwaitable.QueueStreamDataFlushIfNeeded();
 
-                    if (http2Stream == null)
-                    {
-                        return Task.CompletedTask;
-                    }
-
-                    return http2Stream._streamWriteAwaitable.FlushAsync(cancellationToken);
+                    return Task.CompletedTask;
                 }
             }
         }
