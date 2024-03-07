@@ -1046,7 +1046,34 @@ namespace System.Net.Http.Headers
             throw new InvalidOperationException(SR.Format(SR.net_http_headers_not_allowed_header_name, name));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool TryGetHeaderDescriptor(string name, out HeaderDescriptor descriptor)
+        {
+            if (RuntimeHelpers.IsKnownConstant(name))
+            {
+                if (name == "Content-Length")
+                {
+                    descriptor = KnownHeaders.ContentLength.Descriptor;
+                    return true;
+                }
+
+                if (name == "Connection")
+                {
+                    descriptor = KnownHeaders.Connection.Descriptor;
+                    return true;
+                }
+
+                if (name == "Sec-WebSocket-Key")
+                {
+                    descriptor = KnownHeaders.SecWebSocketKey.Descriptor;
+                    return true;
+                }
+            }
+
+            return TryGetHeaderDescriptorCore(name, out descriptor);
+        }
+
+        internal bool TryGetHeaderDescriptorCore(string name, out HeaderDescriptor descriptor)
         {
             if (string.IsNullOrEmpty(name))
             {

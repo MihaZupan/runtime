@@ -121,7 +121,7 @@ namespace System.Runtime.CompilerServices
         internal static bool IsKnownConstant(Type? t) => false;
 
         [Intrinsic]
-        internal static bool IsKnownConstant(string? t) => false;
+        public static bool IsKnownConstant(string? t) => false;
 
         [Intrinsic]
         internal static bool IsKnownConstant(char t) => false;

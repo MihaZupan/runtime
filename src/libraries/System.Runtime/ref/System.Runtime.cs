@@ -13176,6 +13176,7 @@ namespace System.Runtime.CompilerServices
         public static bool TryEnsureSufficientExecutionStack() { throw null; }
         public delegate void CleanupCode(object? userData, bool exceptionThrown);
         public delegate void TryCode(object? userData);
+        public static bool IsKnownConstant(string? t) { throw null; }
     }
     public sealed partial class RuntimeWrappedException : System.Exception
     {
