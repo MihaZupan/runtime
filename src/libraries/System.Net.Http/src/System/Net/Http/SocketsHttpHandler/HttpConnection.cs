@@ -506,7 +506,6 @@ namespace System.Net.Http
             void TraceInterimResponse(HttpResponseMessage response) => Trace($"Current {response.StatusCode} response is an interim response or not expected, need to read for a final response.");
             void TraceRequestFullySent() => Trace("Request is fully sent.");
             void TraceReceivedResponseMessage(HttpResponseMessage response) => Trace($"Received response: {response}");
-            void TraceErrorSendingRequest(Exception error) => Trace($"Error sending request: {error}");
 
             Debug.Assert(_currentRequest == null, $"Expected null {nameof(_currentRequest)}.");
             Debug.Assert(_readBuffer.ActiveLength == 0, "Unexpected data in read buffer");
@@ -820,61 +819,72 @@ namespace System.Net.Http
                 // Clean up the cancellation registration in case we're still registered.
                 cancellationRegistration.Dispose();
 
-                // Make sure to complete the allowExpect100ToContinue task if it exists.
-                if (allowExpect100ToContinue is not null && !allowExpect100ToContinue.TrySetResult(false))
-                {
-                    // allowExpect100ToContinue was already signaled and we may have started sending the request body.
-                    _canRetry = false;
-                }
-
-                if (_readAheadTask != default)
-                {
-                    Debug.Assert(_readAheadTaskStatus == ReadAheadTask_CompletionReserved);
-
-                    LogExceptions(_readAheadTask.AsTask());
-                }
-
-                if (NetEventSource.Log.IsEnabled()) TraceErrorSendingRequest(error);
-
-                // In the rare case where Expect: 100-continue was used and then processing
-                // of the response headers encountered an error such that we weren't able to
-                // wait for the sending to complete, it's possible the sending also encountered
-                // an exception or potentially is still going and will encounter an exception
-                // (we're about to Dispose for the connection). In such cases, we don't want any
-                // exception in that sending task to become unobserved and raise alarm bells, so we
-                // hook up a continuation that will log it.
-                if (sendRequestContentTask != null && !sendRequestContentTask.IsCompletedSuccessfully)
-                {
-                    // In case the connection is disposed, it's most probable that
-                    // expect100Continue timer expired and request content sending failed.
-                    // We're awaiting the task to propagate the exception in this case.
-                    if (Volatile.Read(ref _disposed) == Status_Disposed)
-                    {
-                        try
-                        {
-                            await sendRequestContentTask.ConfigureAwait(false);
-                        }
-                        // Map the exception the same way as we normally do.
-                        catch (Exception ex) when (MapSendException(ex, cancellationToken, out Exception mappedEx))
-                        {
-                            throw mappedEx;
-                        }
-                    }
-                    LogExceptions(sendRequestContentTask);
-                }
-
-                // Now clean up the connection.
-                Dispose();
-
-                // At this point, we're going to throw an exception; we just need to
-                // determine which exception to throw.
-                if (MapSendException(error, cancellationToken, out Exception mappedException))
-                {
-                    throw mappedException;
-                }
-                // Otherwise, just allow the original exception to propagate.
-                throw;
+                await HandleSendAsyncException(error, allowExpect100ToContinue, sendRequestContentTask, cancellationToken).ConfigureAwait(false);
+                Debug.Fail("Unreachable");
+                return null!;
             }
+        }
+
+        private async Task HandleSendAsyncException(Exception error, TaskCompletionSource<bool>? allowExpect100ToContinue, Task? sendRequestContentTask, CancellationToken cancellationToken)
+        {
+            void TraceErrorSendingRequest(Exception error) => Trace($"Error sending request: {error}");
+
+            // Make sure to complete the allowExpect100ToContinue task if it exists.
+            if (allowExpect100ToContinue is not null && !allowExpect100ToContinue.TrySetResult(false))
+            {
+                // allowExpect100ToContinue was already signaled and we may have started sending the request body.
+                _canRetry = false;
+            }
+
+            if (_readAheadTask != default)
+            {
+                Debug.Assert(_readAheadTaskStatus == ReadAheadTask_CompletionReserved);
+
+                LogExceptions(_readAheadTask.AsTask());
+            }
+
+            if (NetEventSource.Log.IsEnabled()) TraceErrorSendingRequest(error);
+
+            // In the rare case where Expect: 100-continue was used and then processing
+            // of the response headers encountered an error such that we weren't able to
+            // wait for the sending to complete, it's possible the sending also encountered
+            // an exception or potentially is still going and will encounter an exception
+            // (we're about to Dispose for the connection). In such cases, we don't want any
+            // exception in that sending task to become unobserved and raise alarm bells, so we
+            // hook up a continuation that will log it.
+            if (sendRequestContentTask != null && !sendRequestContentTask.IsCompletedSuccessfully)
+            {
+                // In case the connection is disposed, it's most probable that
+                // expect100Continue timer expired and request content sending failed.
+                // We're awaiting the task to propagate the exception in this case.
+                if (Volatile.Read(ref _disposed) == Status_Disposed)
+                {
+                    try
+                    {
+                        await sendRequestContentTask.ConfigureAwait(false);
+                    }
+                    // Map the exception the same way as we normally do.
+                    catch (Exception ex) when (MapSendException(ex, cancellationToken, out Exception mappedEx))
+                    {
+                        throw mappedEx;
+                    }
+                }
+
+                LogExceptions(sendRequestContentTask);
+            }
+
+            // Now clean up the connection.
+            Dispose();
+
+            // At this point, we're going to throw an exception; we just need to
+            // determine which exception to throw.
+            if (MapSendException(error, cancellationToken, out Exception mappedException))
+            {
+                throw mappedException;
+            }
+
+            // Otherwise, just allow the original exception to propagate.
+            throw error;
         }
 
         private bool MapSendException(Exception exception, CancellationToken cancellationToken, out Exception mappedException)
