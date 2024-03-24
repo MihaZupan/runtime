@@ -24,7 +24,7 @@ namespace System.Net
                         try
                         {
                             int errorCode = secModule.EnumerateSecurityPackages(out moduleCount, out arrayBaseHandle);
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"arrayBase: {arrayBaseHandle}");
+                            //NetEventSource.Info(null, $"arrayBase: {arrayBaseHandle}");
                             if (errorCode != 0)
                             {
                                 throw new Win32Exception(errorCode);
@@ -36,7 +36,7 @@ namespace System.Net
                             for (i = 0; i < moduleCount; i++)
                             {
                                 securityPackages[i] = new SecurityPackageInfoClass(arrayBaseHandle, i);
-                                if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.EnumerateSecurityPackages(securityPackages[i].Name);
+                                //NetEventSource.Log.EnumerateSecurityPackages(securityPackages[i].Name);
                             }
 
                             secModule.SecurityPackages = securityPackages;
@@ -66,7 +66,7 @@ namespace System.Net
                 }
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.SspiPackageNotFound(packageName);
+            //NetEventSource.Log.SspiPackageNotFound(packageName);
 
             if (throwIfMissing)
             {
@@ -78,14 +78,14 @@ namespace System.Net
 
         public static SafeFreeCredentials AcquireDefaultCredential(ISSPIInterface secModule, string package, Interop.SspiCli.CredentialUse intent)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.AcquireDefaultCredential(package, intent);
+            //NetEventSource.Log.AcquireDefaultCredential(package, intent);
 
-            SafeFreeCredentials? outCredential = null;
+            SafeFreeCredentials? outCredential;
             int errorCode = secModule.AcquireDefaultCredential(package, intent, out outCredential);
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireDefaultCredential), $"0x{errorCode:X}"));
+                //NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireDefaultCredential), $"0x{errorCode:X}"));
                 throw new Win32Exception(errorCode);
             }
             return outCredential;
@@ -93,14 +93,14 @@ namespace System.Net
 
         public static SafeFreeCredentials AcquireCredentialsHandle(ISSPIInterface secModule, string package, Interop.SspiCli.CredentialUse intent, ref SafeSspiAuthDataHandle authdata)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.AcquireCredentialsHandle(package, intent, authdata);
+            //NetEventSource.Log.AcquireCredentialsHandle(package, intent, authdata);
 
-            SafeFreeCredentials? credentialsHandle = null;
+            SafeFreeCredentials? credentialsHandle;
             int errorCode = secModule.AcquireCredentialsHandle(package, intent, ref authdata, out credentialsHandle);
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
+                //NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
                 throw new Win32Exception(errorCode);
             }
 
@@ -117,7 +117,7 @@ namespace System.Net
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
+                //NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
                 throw new Win32Exception(errorCode);
             }
 
@@ -134,7 +134,7 @@ namespace System.Net
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
+                //NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(AcquireCredentialsHandle), $"0x{errorCode:X}"));
                 throw new Win32Exception(errorCode);
             }
 
@@ -143,22 +143,22 @@ namespace System.Net
 
         internal static int InitializeSecurityContext(ISSPIInterface secModule, ref SafeFreeCredentials? credential, ref SafeDeleteSslContext? context, string? targetName, Interop.SspiCli.ContextFlags inFlags, Interop.SspiCli.Endianness datarep, InputSecurityBuffers inputBuffers, ref ProtocolToken outToken, ref Interop.SspiCli.ContextFlags outFlags)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.InitializeSecurityContext(credential, context, targetName, inFlags);
+            //NetEventSource.Log.InitializeSecurityContext(credential, context, targetName, inFlags);
 
             int errorCode = secModule.InitializeSecurityContext(ref credential, ref context, targetName, inFlags, datarep, inputBuffers, ref outToken, ref outFlags);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.SecurityContextInputBuffers(nameof(InitializeSecurityContext), inputBuffers.Count, outToken.Size, (Interop.SECURITY_STATUS)errorCode);
+            //NetEventSource.Log.SecurityContextInputBuffers(nameof(InitializeSecurityContext), inputBuffers.Count, outToken.Size, (Interop.SECURITY_STATUS)errorCode);
 
             return errorCode;
         }
 
         internal static int AcceptSecurityContext(ISSPIInterface secModule, SafeFreeCredentials? credential, ref SafeDeleteSslContext? context, Interop.SspiCli.ContextFlags inFlags, Interop.SspiCli.Endianness datarep, InputSecurityBuffers inputBuffers, ref ProtocolToken outToken, ref Interop.SspiCli.ContextFlags outFlags)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.AcceptSecurityContext(credential, context, inFlags);
+            //NetEventSource.Log.AcceptSecurityContext(credential, context, inFlags);
 
             int errorCode = secModule.AcceptSecurityContext(credential, ref context, inputBuffers, inFlags, datarep, ref outToken, ref outFlags);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.SecurityContextInputBuffers(nameof(AcceptSecurityContext), inputBuffers.Count, outToken.Size, (Interop.SECURITY_STATUS)errorCode);
+            //NetEventSource.Log.SecurityContextInputBuffers(nameof(AcceptSecurityContext), inputBuffers.Count, outToken.Size, (Interop.SECURITY_STATUS)errorCode);
 
             return errorCode;
         }
@@ -167,7 +167,7 @@ namespace System.Net
         {
             int errorCode = secModule.CompleteAuthToken(ref context, in inputBuffer);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.OperationReturnedSomething(nameof(CompleteAuthToken), (Interop.SECURITY_STATUS)errorCode);
+            //NetEventSource.Log.OperationReturnedSomething(nameof(CompleteAuthToken), (Interop.SECURITY_STATUS)errorCode);
 
             return errorCode;
         }
@@ -176,7 +176,7 @@ namespace System.Net
         {
             int errorCode = secModule.ApplyControlToken(ref context, in inputBuffer);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.OperationReturnedSomething(nameof(ApplyControlToken), (Interop.SECURITY_STATUS)errorCode);
+            //NetEventSource.Log.OperationReturnedSomething(nameof(ApplyControlToken), (Interop.SECURITY_STATUS)errorCode);
 
             return errorCode;
         }
@@ -193,7 +193,7 @@ namespace System.Net
             if (errorCode != 0)
             {
                 result.Dispose();
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                 return null;
             }
 
@@ -213,7 +213,7 @@ namespace System.Net
             {
                 if (errorCode != 0)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                    //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                     return false;
                 }
 
@@ -232,7 +232,7 @@ namespace System.Net
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                 return false;
             }
 
@@ -260,12 +260,12 @@ namespace System.Net
             {
                 if (errorCode != 0)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                    //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                     return null;
                 }
 
                 string? result = Marshal.PtrToStringUni(sspiHandle.DangerousGetHandle());
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, result);
+                //NetEventSource.Info(null, result);
                 return result;
             }
         }
@@ -295,7 +295,7 @@ namespace System.Net
                 }
                 if (!success)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                    //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                 }
                 return success;
             }
@@ -329,7 +329,7 @@ namespace System.Net
 
             if (errorCode != 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
+                //NetEventSource.Error(null, $"ERROR = {ErrorDescription(errorCode)}");
                 return false;
             }
 

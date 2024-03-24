@@ -20,7 +20,7 @@ namespace System.Net
     // Usage:
     // - Operations that may allocate (e.g. boxing a value type, using string interpolation, etc.) or that may have computations
     //   at call sites should guard access like:
-    //       if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Found certificate: {cert}"); // info logging with a formattable string
+    //       //NetEventSource.Info(null, $"Found certificate: {cert}"); // info logging with a formattable string
     // - Operations that have zero allocations / measurable computations at call sites can use a simpler pattern, calling methods like:
     //       NetEventSource.Info(this, "literal string");  // arbitrary message with a literal string
     //   Debug.Asserts inside the logging methods will help to flag some misuse if the DEBUG_NETEVENTSOURCE_MISUSE compilation constant is defined.

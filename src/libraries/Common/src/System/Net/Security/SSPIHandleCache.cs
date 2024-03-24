@@ -29,12 +29,8 @@ namespace System.Net.Security
 
                 Interlocked.Exchange(ref s_cacheSlots[index], newRef)?.Dispose();
             }
-            catch (Exception e)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled() && !ExceptionCheck.IsFatal(e))
-                {
-                    NetEventSource.Error(null, $"Attempted to throw: {e}");
-                }
             }
         }
     }

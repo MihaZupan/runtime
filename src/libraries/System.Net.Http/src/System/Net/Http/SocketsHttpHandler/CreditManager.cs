@@ -22,7 +22,6 @@ namespace System.Net.Http
             Debug.Assert(owner != null);
             Debug.Assert(!string.IsNullOrWhiteSpace(name));
 
-            if (NetEventSource.Log.IsEnabled()) owner.Trace($"{name}. {nameof(initialCredit)}={initialCredit}");
             _owner = owner;
             _name = name;
             _current = initialCredit;
@@ -57,8 +56,6 @@ namespace System.Net.Http
                     return new ValueTask<int>(granted);
                 }
 
-                if (NetEventSource.Log.IsEnabled()) _owner.Trace($"{_name}. requested={amount}, no credit available.");
-
                 // Otherwise, create a new waiter.
                 var waiter = new CreditWaiter(cancellationToken);
                 waiter.Amount = amount;
@@ -87,8 +84,6 @@ namespace System.Net.Http
 
             lock (SyncObject)
             {
-                if (NetEventSource.Log.IsEnabled()) _owner.Trace($"{_name}. {nameof(amount)}={amount}, current={_current}");
-
                 if (_disposed)
                 {
                     return;
@@ -167,7 +162,6 @@ namespace System.Net.Http
                 Debug.Assert(_waitersTail is null, "Shouldn't have waiters when credit is available");
 
                 int granted = Math.Min(amount, _current);
-                if (NetEventSource.Log.IsEnabled()) _owner.Trace($"{_name}. requested={amount}, current={_current}, granted={granted}");
                 _current -= granted;
                 return granted;
             }

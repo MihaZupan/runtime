@@ -856,7 +856,7 @@ namespace System.Net.Sockets
         {
             SetResults(SocketError.Success, bytesTransferred, flags);
 
-            if (NetEventSource.Log.IsEnabled() && bytesTransferred > 0)
+            if (false && bytesTransferred > 0)
             {
                 LogBuffer(bytesTransferred);
             }
@@ -873,15 +873,6 @@ namespace System.Net.Sockets
                     if (socketError == SocketError.Success)
                     {
                         _acceptSocket = _currentSocket.UpdateAcceptSocket(_acceptSocket!, _currentSocket._rightEndPoint!.Create(remoteSocketAddress));
-
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            try
-                            {
-                                NetEventSource.Accepted(_acceptSocket, _acceptSocket.RemoteEndPoint, _acceptSocket.LocalEndPoint);
-                            }
-                            catch (ObjectDisposedException) { }
-                        }
                     }
                     else
                     {
@@ -895,15 +886,6 @@ namespace System.Net.Sockets
                     socketError = FinishOperationConnect();
                     if (socketError == SocketError.Success)
                     {
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            try
-                            {
-                                NetEventSource.Connected(_currentSocket!, _currentSocket!.LocalEndPoint, _currentSocket.RemoteEndPoint);
-                            }
-                            catch (ObjectDisposedException) { }
-                        }
-
                         // Mark socket connected.
                         _currentSocket!.SetToConnected();
                         _connectSocket = _currentSocket;

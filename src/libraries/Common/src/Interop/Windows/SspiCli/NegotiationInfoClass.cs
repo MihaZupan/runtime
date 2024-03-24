@@ -13,7 +13,7 @@ namespace System.Net
         {
             if (safeHandle.IsInvalid)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Invalid handle:{safeHandle}");
+                //NetEventSource.Info(null, $"Invalid handle:{safeHandle}");
                 return null;
             }
 
@@ -22,7 +22,7 @@ namespace System.Net
             {
                 safeHandle.DangerousAddRef(ref gotRef);
                 IntPtr packageInfo = safeHandle.DangerousGetHandle();
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"packageInfo:{packageInfo} negotiationState:{negotiationState:x}");
+                //NetEventSource.Info(null, $"packageInfo:{packageInfo} negotiationState:{negotiationState:x}");
 
                 if (negotiationState == Interop.SspiCli.SECPKG_NEGOTIATION_COMPLETE ||
                     negotiationState == Interop.SspiCli.SECPKG_NEGOTIATION_OPTIMISTIC)
@@ -33,7 +33,7 @@ namespace System.Net
                         name = Marshal.PtrToStringUni(((SecurityPackageInfo*)packageInfo)->Name);
                     }
 
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"packageInfo:{packageInfo} negotiationState:{negotiationState:x} name:{name}");
+                    //NetEventSource.Info(null, $"packageInfo:{packageInfo} negotiationState:{negotiationState:x} name:{name}");
 
                     // An optimization for future string comparisons.
                     return

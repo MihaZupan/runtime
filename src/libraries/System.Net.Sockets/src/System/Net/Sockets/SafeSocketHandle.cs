@@ -78,7 +78,7 @@ namespace System.Net.Sockets
             _released = true;
             bool shouldClose = TryOwnClose();
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"shouldClose={shouldClose}");
+            //etEventSource.Info(this, $"shouldClose={shouldClose}");
 
             // When shouldClose is true, the user called Dispose on the SafeHandle.
             // When it is false, the handle was closed from the Socket via CloseAsIs.
@@ -99,7 +99,7 @@ namespace System.Net.Sockets
 #endif
                 bool shouldClose = TryOwnClose();
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"abortive={abortive}, shouldClose ={shouldClose}");
+                //etEventSource.Info(this, $"abortive={abortive}, shouldClose ={shouldClose}");
 
                 Dispose();
 
@@ -139,7 +139,7 @@ namespace System.Net.Sockets
             try
             {
 #endif
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"handle:{handle}");
+                //etEventSource.Info(this, $"handle:{handle}");
 
                 canceledOperations |= OnHandleClose();
 

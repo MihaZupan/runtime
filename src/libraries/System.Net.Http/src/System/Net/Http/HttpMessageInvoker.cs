@@ -22,7 +22,7 @@ namespace System.Net.Http
         {
             ArgumentNullException.ThrowIfNull(handler);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Associate(this, handler);
+            //tEventSource.Associate(this, handler);
 
             _handler = handler;
             _disposeHandler = disposeHandler;

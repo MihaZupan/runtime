@@ -92,18 +92,10 @@ namespace System.Net.Http
             {
                 // We have no credential for this auth type, so we can't respond to the challenge.
                 // We'll continue to look for a different auth type that we do have a credential for.
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    NetEventSource.AuthenticationInfo(uri, $"Authentication scheme '{scheme}' supported by server, but not by client.");
-                }
                 return false;
             }
 
             challenge = new AuthenticationChallenge(authenticationType, scheme, credential, challengeData);
-            if (NetEventSource.Log.IsEnabled())
-            {
-                NetEventSource.AuthenticationInfo(uri, $"Authentication scheme '{scheme}' selected. Client username={challenge.Credential.UserName}");
-            }
             return true;
         }
 
@@ -117,10 +109,7 @@ namespace System.Net.Http
 
             // Try to get a valid challenge for the schemes we support, in priority order.
             HttpHeaderValueCollection<AuthenticationHeaderValue> authenticationHeaderValues = GetResponseAuthenticationHeaderValues(response, isProxyAuth);
-            if (NetEventSource.Log.IsEnabled())
-            {
-                NetEventSource.AuthenticationInfo(authUri, $"{(isProxyAuth ? "Proxy" : "Server")} authentication requested with WWW-Authenticate header value '{authenticationHeaderValues}'");
-            }
+
             return
                 TryGetValidAuthenticationChallengeForScheme(NegotiateScheme, AuthenticationType.Negotiate, authUri, credentials, authenticationHeaderValues, out challenge) ||
                 TryGetValidAuthenticationChallengeForScheme(NtlmScheme, AuthenticationType.Ntlm, authUri, credentials, authenticationHeaderValues, out challenge) ||
@@ -191,10 +180,6 @@ namespace System.Net.Http
             // Any errors in obtaining parameter return false and we don't proceed with auth
             if (string.IsNullOrEmpty(parameter))
             {
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    NetEventSource.AuthenticationError(request.RequestUri, $"Unable to find 'Digest' authentication token when authenticating with {(isProxyAuth ? "proxy" : "server")}");
-                }
                 return false;
             }
 
@@ -267,10 +252,6 @@ namespace System.Net.Http
                     case AuthenticationType.Basic:
                         if (performedBasicPreauth)
                         {
-                            if (NetEventSource.Log.IsEnabled())
-                            {
-                                NetEventSource.AuthenticationError(authUri, $"Pre-authentication with {(isProxyAuth ? "proxy" : "server")} failed.");
-                            }
                             break;
                         }
 
@@ -284,10 +265,6 @@ namespace System.Net.Http
                             {
                                 case HttpStatusCode.ProxyAuthenticationRequired:
                                 case HttpStatusCode.Unauthorized:
-                                    if (NetEventSource.Log.IsEnabled())
-                                    {
-                                        NetEventSource.AuthenticationError(authUri, $"Pre-authentication with {(isProxyAuth ? "proxy" : "server")} failed.");
-                                    }
                                     break;
 
                                 default:
@@ -295,19 +272,11 @@ namespace System.Net.Http
                                     {
                                         try
                                         {
-                                            if (NetEventSource.Log.IsEnabled())
-                                            {
-                                                NetEventSource.Info(pool.PreAuthCredentials, $"Adding Basic credential to cache, uri={authUri}, username={challenge.Credential.UserName}");
-                                            }
                                             pool.PreAuthCredentials.Add(authUri, BasicScheme, challenge.Credential);
                                         }
                                         catch (ArgumentException)
                                         {
                                             // The credential already existed.
-                                            if (NetEventSource.Log.IsEnabled())
-                                            {
-                                                NetEventSource.Info(pool.PreAuthCredentials, $"Basic credential present in cache, uri={authUri}, username={challenge.Credential.UserName}");
-                                            }
                                         }
                                     }
                                     break;
@@ -315,11 +284,6 @@ namespace System.Net.Http
                         }
                         break;
                 }
-            }
-
-            if (NetEventSource.Log.IsEnabled() && response.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                NetEventSource.AuthenticationError(authUri, $"{(isProxyAuth ? "Proxy" : "Server")} authentication failed.");
             }
 
             return response;

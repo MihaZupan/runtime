@@ -215,8 +215,7 @@ namespace System.Net.Security
             Interop.SspiCli.CredentialUse intent,
             out SafeFreeCredentials outCredential)
         {
-            int errorCode = -1;
-            long timeStamp;
+            int errorCode;
 
             outCredential = new SafeFreeCredential_SECURITY();
 
@@ -229,9 +228,9 @@ namespace System.Net.Security
                             null,
                             null,
                             ref outCredential._handle,
-                            out timeStamp);
+                            out _);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
+            //NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
 
             if (errorCode != 0)
             {
@@ -273,7 +272,7 @@ namespace System.Net.Security
             Interop.SspiCli.SCHANNEL_CRED* authdata,
             out SafeFreeCredentials outCredential)
         {
-            int errorCode = -1;
+            int errorCode;
 
             outCredential = new SafeFreeCredential_SECURITY();
 
@@ -288,7 +287,7 @@ namespace System.Net.Security
                                 ref outCredential._handle,
                                 out _);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
+            //NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
 
             if (errorCode != 0)
             {
@@ -304,8 +303,6 @@ namespace System.Net.Security
             Interop.SspiCli.SCH_CREDENTIALS* authdata,
             out SafeFreeCredentials outCredential)
         {
-            long timeStamp;
-
             outCredential = new SafeFreeCredential_SECURITY();
 
             int errorCode = Interop.SspiCli.AcquireCredentialsHandleW(
@@ -317,9 +314,9 @@ namespace System.Net.Security
                                 null,
                                 null,
                                 ref outCredential._handle,
-                                out timeStamp);
+                                out _);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
+            //NetEventSource.Info(null, $"{nameof(Interop.SspiCli.AcquireCredentialsHandleW)} returns 0x{errorCode:x}, handle = {outCredential}");
 
             if (errorCode != 0)
             {
@@ -970,7 +967,7 @@ namespace System.Net.Security
             ref SafeDeleteSslContext? refContext,
             in InputSecurityBuffer inSecBuffer)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"refContext = {refContext}");
+            //NetEventSource.Info(null, $"refContext = {refContext}");
 
             var inSecurityBufferDescriptor = new Interop.SspiCli.SecBufferDesc(1);
             int errorCode = (int)Interop.SECURITY_STATUS.InvalidHandle;
@@ -1021,7 +1018,7 @@ namespace System.Net.Security
             ref SafeDeleteSslContext? refContext,
             in SecurityBuffer inSecBuffer)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"refContext = {refContext}, inSecBuffer = {inSecBuffer}");
+            //NetEventSource.Info(null, $"refContext = {refContext}, inSecBuffer = {inSecBuffer}");
 
             int errorCode = (int)Interop.SECURITY_STATUS.InvalidHandle;
 

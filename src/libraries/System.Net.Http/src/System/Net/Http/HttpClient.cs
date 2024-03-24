@@ -91,7 +91,7 @@ namespace System.Net.Http
 
                 CheckDisposedOrStarted();
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.UriBaseAddress(this, value);
+                //tEventSource.UriBaseAddress(this, value);
 
                 _baseAddress = value;
             }
@@ -623,7 +623,7 @@ namespace System.Net.Http
 
             LogRequestFailed(e, telemetryStarted);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, e);
+            //tEventSource.Error(this, e);
 
             if (toThrow != null)
             {

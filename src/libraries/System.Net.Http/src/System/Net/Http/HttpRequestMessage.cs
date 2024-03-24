@@ -65,18 +65,6 @@ namespace System.Net.Http
             {
                 CheckDisposed();
 
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    if (value == null)
-                    {
-                        NetEventSource.ContentNull(this);
-                    }
-                    else
-                    {
-                        NetEventSource.Associate(this, value);
-                    }
-                }
-
                 // It's OK to set a 'null' content, even if the method is POST/PUT.
                 _content = value;
             }

@@ -12,27 +12,13 @@ namespace System.Net
     //
     internal abstract class DebugSafeHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
-        private string? _trace;
-
         protected DebugSafeHandle(bool ownsHandle) : base(ownsHandle)
         {
-            Trace();
         }
 
         protected DebugSafeHandle(IntPtr invalidValue, bool ownsHandle) : base(ownsHandle)
         {
             SetHandle(invalidValue);
-            Trace();
-        }
-
-        private void Trace()
-        {
-            _trace = "WARNING! GC-ed  >>" + this.GetType().ToString() + "<< (should be explicitly closed) \r\n";
-        }
-
-        ~DebugSafeHandle()
-        {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, _trace);
         }
     }
 #endif // DEBUG

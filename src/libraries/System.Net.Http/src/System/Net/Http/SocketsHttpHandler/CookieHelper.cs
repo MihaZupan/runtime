@@ -28,10 +28,6 @@ namespace System.Net.Http
                     catch (CookieException)
                     {
                         // Ignore invalid Set-Cookie header and continue processing.
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            NetEventSource.Error(response, $"Invalid Set-Cookie '{valuesArray[i]}' ignored.");
-                        }
                     }
                 }
             }

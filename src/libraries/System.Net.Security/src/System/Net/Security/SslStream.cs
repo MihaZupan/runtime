@@ -218,7 +218,7 @@ namespace System.Net.Security
             _sslAuthenticationOptions.SslStreamProxy = new SslStream.JavaProxy(sslStream: this);
 #endif
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.SslStreamCtor(this, innerStream);
+            //NetEventSource.Log.SslStreamCtor(this, innerStream);
         }
 
         //

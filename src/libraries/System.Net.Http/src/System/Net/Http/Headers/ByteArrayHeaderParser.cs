@@ -47,9 +47,9 @@ namespace System.Net.Http.Headers
                 index = value.Length;
                 return true;
             }
-            catch (FormatException e)
+            catch (FormatException)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, SR.Format(SR.net_http_parser_invalid_base64_string, base64String, e.Message));
+                //tEventSource.Error(this, SR.Format(SR.net_http_parser_invalid_base64_string, base64String, e.Message));
             }
 
             return false;

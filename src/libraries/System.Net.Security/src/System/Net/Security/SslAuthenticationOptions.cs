@@ -126,7 +126,7 @@ namespace System.Net.Security
                 {
                     // This is legacy fix-up. If the Certificate did not have key, we will search stores and we
                     // will try to find one with matching hash.
-                    certificateWithKey = SslStream.FindCertificateWithPrivateKey(this, true, sslServerAuthenticationOptions.ServerCertificate);
+                    certificateWithKey = SslStream.FindCertificateWithPrivateKey(true, sslServerAuthenticationOptions.ServerCertificate);
                     if (certificateWithKey == null)
                     {
                         throw new AuthenticationException(SR.net_ssl_io_no_server_cert);

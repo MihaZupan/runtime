@@ -36,7 +36,7 @@ namespace System.Net
                     if ((IntPtr)next != certContext)
                     {
                         var cert = new X509Certificate2(new IntPtr(next));
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(certContext, $"Adding remote certificate:{cert}");
+                        //NetEventSource.Info(certContext, $"Adding remote certificate:{cert}");
 
                         result.Add(cert);
                     }

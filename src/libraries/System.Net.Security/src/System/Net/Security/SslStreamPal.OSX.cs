@@ -65,13 +65,6 @@ namespace System.Net.Security
                         if (osStatus == 0)
                         {
                             context.SelectedApplicationProtocol = applicationProtocol;
-                            if (NetEventSource.Log.IsEnabled())
-                                NetEventSource.Info(context, $"Selected '{applicationProtocol}' ALPN");
-                        }
-                        else
-                        {
-                            if (NetEventSource.Log.IsEnabled())
-                                NetEventSource.Error(context, $"Failed to set ALPN: {osStatus}");
                         }
 
                         // We ignore failure and we will move on with ALPN

@@ -102,7 +102,7 @@ namespace System.Net
                     {
                         Debug.Assert(_securityContext is not null && _isAuthenticated, "Trying to get the client SPN before handshaking is done!");
                         _spn = SSPIWrapper.QueryStringContextAttributes(GlobalSSPI.SSPIAuth, _securityContext, Interop.SspiCli.ContextAttribute.SECPKG_ATTR_CLIENT_SPECIFIED_TARGET);
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"The client specified SPN is [{_spn}]");
+                        //NetEventSource.Info(this, $"The client specified SPN is [{_spn}]");
                     }
                     return _spn;
                 }
@@ -124,7 +124,7 @@ namespace System.Net
                         try
                         {
                             name = SSPIWrapper.QueryStringContextAttributes(GlobalSSPI.SSPIAuth, _securityContext, Interop.SspiCli.ContextAttribute.SECPKG_ATTR_NAMES);
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"NTAuthentication: The context is associated with [{name}]");
+                            //NetEventSource.Info(this, $"NTAuthentication: The context is associated with [{name}]");
 
                             // This will return a client token when conducted authentication on server side.
                             // This token can be used for impersonation. We use it to create a WindowsIdentity and hand it out to the server app.
@@ -197,7 +197,7 @@ namespace System.Net
                 _package = clientOptions.Package;
                 _channelBinding = clientOptions.Binding;
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
+                //NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
 
                 //
                 // Check if we're using DefaultCredentials.
@@ -206,7 +206,7 @@ namespace System.Net
                 Debug.Assert(CredentialCache.DefaultCredentials == CredentialCache.DefaultNetworkCredentials);
                 if (clientOptions.Credential == CredentialCache.DefaultCredentials)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, "using DefaultCredentials");
+                    //NetEventSource.Info(this, "using DefaultCredentials");
                     _credentialsHandle = AcquireDefaultCredential(_package, _isServer);
                 }
                 else
@@ -245,7 +245,7 @@ namespace System.Net
                 _package = serverOptions.Package;
                 _channelBinding = serverOptions.Binding;
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
+                //NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
 
                 //
                 // Check if we're using DefaultCredentials.
@@ -254,7 +254,7 @@ namespace System.Net
                 Debug.Assert(CredentialCache.DefaultCredentials == CredentialCache.DefaultNetworkCredentials);
                 if (serverOptions.Credential == CredentialCache.DefaultCredentials)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, "using DefaultCredentials");
+                    //NetEventSource.Info(this, "using DefaultCredentials");
                     _credentialsHandle = AcquireDefaultCredential(_package, _isServer);
                 }
                 else
@@ -291,13 +291,13 @@ namespace System.Net
                             out resultBlobLength,
                             ref _contextFlags);
 
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"SSPIWrapper.InitializeSecurityContext() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
+                        //NetEventSource.Info(this, $"SSPIWrapper.InitializeSecurityContext() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
 
                         if (platformStatusCode.ErrorCode == SecurityStatusPalErrorCode.CompleteNeeded)
                         {
                             platformStatusCode = CompleteAuthToken(ref _securityContext, _tokenBuffer.AsSpan(0, resultBlobLength));
 
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"SSPIWrapper.CompleteAuthToken() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
+                            //NetEventSource.Info(this, $"SSPIWrapper.CompleteAuthToken() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
 
                             resultBlobLength = 0;
                         }
@@ -315,7 +315,7 @@ namespace System.Net
                             out resultBlobLength,
                             ref _contextFlags);
 
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"SSPIWrapper.AcceptSecurityContext() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
+                        //NetEventSource.Info(this, $"SSPIWrapper.AcceptSecurityContext() returns statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode})");
                     }
                 }
                 finally
@@ -406,7 +406,7 @@ namespace System.Net
                 else
                 {
                     // We need to continue.
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"need continue statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode}) _securityContext:{_securityContext}");
+                    //NetEventSource.Info(this, $"need continue statusCode:0x{((int)platformStatusCode.ErrorCode):x8} ({platformStatusCode}) _securityContext:{_securityContext}");
                 }
 
                 return result;
@@ -593,7 +593,7 @@ namespace System.Net
                         if (errorCode != 0)
                         {
                             Exception e = new Win32Exception(errorCode);
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, e);
+                            //NetEventSource.Error(null, e);
                             throw new Win32Exception(errorCode);
                         }
 
@@ -643,7 +643,7 @@ namespace System.Net
                         if (errorCode != 0)
                         {
                             Exception e = new Win32Exception(errorCode);
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, e);
+                            //NetEventSource.Error(null, e);
                             throw new Win32Exception(errorCode);
                         }
 
@@ -684,7 +684,7 @@ namespace System.Net
 
                     if (result != Interop.SECURITY_STATUS.OK)
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(Interop.SspiCli.SspiEncodeStringsAsAuthIdentity), $"0x{(int)result:X}"));
+                        //NetEventSource.Error(null, SR.Format(SR.net_log_operation_failed_with_error, nameof(Interop.SspiCli.SspiEncodeStringsAsAuthIdentity), $"0x{(int)result:X}"));
                         throw new Win32Exception((int)result);
                     }
 

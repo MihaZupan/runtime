@@ -91,7 +91,7 @@ namespace System.Net
                 }
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.RemoteCertificate(result);
+            //NetEventSource.Log.RemoteCertificate(result);
             return result;
         }
 

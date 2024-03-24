@@ -236,7 +236,7 @@ namespace System.Net.Sockets
                     return;
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, csep.IPEndPoint);
+            //etEventSource.Info(this, csep.IPEndPoint);
 
             if (_socketType == SocketType.Stream && _protocolType == ProtocolType.Tcp)
             {
@@ -259,7 +259,7 @@ namespace System.Net.Sockets
                 ref optionValue,
                 sizeof(int));
 
-            if (NetEventSource.Log.IsEnabled() && error != SocketError.Success)
+            if (false && error != SocketError.Success)
             {
                 error = SocketPal.GetLastSocketError();
                 NetEventSource.Info($"Enabling SO_REUSE_UNICASTPORT failed with error code: {error}");

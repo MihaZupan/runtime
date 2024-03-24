@@ -86,7 +86,7 @@ namespace System.Net
                 }
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.RemoteCertificate(result);
+            //NetEventSource.Log.RemoteCertificate(result);
             return result;
         }
 
@@ -151,7 +151,7 @@ namespace System.Net
                                 byte[] x = new Span<byte>((byte*)elements[i].pCertContext, checked((int)elements[i].cbSize)).ToArray();
                                 var x500DistinguishedName = new X500DistinguishedName(x);
                                 issuers[i] = x500DistinguishedName.Name;
-                                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(securityContext, $"IssuerListEx[{issuers[i]}]");
+                                //NetEventSource.Info(securityContext, $"IssuerListEx[{issuers[i]}]");
                             }
                         }
                     }

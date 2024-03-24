@@ -135,7 +135,7 @@ namespace System.Net.Http
 
                 _ = _connectionClosedTask.ContinueWith(async closeTask =>
                 {
-                    if (closeTask.IsFaulted && NetEventSource.Log.IsEnabled())
+                    if (closeTask.IsFaulted && false)
                     {
                         Trace($"{nameof(QuicConnection)} failed to close: {closeTask.Exception!.InnerException}");
                     }
@@ -226,7 +226,7 @@ namespace System.Net.Http
                     throw new HttpRequestException(HttpRequestError.Unknown, SR.net_http_request_aborted, null, RequestRetryType.RetryOnConnectionFailure);
                 }
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Sending request: {request}");
+                //ce($"Sending request: {request}");
 
                 Task<HttpResponseMessage> responseTask = requestStream.SendAsync(cancellationToken);
 
@@ -263,7 +263,7 @@ namespace System.Net.Http
 
             if (firstException != null)
             {
-                if (NetEventSource.Log.IsEnabled() && !ReferenceEquals(firstException, abortException))
+                if (false && !ReferenceEquals(firstException, abortException))
                 {
                     // Lost the race to set the field to another exception, so just trace this one.
                     Trace($"{nameof(abortException)}=={abortException}");
@@ -312,10 +312,6 @@ namespace System.Net.Http
                     // Server can send multiple GOAWAY frames.
                     // Spec says a server MUST NOT increase the stream ID in subsequent GOAWAYs,
                     // but doesn't specify what client should do if that is violated. Ignore for now.
-                    if (NetEventSource.Log.IsEnabled())
-                    {
-                        Trace("HTTP/3 server sent GOAWAY with increasing stream ID. Retried requests may have been double-processed by server.");
-                    }
                     return;
                 }
 
@@ -552,29 +548,6 @@ namespace System.Net.Http
                             throw HttpProtocolException.CreateHttp3ConnectionException(Http3ErrorCode.IdError);
                         default:
                             // Unknown stream type. Per spec, these must be ignored and aborted but not be considered a connection-level error.
-
-                            if (NetEventSource.Log.IsEnabled())
-                            {
-                                // Read the rest of the integer, which might be more than 1 byte, so we can log it.
-
-                                long unknownStreamType;
-                                while (!VariableLengthIntegerHelper.TryRead(buffer.ActiveSpan, out unknownStreamType, out _))
-                                {
-                                    buffer.EnsureAvailableSpace(VariableLengthIntegerHelper.MaximumEncodedLength);
-                                    bytesRead = await stream.ReadAsync(buffer.AvailableMemory, CancellationToken.None).ConfigureAwait(false);
-
-                                    if (bytesRead == 0)
-                                    {
-                                        unknownStreamType = -1;
-                                        break;
-                                    }
-
-                                    buffer.Commit(bytesRead);
-                                }
-
-                                NetEventSource.Info(this, $"Ignoring server-initiated stream of unknown type {unknownStreamType}.");
-                            }
-
                             stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.StreamCreationError);
                             return;
                     }
@@ -744,7 +717,7 @@ namespace System.Net.Http
 
                     buffer.Discard(bytesRead);
 
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Applying setting {(Http3SettingType)settingId}={settingValue}");
+                    //ce($"Applying setting {(Http3SettingType)settingId}={settingValue}");
 
                     switch ((Http3SettingType)settingId)
                     {

@@ -224,7 +224,7 @@ namespace System.Net.Http
                     // A read stream is required to finish up the request.
                     responseContent.SetStream(new Http3ReadStream(this));
                 }
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received response: {_response}");
+                //ce($"Received response: {_response}");
 
                 // Process any Set-Cookie headers.
                 if (_connection.Pool.Settings._useCookies)
@@ -340,10 +340,6 @@ namespace System.Net.Http
 
                 if (frameType != Http3FrameType.Headers)
                 {
-                    if (NetEventSource.Log.IsEnabled())
-                    {
-                        Trace($"Expected HEADERS as first response frame; received {frameType}.");
-                    }
                     throw new HttpIOException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                 }
 
@@ -526,10 +522,6 @@ namespace System.Net.Http
                         // Per spec, 0-length payload is allowed.
                         if (payloadLength != 0)
                         {
-                            if (NetEventSource.Log.IsEnabled())
-                            {
-                                Trace("Response content exceeded Content-Length.");
-                            }
                             throw new HttpIOException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                         }
                         break;
@@ -832,11 +824,6 @@ namespace System.Net.Http
 
                 _recvBuffer.Discard(bytesRead);
 
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    Trace($"Received frame {frameType} of length {payloadLength}.");
-                }
-
                 switch ((Http3FrameType)frameType)
                 {
                     case Http3FrameType.Headers:
@@ -888,7 +875,7 @@ namespace System.Net.Http
                     }
                     else
                     {
-                        if (NetEventSource.Log.IsEnabled()) Trace($"Server closed response stream before entire header payload could be read. {headersLength:N0} bytes remaining.");
+                        //ce($"Server closed response stream before entire header payload could be read. {headersLength:N0} bytes remaining.");
                         throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
                     }
                 }
@@ -933,11 +920,11 @@ namespace System.Net.Http
             ((IHttpStreamHeadersHandler)this).OnHeader(name, value);
         }
 
-        private void GetStaticQPackHeader(int index, out HeaderDescriptor descriptor, out string? knownValue)
+        private static void GetStaticQPackHeader(int index, out HeaderDescriptor descriptor, out string? knownValue)
         {
             if (!HeaderDescriptor.TryGetStaticQPackHeader(index, out descriptor, out knownValue))
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"Response contains invalid static header index '{index}'.");
+                //ce($"Response contains invalid static header index '{index}'.");
                 throw HttpProtocolException.CreateHttp3ConnectionException(Http3ErrorCode.ProtocolError);
             }
         }
@@ -953,13 +940,13 @@ namespace System.Net.Http
             {
                 if (!descriptor.Equals(KnownHeaders.PseudoStatus))
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Received unknown pseudo-header '{descriptor.Name}'.");
+                    //ce($"Received unknown pseudo-header '{descriptor.Name}'.");
                     throw HttpProtocolException.CreateHttp3ConnectionException(Http3ErrorCode.ProtocolError);
                 }
 
                 if (_headerState != HeaderState.StatusHeader)
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace("Received extra status header.");
+                    //ce("Received extra status header.");
                     throw HttpProtocolException.CreateHttp3ConnectionException(Http3ErrorCode.ProtocolError);
                 }
 
@@ -986,11 +973,11 @@ namespace System.Net.Http
                         _ => ParseStatusCode(staticIndex, staticValue)
                     };
 
-                    int ParseStatusCode(int? index, string value)
+                    static int ParseStatusCode(int? index, string value)
                     {
                         string message = $"Unexpected QPACK table reference for Status code: index={index} value=\'{value}\'";
                         Debug.Fail(message);
-                        if (NetEventSource.Log.IsEnabled()) Trace(message);
+                        //ce(message);
 
                         // TODO: The parsing is not optimal, but I don't expect this line to be executed at all for now.
                         return HttpConnectionBase.ParseStatusCode(Encoding.ASCII.GetBytes(value));
@@ -1027,7 +1014,7 @@ namespace System.Net.Http
                         // If the final status code is >= 300, skip sending the body.
                         bool shouldSendBody = (statusCode < 300);
 
-                        if (NetEventSource.Log.IsEnabled()) Trace($"Expecting 100 Continue but received final status {statusCode}.");
+                        //ce($"Expecting 100 Continue but received final status {statusCode}.");
                         _expect100ContinueCompletionSource.TrySetResult(shouldSendBody);
                     }
                 }
@@ -1050,7 +1037,7 @@ namespace System.Net.Http
                 switch (_headerState)
                 {
                     case HeaderState.StatusHeader:
-                        if (NetEventSource.Log.IsEnabled()) Trace($"Received headers without :status.");
+                        //ce($"Received headers without :status.");
                         throw HttpProtocolException.CreateHttp3ConnectionException(Http3ErrorCode.ProtocolError);
                     case HeaderState.ResponseHeaders when descriptor.HeaderType.HasFlag(HttpHeaderType.Content):
                         _response!.Content!.Headers.TryAddWithoutValidation(descriptor, headerValue);

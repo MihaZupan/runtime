@@ -40,11 +40,6 @@ namespace System.Net.Http
                 {
                     // If we exceed the maximum number of redirects
                     // then just return the 3xx response.
-                    if (NetEventSource.Log.IsEnabled())
-                    {
-                        TraceError($"Exceeded max number of redirects. Redirect from {request.RequestUri} to {redirectUri} blocked.", request.GetHashCode());
-                    }
-
                     break;
                 }
 
@@ -57,20 +52,11 @@ namespace System.Net.Http
                 {
                     HttpTelemetry.Log.Redirect(redirectUri.AbsoluteUri);
                 }
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    Trace($"Redirecting from {request.RequestUri} to {redirectUri} in response to status code {(int)response.StatusCode} '{response.StatusCode}'.", request.GetHashCode());
-                }
 
                 // Set up for the redirect
                 request.RequestUri = redirectUri;
                 if (RequestRequiresForceGet(response.StatusCode, request.Method))
                 {
-                    if (NetEventSource.Log.IsEnabled())
-                    {
-                        Trace($"Modified request from {request.Method} to {HttpMethod.Get} in response to status code {(int)response.StatusCode} '{response.StatusCode}'.", request.GetHashCode());
-                    }
-
                     request.Method = HttpMethod.Get;
                     request.Content = null;
                     if (request.Headers.TransferEncodingChunked == true)
@@ -88,7 +74,7 @@ namespace System.Net.Http
             return response;
         }
 
-        private Uri? GetUriForRedirect(Uri requestUri, HttpResponseMessage response)
+        private static Uri? GetUriForRedirect(Uri requestUri, HttpResponseMessage response)
         {
             switch (response.StatusCode)
             {
@@ -131,11 +117,6 @@ namespace System.Net.Http
             // Disallow automatic redirection from secure to non-secure schemes
             if (HttpUtilities.IsSupportedSecureScheme(requestUri.Scheme) && !HttpUtilities.IsSupportedSecureScheme(location.Scheme))
             {
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    TraceError($"Insecure https to http redirect from '{requestUri}' to '{location}' blocked.", response.RequestMessage!.GetHashCode());
-                }
-
                 return null;
             }
 

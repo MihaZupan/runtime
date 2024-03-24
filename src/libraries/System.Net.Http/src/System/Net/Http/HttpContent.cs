@@ -130,7 +130,7 @@ namespace System.Net.Http
         protected HttpContent()
         {
             // Log to get an ID for the current content. This ID is used when the content gets associated to a message.
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this);
+            //tEventSource.Info(this);
 
             // We start with the assumption that we can calculate the content length.
             _canCalculateLength = true;
@@ -446,7 +446,7 @@ namespace System.Net.Http
             }
             catch (Exception e)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, e);
+                //tEventSource.Error(this, e);
 
                 if (CancellationHelper.ShouldWrapInOperationCanceledException(e, cancellationToken))
                 {
@@ -527,9 +527,9 @@ namespace System.Net.Http
                 tempBuffer.Seek(0, SeekOrigin.Begin); // Rewind after writing data.
                 _bufferedContent = tempBuffer;
             }
-            catch (Exception e)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, e);
+                //tEventSource.Error(this, e);
                 throw;
             }
         }
@@ -689,12 +689,12 @@ namespace System.Net.Http
             ObjectDisposedException.ThrowIf(_disposed, this);
         }
 
-        private void CheckTaskNotNull(Task task)
+        private static void CheckTaskNotNull(Task task)
         {
             if (task == null)
             {
                 var e = new InvalidOperationException(SR.net_http_content_no_task_returned);
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, e);
+                //tEventSource.Error(this, e);
                 throw e;
             }
         }

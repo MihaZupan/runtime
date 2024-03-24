@@ -244,10 +244,8 @@ namespace System.Net
                     return OSStatus_noErr;
                 }
             }
-            catch (Exception e)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled())
-                    NetEventSource.Error(context, $"WritingToConnection failed: {e.Message}");
                 return OSStatus_writErr;
             }
         }
@@ -287,10 +285,8 @@ namespace System.Net
                     return OSStatus_noErr;
                 }
             }
-            catch (Exception e)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled())
-                    NetEventSource.Error(context, $"ReadFromConnectionfailed: {e.Message}");
                 return OSStatus_readErr;
             }
         }

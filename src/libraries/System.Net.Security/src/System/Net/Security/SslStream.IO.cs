@@ -278,8 +278,6 @@ namespace System.Net.Security
                         Debug.Assert(token.Payload != null);
                         await TIOAdapter.WriteAsync(InnerStream, new ReadOnlyMemory<byte>(token.Payload!, 0, token.Size), cancellationToken).ConfigureAwait(false);
                         await TIOAdapter.FlushAsync(InnerStream, cancellationToken).ConfigureAwait(false);
-                        if (NetEventSource.Log.IsEnabled())
-                            NetEventSource.Log.SentFrame(this, token.Payload);
                     }
 
                     token.ReleasePayload();
@@ -322,16 +320,13 @@ namespace System.Net.Security
                         // If there is message send it out even if call failed. It may contain TLS Alert.
                         await TIOAdapter.WriteAsync(InnerStream, payload, cancellationToken).ConfigureAwait(false);
                         await TIOAdapter.FlushAsync(InnerStream, cancellationToken).ConfigureAwait(false);
-
-                        if (NetEventSource.Log.IsEnabled())
-                            NetEventSource.Log.SentFrame(this, payload.Span);
                     }
 
                     token.ReleasePayload();
 
                     if (token.Failed)
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, token.Status);
+                        //NetEventSource.Error(this, token.Status);
 
                         if (_lastFrame.Header.Type == TlsContentType.Alert && _lastFrame.AlertDescription != TlsAlertDescription.CloseNotify &&
                                  token.Status.ErrorCode == SecurityStatusPalErrorCode.IllegalMessage)
@@ -362,16 +357,6 @@ namespace System.Net.Security
                 token.ReleasePayload();
             }
 
-            if (NetEventSource.Log.IsEnabled())
-                NetEventSource.Log.SspiSelectedCipherSuite(nameof(ForceAuthenticationAsync),
-                                                                    SslProtocol,
-                                                                    CipherAlgorithm,
-                                                                    CipherStrength,
-                                                                    HashAlgorithm,
-                                                                    HashStrength,
-                                                                    KeyExchangeAlgorithm,
-                                                                    KeyExchangeStrength);
-
         }
 
         // This method will make sure we have at least one full TLS frame buffered.
@@ -392,7 +377,7 @@ namespace System.Net.Security
                 case TlsContentType.Alert:
                     if (TlsFrameHelper.TryGetFrameInfo(_buffer.EncryptedReadOnlySpan, ref _lastFrame))
                     {
-                        if (NetEventSource.Log.IsEnabled() && _lastFrame.AlertDescription != TlsAlertDescription.CloseNotify) NetEventSource.Error(this, $"Received TLS alert {_lastFrame.AlertDescription}");
+                        if (false && _lastFrame.AlertDescription != TlsAlertDescription.CloseNotify) NetEventSource.Error(this, $"Received TLS alert {_lastFrame.AlertDescription}");
                     }
                     break;
                 case TlsContentType.Handshake:
@@ -401,7 +386,7 @@ namespace System.Net.Security
                         _sslAuthenticationOptions!.IsServer) // guard against malicious endpoints. We should not see ClientHello on client.
 #pragma warning restore CS0618
                     {
-                        TlsFrameHelper.ProcessingOptions options = NetEventSource.Log.IsEnabled() ?
+                        TlsFrameHelper.ProcessingOptions options = false ?
                                                                     TlsFrameHelper.ProcessingOptions.All :
                                                                     TlsFrameHelper.ProcessingOptions.ServerName;
                         if (OperatingSystem.IsMacOS() && _sslAuthenticationOptions.IsServer)
@@ -414,7 +399,7 @@ namespace System.Net.Security
                         // Process SNI from Client Hello message
                         if (!TlsFrameHelper.TryGetFrameInfo(_buffer.EncryptedReadOnlySpan, ref _lastFrame, options))
                         {
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, $"Failed to parse TLS hello.");
+                            //NetEventSource.Error(this, $"Failed to parse TLS hello.");
                         }
 
                         if (_lastFrame.HandshakeType == TlsHandshakeType.ClientHello)
@@ -432,11 +417,6 @@ namespace System.Net.Security
                                         _sslAuthenticationOptions.UserState, cancellationToken).ConfigureAwait(false);
                                 _sslAuthenticationOptions.UpdateOptions(userOptions);
                             }
-                        }
-
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            NetEventSource.Log.ReceivedFrame(this, _lastFrame);
                         }
                     }
                     break;
@@ -525,7 +505,7 @@ namespace System.Net.Security
 
             if (_nestedAuth != StreamInUse)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, $"Ignoring unsolicited renegotiated certificate.");
+                //NetEventSource.Error(this, $"Ignoring unsolicited renegotiated certificate.");
                 // ignore certificates received outside of handshake or requested renegotiation.
                 sslPolicyErrors = SslPolicyErrors.None;
                 chainStatus = X509ChainStatusFlags.NoError;
@@ -850,9 +830,6 @@ namespace System.Net.Security
                             _buffer.Discard(_buffer.DecryptedLength);
                         }
 
-                        if (NetEventSource.Log.IsEnabled())
-                            NetEventSource.Info(null, $"***Processing an error Status = {status}");
-
                         if (status.ErrorCode == SecurityStatusPalErrorCode.Renegotiate)
                         {
                             // We determined above that we will not process it.
@@ -994,7 +971,7 @@ namespace System.Net.Security
 
             if (_lastFrame.Header.Length < 0)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, "invalid TLS frame size");
+                //NetEventSource.Error(this, "invalid TLS frame size");
                 throw new AuthenticationException(SR.net_frame_read_size);
             }
 

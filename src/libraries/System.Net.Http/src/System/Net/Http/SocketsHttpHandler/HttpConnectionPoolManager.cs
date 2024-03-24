@@ -188,9 +188,9 @@ namespace System.Net.Http
                     NetworkChange.NetworkAddressChanged += networkChangedDelegate;
                 }
             }
-            catch (NetworkInformationException e)
+            catch (NetworkInformationException)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, $"Exception when subscribing to NetworkChange.NetworkAddressChanged: {e}");
+                //tEventSource.Error(this, $"Exception when subscribing to NetworkChange.NetworkAddressChanged: {e}");
 
                 // We can't monitor network changes, so technically "information
                 // about network state is not available" and we can just keep
@@ -400,11 +400,11 @@ namespace System.Net.Http
                     }
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 // Eat any exception from the IWebProxy and just treat it as no proxy.
                 // This matches the behavior of other handlers.
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, $"Exception from {_proxy.GetType().Name}.GetProxy({request.RequestUri}): {ex}");
+                //tEventSource.Error(this, $"Exception from {_proxy.GetType().Name}.GetProxy({request.RequestUri}): {ex}");
             }
 
             if (proxyUri != null && !HttpUtilities.IsSupportedProxyScheme(proxyUri.Scheme))

@@ -206,7 +206,7 @@ namespace System.Net.Http
             {
                 Debug.Assert(task.IsFaulted);
                 Exception? e = task.Exception!.InnerException; // Access Exception even if not tracing, to avoid TaskScheduler.UnobservedTaskException firing
-                if (NetEventSource.Log.IsEnabled()) connection.Trace($"Exception from asynchronous processing: {e}");
+                //ce($"Exception from asynchronous processing: {e}");
             }
         }
 

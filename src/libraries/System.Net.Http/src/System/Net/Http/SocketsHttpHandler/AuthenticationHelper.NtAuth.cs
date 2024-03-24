@@ -78,10 +78,6 @@ namespace System.Net.Http
             if (!isProxyAuth && connection.Kind == HttpConnectionKind.Proxy && !ProxySupportsConnectionAuth(response))
             {
                 // Proxy didn't indicate that it supports connection-based auth, so we can't proceed.
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    NetEventSource.Error(connection, $"Proxy doesn't support connection-based auth, uri={authUri}");
-                }
                 return response;
             }
 
@@ -108,11 +104,6 @@ namespace System.Net.Http
                             needDrain = false;
                         }
 
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            NetEventSource.Info(connection, $"Authentication: {challenge.AuthenticationType}, Uri: {authUri.AbsoluteUri}");
-                        }
-
                         // Calculate SPN (Service Principal Name) using the host name of the request.
                         // Use the request's 'Host' header if available. Otherwise, use the request uri.
                         // Ignore the 'Host' header if this is proxy authentication since we need to use
@@ -122,10 +113,6 @@ namespace System.Net.Http
                         {
                             // Use the host name without any normalization.
                             hostName = request.Headers.Host;
-                            if (NetEventSource.Log.IsEnabled())
-                            {
-                                NetEventSource.Info(connection, $"Authentication: {challenge.AuthenticationType}, Host: {hostName}");
-                            }
                         }
                         else
                         {
@@ -151,10 +138,6 @@ namespace System.Net.Http
                         }
 
                         string spn = "HTTP/" + hostName;
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            NetEventSource.Info(connection, $"Authentication: {challenge.AuthenticationType}, SPN: {spn}");
-                        }
 
                         ProtectionLevel requiredProtectionLevel = ProtectionLevel.None;
                         // When connecting to proxy server don't enforce the integrity to avoid

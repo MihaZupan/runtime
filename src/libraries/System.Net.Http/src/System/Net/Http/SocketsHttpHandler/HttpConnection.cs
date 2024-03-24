@@ -87,8 +87,6 @@ namespace System.Net.Http
 
             _writeBuffer = new ArrayBuffer(InitialWriteBufferSize, usePool: false);
             _readBuffer = new ArrayBuffer(InitialReadBufferSize, usePool: false);
-
-            if (NetEventSource.Log.IsEnabled()) TraceConnection(_stream);
         }
 
         ~HttpConnection() => Dispose(disposing: false);
@@ -101,8 +99,6 @@ namespace System.Net.Http
             // if the request and the response were running concurrently and both incurred an exception.
             if (Interlocked.Exchange(ref _disposed, Status_Disposed) != Status_Disposed)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace("Connection closing.");
-
                 MarkConnectionAsClosed();
 
                 if (!_detachedFromPool)
@@ -168,10 +164,9 @@ namespace System.Net.Http
 
                     return !_readAheadTask.IsCompleted;
                 }
-                catch (Exception error)
+                catch
                 {
                     // If reading throws, eat the error and don't reuse the connection.
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Error performing read ahead: {error}");
                     return false;
                 }
             }
@@ -233,15 +228,13 @@ namespace System.Net.Http
                     // In that case we've received EOF/erroneous data before we sent the request headers, and the connection can't be reused.
                     if (TryOwnReadAheadTaskCompletion())
                     {
-                        if (NetEventSource.Log.IsEnabled()) Trace("Read-ahead task observed data before the request was sent.");
+
                     }
 
                     return read;
                 }
-                catch (Exception error) when (TryOwnReadAheadTaskCompletion())
+                catch when (TryOwnReadAheadTaskCompletion())
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Error performing read ahead: {error}");
-
                     return 0;
                 }
             }
@@ -513,8 +506,6 @@ namespace System.Net.Http
 
             _canRetry = false;
 
-            // Send the request.
-            if (NetEventSource.Log.IsEnabled()) Trace($"Sending request: {request}");
             CancellationTokenRegistration cancellationRegistration = RegisterCancellation(cancellationToken);
             try
             {
@@ -532,7 +523,6 @@ namespace System.Net.Http
                 else
                 {
                     bool hasExpectContinueHeader = request.HasHeaders && request.Headers.ExpectContinue == true;
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Request content is not null, start processing it. hasExpectContinueHeader = {hasExpectContinueHeader}");
 
                     // Send the body if there is one.  We prefer to serialize the sending of the content before
                     // we try to receive any response, but if ExpectContinue has been set, we allow the sending
@@ -592,17 +582,10 @@ namespace System.Net.Http
                     }
                     else
                     {
-                        if (NetEventSource.Log.IsEnabled() && !async)
-                        {
-                            Trace($"Pre-emptive read completed asynchronously for a synchronous request.");
-                        }
-
                         bytesRead = await vt.ConfigureAwait(false);
                     }
 
                     _readBuffer.Commit(bytesRead);
-
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
 
                     _readAheadTaskStatus = ReadAheadTask_NotStarted;
                 }
@@ -662,7 +645,6 @@ namespace System.Net.Http
                     }
 
                     // In case read hangs which eventually leads to connection timeout.
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Current {response.StatusCode} response is an interim response or not expected, need to read for a final response.");
 
                     // Discard headers that come with the interim 1xx responses.
                     while (!ParseHeaders(response: null, isFromTrailer: false))
@@ -733,7 +715,6 @@ namespace System.Net.Http
                 }
 
                 // Now we are sure that the request was fully sent.
-                if (NetEventSource.Log.IsEnabled()) Trace("Request is fully sent.");
 
                 // We're about to create the response stream, at which point responsibility for canceling
                 // the remainder of the response lies with the stream.  Thus we dispose of our registration
@@ -796,8 +777,6 @@ namespace System.Net.Http
                 }
                 ((HttpConnectionResponseContent)response.Content).SetStream(responseStream);
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received response: {response}");
-
                 // Process Set-Cookie headers.
                 if (_pool.Settings._useCookies)
                 {
@@ -824,8 +803,6 @@ namespace System.Net.Http
 
                     LogExceptions(_readAheadTask.AsTask());
                 }
-
-                if (NetEventSource.Log.IsEnabled()) Trace($"Error sending request: {error}");
 
                 // In the rare case where Expect: 100-continue was used and then processing
                 // of the response headers encountered an error such that we weren't able to
@@ -927,7 +904,6 @@ namespace System.Net.Http
             return cancellationToken.Register(static s =>
             {
                 var connection = (HttpConnection)s!;
-                if (NetEventSource.Log.IsEnabled()) connection.Trace("Cancellation requested. Disposing of the connection.");
                 connection.Dispose();
             }, this);
         }
@@ -954,8 +930,6 @@ namespace System.Net.Http
             await FlushAsync(async).ConfigureAwait(false);
 
             if (HttpTelemetry.Log.IsEnabled()) HttpTelemetry.Log.RequestContentStop(stream.BytesWritten);
-
-            if (NetEventSource.Log.IsEnabled()) Trace("Finished sending request content.");
         }
 
         private async Task SendRequestContentWithExpect100ContinueAsync(
@@ -972,7 +946,6 @@ namespace System.Net.Http
             // Send the content if we're supposed to.  Otherwise, we're done.
             if (sendRequestContent)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"Sending request content for Expect: 100-continue.");
                 try
                 {
                     await SendRequestContentAsync(request, stream, async, cancellationToken).ConfigureAwait(false);
@@ -984,10 +957,6 @@ namespace System.Net.Http
                     Dispose();
                     throw;
                 }
-            }
-            else
-            {
-                if (NetEventSource.Log.IsEnabled()) Trace($"Canceling request content for Expect: 100-continue.");
             }
         }
 
@@ -1532,14 +1501,11 @@ namespace System.Net.Http
 
         private void WriteToStream(ReadOnlySpan<byte> source)
         {
-            if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
             _stream.Write(source);
         }
 
         private ValueTask WriteToStreamAsync(ReadOnlyMemory<byte> source, bool async)
         {
-            if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
-
             if (async)
             {
                 return _stream.WriteAsync(source);
@@ -1597,8 +1563,6 @@ namespace System.Net.Http
                 _stream.Read(_readBuffer.AvailableSpan);
 
             _readBuffer.Commit(bytesRead);
-
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
         }
 
         // Throws IOException on EOF.  This is only called when we expect more data.
@@ -1614,7 +1578,6 @@ namespace System.Net.Http
 
             _readBuffer.Commit(bytesRead);
 
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
             if (bytesRead == 0)
             {
                 throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
@@ -1733,26 +1696,23 @@ namespace System.Net.Http
             // Do an unbuffered read directly against the underlying stream.
             Debug.Assert(_readAheadTask == default, "Read ahead task should have been consumed as part of the headers.");
             int count = _stream.Read(destination);
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {count} bytes.");
             return count;
         }
 
-        private async ValueTask<int> ReadAsync(Memory<byte> destination)
+        private ValueTask<int> ReadAsync(Memory<byte> destination)
         {
             // This is called when reading the response body.
 
             if (_readBuffer.ActiveLength > 0)
             {
                 // We have data in the read buffer.  Return it to the caller.
-                return ReadFromBuffer(destination.Span);
+                return new ValueTask<int>(ReadFromBuffer(destination.Span));
             }
 
             // No data in read buffer.
             // Do an unbuffered read directly against the underlying stream.
             Debug.Assert(_readAheadTask == default, "Read ahead task should have been consumed as part of the headers.");
-            int count = await _stream.ReadAsync(destination).ConfigureAwait(false);
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {count} bytes.");
-            return count;
+            return _stream.ReadAsync(destination);
         }
 
         private int ReadBuffered(Span<byte> destination)
@@ -1772,8 +1732,6 @@ namespace System.Net.Http
                 Debug.Assert(_readBuffer.AvailableLength == _readBuffer.Capacity);
                 int bytesRead = _stream.Read(_readBuffer.AvailableSpan);
                 _readBuffer.Commit(bytesRead);
-
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
             }
 
             // Hand back as much data as we can fit.
@@ -1805,8 +1763,6 @@ namespace System.Net.Http
                 Debug.Assert(_readBuffer.AvailableLength == _readBuffer.Capacity);
                 int bytesRead = await _stream.ReadAsync(_readBuffer.AvailableMemory).ConfigureAwait(false);
                 _readBuffer.Commit(bytesRead);
-
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
             }
 
             // Hand back as much data as we can fit.
@@ -1816,8 +1772,6 @@ namespace System.Net.Http
         private ValueTask CopyFromBufferAsync(Stream destination, bool async, int count, CancellationToken cancellationToken)
         {
             Debug.Assert(count <= _readBuffer.ActiveLength);
-
-            if (NetEventSource.Log.IsEnabled()) Trace($"Copying {count} bytes to stream.");
 
             ReadOnlyMemory<byte> source = _readBuffer.ActiveMemory.Slice(0, count);
             _readBuffer.Discard(count);
@@ -2006,11 +1960,6 @@ namespace System.Net.Http
             // may not even have it any more.
             if (_readBuffer.ActiveLength > 0)
             {
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    Trace("Unexpected data on connection after response read.");
-                }
-
                 _readBuffer.Discard(_readBuffer.ActiveLength);
                 _connectionClose = true;
             }
@@ -2066,11 +2015,6 @@ namespace System.Net.Http
             // don't put the connection back in the pool.
             if (_connectionClose)
             {
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    Trace("Connection will not be reused.");
-                }
-
                 // We're not putting the connection back in the pool. Dispose it.
                 Dispose();
             }

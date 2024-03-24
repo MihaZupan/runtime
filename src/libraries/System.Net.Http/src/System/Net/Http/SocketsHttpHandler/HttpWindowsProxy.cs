@@ -43,7 +43,7 @@ namespace System.Net.Http
 
             if (proxyHelper.AutoSettingsUsed)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(proxyHelper, $"AutoSettingsUsed, calling {nameof(Interop.WinHttp.WinHttpOpen)}");
+                //tEventSource.Info(proxyHelper, $"AutoSettingsUsed, calling {nameof(Interop.WinHttp.WinHttpOpen)}");
                 sessionHandle = Interop.WinHttp.WinHttpOpen(
                     IntPtr.Zero,
                     Interop.WinHttp.WINHTTP_ACCESS_TYPE_NO_PROXY,
@@ -54,7 +54,7 @@ namespace System.Net.Http
                 if (sessionHandle.IsInvalid)
                 {
                     // Proxy failures are currently ignored by managed handler.
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(proxyHelper, $"{nameof(Interop.WinHttp.WinHttpOpen)} returned invalid handle");
+                    //tEventSource.Error(proxyHelper, $"{nameof(Interop.WinHttp.WinHttpOpen)} returned invalid handle");
                     sessionHandle.Dispose();
                     return false;
                 }
@@ -71,7 +71,7 @@ namespace System.Net.Http
 
             if (proxyHelper.ManualSettingsUsed)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(proxyHelper, $"ManualSettingsUsed, {proxyHelper.Proxy}");
+                //tEventSource.Info(proxyHelper, $"ManualSettingsUsed, {proxyHelper.Proxy}");
 
                 _secureProxy = MultiProxy.Parse(_failedProxies, proxyHelper.Proxy, true);
                 _insecureProxy = MultiProxy.Parse(_failedProxies, proxyHelper.Proxy, false);

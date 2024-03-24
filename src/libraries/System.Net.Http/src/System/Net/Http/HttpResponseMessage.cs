@@ -46,18 +46,6 @@ namespace System.Net.Http
             {
                 CheckDisposed();
 
-                if (NetEventSource.Log.IsEnabled())
-                {
-                    if (value == null)
-                    {
-                        NetEventSource.ContentNull(this);
-                    }
-                    else
-                    {
-                        NetEventSource.Associate(this, value);
-                    }
-                }
-
                 _content = value;
             }
         }
@@ -133,8 +121,6 @@ namespace System.Net.Http
             set
             {
                 CheckDisposed();
-                if (value is not null && NetEventSource.Log.IsEnabled())
-                    NetEventSource.Associate(this, value);
                 _requestMessage = value;
             }
         }

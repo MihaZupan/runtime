@@ -173,9 +173,9 @@ namespace System.Net.Http
                 // Write footer boundary.
                 WriteToStream(stream, CrLf + "--" + _boundary + "--" + CrLf);
             }
-            catch (Exception ex)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                //tEventSource.Error(this, ex);
                 throw;
             }
         }
@@ -223,9 +223,9 @@ namespace System.Net.Http
                 // Write footer boundary.
                 await EncodeStringToStreamAsync(stream, CrLf + "--" + _boundary + "--" + CrLf, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                //tEventSource.Error(this, ex);
                 throw;
             }
         }
@@ -296,9 +296,9 @@ namespace System.Net.Http
 
                 return new ContentReadStream(streams);
             }
-            catch (Exception ex)
+            catch
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                //tEventSource.Error(this, ex);
                 throw;
             }
         }

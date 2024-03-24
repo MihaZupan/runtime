@@ -107,7 +107,7 @@ namespace System.Net.Security
         {
             if (s_cachedCreds.IsEmpty)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Not found, Current Cache Count = {s_cachedCreds.Count}");
+                //NetEventSource.Info(null, $"Not found, Current Cache Count = {s_cachedCreds.Count}");
                 return null;
             }
 
@@ -117,11 +117,11 @@ namespace System.Net.Security
             SafeFreeCredentials? credentials = GetCachedCredential(key);
             if (credentials == null || credentials.IsClosed || credentials.IsInvalid || credentials.Expiry < DateTime.UtcNow)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Not found or invalid, Current Cache Count = {s_cachedCreds.Count}");
+                //NetEventSource.Info(null, $"Not found or invalid, Current Cache Count = {s_cachedCreds.Count}");
                 return null;
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Found a cached Handle = {credentials}");
+            //NetEventSource.Info(null, $"Found a cached Handle = {credentials}");
 
             return credentials;
         }
@@ -150,7 +150,7 @@ namespace System.Net.Security
 
             if (creds.IsInvalid)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Refused to cache an Invalid Handle {creds}, Current Cache Count = {s_cachedCreds.Count}");
+                //NetEventSource.Info(null, $"Refused to cache an Invalid Handle {creds}, Current Cache Count = {s_cachedCreds.Count}");
                 return;
             }
 
@@ -175,20 +175,20 @@ namespace System.Net.Security
                         }
 
                         s_cachedCreds[key] = cached;
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Caching New Handle = {creds}, Current Cache Count = {s_cachedCreds.Count}");
+                        //NetEventSource.Info(null, $"Caching New Handle = {creds}, Current Cache Count = {s_cachedCreds.Count}");
 
                         ShrinkCredentialCache();
 
                     }
                     else
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"CacheCredential() (locked retry) Found already cached Handle = {credentials}");
+                        //NetEventSource.Info(null, $"CacheCredential() (locked retry) Found already cached Handle = {credentials}");
                     }
                 }
             }
             else
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"CacheCredential() Ignoring incoming handle = {creds} since found already cached Handle = {credentials}");
+                //NetEventSource.Info(null, $"CacheCredential() Ignoring incoming handle = {creds} since found already cached Handle = {credentials}");
             }
 
             static void ShrinkCredentialCache()
@@ -231,7 +231,7 @@ namespace System.Net.Security
                         }
 
                     }
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, $"Scavenged cache, New Cache Count = {s_cachedCreds.Count}");
+                    //NetEventSource.Info(null, $"Scavenged cache, New Cache Count = {s_cachedCreds.Count}");
                 }
             }
         }

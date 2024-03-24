@@ -90,7 +90,7 @@ namespace System.Net.Sockets
 
             Marshal.InitHandle(socket, fd);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, socket);
+            //etEventSource.Info(null, socket);
             if (socket.IsInvalid)
             {
                 socket.Dispose();
@@ -1117,7 +1117,7 @@ namespace System.Net.Sockets
 
             Marshal.InitHandle(socket, acceptedFd);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, socket);
+            //etEventSource.Info(null, socket);
 
             return errorCode;
         }
@@ -2010,7 +2010,7 @@ namespace System.Net.Sockets
         {
             var res = new SafeSocketHandle(fileDescriptor, ownsHandle: true);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, res);
+            //etEventSource.Info(null, res);
             return res;
         }
 

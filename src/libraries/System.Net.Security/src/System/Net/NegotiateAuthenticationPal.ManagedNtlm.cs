@@ -225,7 +225,7 @@ namespace System.Net
                 _channelBinding = clientOptions.Binding;
                 _protectionLevel = clientOptions.RequiredProtectionLevel;
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"package={clientOptions.Package}, spn={_spn}, requiredProtectionLevel={_protectionLevel}");
+                //NetEventSource.Info(this, $"package={clientOptions.Package}, spn={_spn}, requiredProtectionLevel={_protectionLevel}");
             }
 
             public static new NegotiateAuthenticationPal Create(NegotiateAuthenticationClientOptions clientOptions)
@@ -237,7 +237,7 @@ namespace System.Net
                     string.IsNullOrWhiteSpace(clientOptions.Credential.Password))
                 {
                     // NTLM authentication is not possible with default credentials which are no-op
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(null, SR.net_ntlm_not_possible_default_cred);
+                    //NetEventSource.Info(null, SR.net_ntlm_not_possible_default_cred);
                     return new UnsupportedNegotiateAuthenticationPal(clientOptions, NegotiateAuthenticationStatusCode.UnknownCredentials);
                 }
 

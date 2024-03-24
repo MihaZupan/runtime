@@ -47,7 +47,7 @@ namespace System.Net
             }
             catch (Interop.NetSecurityNative.GssApiException gex)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, gex);
+                //NetEventSource.Error(null, gex);
                 NegotiateAuthenticationStatusCode statusCode = UnixNegotiateAuthenticationPal.GetErrorCode(gex);
                 if (statusCode <= NegotiateAuthenticationStatusCode.GenericFailure)
                 {
@@ -70,7 +70,7 @@ namespace System.Net
             }
             catch (Interop.NetSecurityNative.GssApiException gex)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, gex);
+                //NetEventSource.Error(null, gex);
                 NegotiateAuthenticationStatusCode statusCode = UnixNegotiateAuthenticationPal.GetErrorCode(gex);
                 if (statusCode <= NegotiateAuthenticationStatusCode.GenericFailure)
                 {
@@ -139,9 +139,9 @@ namespace System.Net
                         {
                             name = GssGetUser(_securityContext);
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                            //NetEventSource.Error(this, ex);
                             throw;
                         }
                     }
@@ -189,23 +189,23 @@ namespace System.Net
                 _channelBinding = clientOptions.Binding;
                 _packageType = GetPackageType(_package);
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
+                //NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
 
                 if (clientOptions.Credential == CredentialCache.DefaultNetworkCredentials ||
                     string.IsNullOrWhiteSpace(clientOptions.Credential.UserName) ||
                     string.IsNullOrWhiteSpace(clientOptions.Credential.Password))
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, "using DefaultCredentials");
+                    //NetEventSource.Info(this, "using DefaultCredentials");
 
                     if (_packageType == Interop.NetSecurityNative.PackageType.NTLM)
                     {
                         // NTLM authentication is not possible with default credentials which are no-op
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_ntlm_not_possible_default_cred);
+                        //NetEventSource.Info(this, SR.net_ntlm_not_possible_default_cred);
                         throw new Interop.NetSecurityNative.GssApiException(Interop.NetSecurityNative.Status.GSS_S_NO_CRED, 0, SR.net_ntlm_not_possible_default_cred);
                     }
                     if (string.IsNullOrEmpty(_spn))
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_nego_not_supported_empty_target_with_defaultcreds);
+                        //NetEventSource.Info(this, SR.net_nego_not_supported_empty_target_with_defaultcreds);
                         throw new Interop.NetSecurityNative.GssApiException(Interop.NetSecurityNative.Status.GSS_S_BAD_NAME, 0, SR.net_nego_not_supported_empty_target_with_defaultcreds);
                     }
 
@@ -237,13 +237,13 @@ namespace System.Net
                 _channelBinding = serverOptions.Binding;
                 _packageType = GetPackageType(_package);
 
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
+                //NetEventSource.Info(this, $"Peer SPN-> '{_spn}'");
 
                 if (serverOptions.Credential == CredentialCache.DefaultNetworkCredentials ||
                     string.IsNullOrWhiteSpace(serverOptions.Credential.UserName) ||
                     string.IsNullOrWhiteSpace(serverOptions.Credential.Password))
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, "using DefaultCredentials");
+                    //NetEventSource.Info(this, "using DefaultCredentials");
                     _credentialsHandle = SafeGssCredHandle.CreateAcceptor();
                 }
                 else
@@ -280,7 +280,7 @@ namespace System.Net
                         out resultBlobLength,
                         ref _contextFlags);
 
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"SSPIWrapper.InitializeSecurityContext() returns statusCode:{statusCode}");
+                    //NetEventSource.Info(this, $"SSPIWrapper.InitializeSecurityContext() returns statusCode:{statusCode}");
                 }
                 else
                 {
@@ -295,7 +295,7 @@ namespace System.Net
                         out resultBlobLength,
                         ref _contextFlags);
 
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"SSPIWrapper.AcceptSecurityContext() returns statusCode:{statusCode}");
+                    //NetEventSource.Info(this, $"SSPIWrapper.AcceptSecurityContext() returns statusCode:{statusCode}");
                 }
 
                 if (statusCode >= NegotiateAuthenticationStatusCode.GenericFailure)
@@ -321,7 +321,7 @@ namespace System.Net
                 else
                 {
                     // We need to continue.
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"need continue _securityContext:{_securityContext}");
+                    //NetEventSource.Info(this, $"need continue _securityContext:{_securityContext}");
                 }
 
                 return result;
@@ -506,7 +506,7 @@ namespace System.Net
                 }
                 catch (Exception ex) when (ex is not Interop.NetSecurityNative.GssApiException)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                    //NetEventSource.Error(this, ex);
                     throw new Interop.NetSecurityNative.GssApiException(Interop.NetSecurityNative.Status.GSS_S_BAD_NAME, 0);
                 }
             }
@@ -560,17 +560,6 @@ namespace System.Net
 
                 if (contextHandle == null)
                 {
-                    if (NetEventSource.Log.IsEnabled())
-                    {
-                        string protocol = _packageType switch
-                        {
-                            Interop.NetSecurityNative.PackageType.NTLM => "NTLM",
-                            Interop.NetSecurityNative.PackageType.Kerberos => "Kerberos",
-                            _ => "SPNEGO"
-                        };
-                        NetEventSource.Info(this, $"requested protocol = {protocol}, target = {spn}");
-                    }
-
                     targetNameHandle = SafeGssNameHandle.CreateTarget(spn!);
                     contextHandle = new SafeGssContextHandle();
                 }
@@ -627,7 +616,7 @@ namespace System.Net
                         }
 
                         Interop.NetSecurityNative.GssApiException gex = new Interop.NetSecurityNative.GssApiException(status, minorStatus);
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, gex);
+                        //NetEventSource.Error(this, gex);
                         resultBlob = Array.Empty<byte>();
                         return GetErrorCode(gex);
                     }
@@ -637,17 +626,6 @@ namespace System.Net
 
                     if (status == Interop.NetSecurityNative.Status.GSS_S_COMPLETE)
                     {
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            string protocol = _packageType switch
-                            {
-                                Interop.NetSecurityNative.PackageType.NTLM => "NTLM",
-                                Interop.NetSecurityNative.PackageType.Kerberos => "Kerberos",
-                                _ => isNtlmUsed ? "SPNEGO-NTLM" : "SPNEGO-Kerberos"
-                            };
-                            NetEventSource.Info(this, $"actual protocol = {protocol}");
-                        }
-
                         // Populate protocol used for authentication
                         _package = isNtlmUsed ? NegotiationInfoClass.NTLM : NegotiationInfoClass.Kerberos;
                     }
@@ -659,9 +637,9 @@ namespace System.Net
                         NegotiateAuthenticationStatusCode.Completed :
                         NegotiateAuthenticationStatusCode.ContinueNeeded;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                    //NetEventSource.Error(this, ex);
                     return NegotiateAuthenticationStatusCode.GenericFailure;
                 }
                 finally
@@ -699,7 +677,7 @@ namespace System.Net
                         (status != Interop.NetSecurityNative.Status.GSS_S_CONTINUE_NEEDED))
                     {
                         Interop.NetSecurityNative.GssApiException gex = new Interop.NetSecurityNative.GssApiException(status, minorStatus);
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, gex);
+                        //NetEventSource.Error(this, gex);
                         resultBlobLength = 0;
                         return GetErrorCode(gex);
                     }
@@ -714,12 +692,6 @@ namespace System.Net
                     NegotiateAuthenticationStatusCode errorCode;
                     if (status == Interop.NetSecurityNative.Status.GSS_S_COMPLETE)
                     {
-                        if (NetEventSource.Log.IsEnabled())
-                        {
-                            string protocol = isNtlmUsed ? "SPNEGO-NTLM" : "SPNEGO-Kerberos";
-                            NetEventSource.Info(this, $"AcceptSecurityContext: actual protocol = {protocol}");
-                        }
-
                         // Populate protocol used for authentication
                         _package = isNtlmUsed ? NegotiationInfoClass.NTLM : NegotiationInfoClass.Kerberos;
                         errorCode = NegotiateAuthenticationStatusCode.Completed;
@@ -731,9 +703,9 @@ namespace System.Net
 
                     return errorCode;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, ex);
+                    //NetEventSource.Error(this, ex);
                     resultBlobLength = 0;
                     return NegotiateAuthenticationStatusCode.GenericFailure;
                 }

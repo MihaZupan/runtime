@@ -30,7 +30,7 @@ namespace System.Net.Sockets
         // Initializes a new instance of the System.Net.Sockets.TcpClient class.
         public TcpClient(AddressFamily family)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, family);
+            //etEventSource.Info(this, family);
 
             if (family is not (AddressFamily.InterNetwork or AddressFamily.InterNetworkV6 or AddressFamily.Unknown))
             {
@@ -46,7 +46,7 @@ namespace System.Net.Sockets
         {
             ArgumentNullException.ThrowIfNull(localEP);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, localEP);
+            //etEventSource.Info(this, localEP);
             _family = localEP.AddressFamily; // set before calling CreateSocket
             InitializeClientSocket();
             _clientSocket.Bind(localEP);
@@ -58,7 +58,7 @@ namespace System.Net.Sockets
         {
             ArgumentNullException.ThrowIfNull(hostname);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, hostname);
+            //etEventSource.Info(this, hostname);
             if (!TcpValidationHelpers.ValidatePortNumber(port))
             {
                 throw new ArgumentOutOfRangeException(nameof(port));

@@ -13,7 +13,7 @@ namespace System.Net.Http
     {
         protected HttpMessageHandler()
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this);
+            //tEventSource.Info(this);
         }
 
         // We cannot add abstract member to a public class in order to not to break already established contract of this class.

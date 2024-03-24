@@ -754,7 +754,7 @@ namespace System.Net.Http.Headers
             {
                 if (HttpRuleParser.ContainsNewLine(rawValue))
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(null, SR.Format(SR.net_http_log_headers_no_newlines, descriptor.Name, rawValue));
+                    //tEventSource.Error(null, SR.Format(SR.net_http_log_headers_no_newlines, descriptor.Name, rawValue));
                     AddInvalidValue(info, rawValue);
                 }
                 else
@@ -766,7 +766,7 @@ namespace System.Net.Http.Headers
             {
                 if (!TryParseAndAddRawHeaderValue(descriptor, info, rawValue, true))
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.HeadersInvalidValue(descriptor.Name, rawValue);
+                    //tEventSource.Log.HeadersInvalidValue(descriptor.Name, rawValue);
                 }
             }
         }

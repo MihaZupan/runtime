@@ -327,7 +327,7 @@ namespace System.Net.Security
             }
 #pragma warning restore SYSLIB0040
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info($"flags=({flags}), ProtocolFlags=({protocolFlags}), EncryptionPolicy={policy}");
+            //NetEventSource.Info($"flags=({flags}), ProtocolFlags=({protocolFlags}), EncryptionPolicy={policy}");
             Interop.SspiCli.SCHANNEL_CRED secureCredential = CreateSecureCredential(
                 flags,
                 protocolFlags,
@@ -428,7 +428,7 @@ namespace System.Net.Security
                 credential.paCred = &certificateHandle;
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info($"flags=({flags}), ProtocolFlags=({protocolFlags}), EncryptionPolicy={policy}");
+            //NetEventSource.Info($"flags=({flags}), ProtocolFlags=({protocolFlags}), EncryptionPolicy={policy}");
 
             if (protocolFlags != 0)
             {
@@ -486,8 +486,6 @@ namespace System.Net.Security
 
                 if (errorCode != 0)
                 {
-                    if (NetEventSource.Log.IsEnabled())
-                        NetEventSource.Info(securityContext, $"Encrypt ERROR {errorCode:X}");
                     token.Size = 0;
                     token.Status = SecurityStatusAdapterPal.GetSecurityStatusPalFromNativeInt(errorCode);
                     return token;

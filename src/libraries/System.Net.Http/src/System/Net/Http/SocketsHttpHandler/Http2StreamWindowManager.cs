@@ -20,14 +20,14 @@ namespace System.Net.Http
             private int _streamWindowSize;
             private long _lastWindowUpdate;
 
-            public Http2StreamWindowManager(Http2Connection connection, Http2Stream stream)
+            public Http2StreamWindowManager(Http2Connection connection)
             {
                 HttpConnectionSettings settings = connection._pool.Settings;
                 _streamWindowSize = settings._initialHttp2StreamWindowSize;
                 _deliveredBytes = 0;
                 _lastWindowUpdate = default;
 
-                if (NetEventSource.Log.IsEnabled()) stream.Trace($"[FlowControl] InitialClientStreamWindowSize: {StreamWindowSize}, StreamWindowThreshold: {StreamWindowThreshold}, WindowScaleThresholdMultiplier: {WindowScaleThresholdMultiplier}");
+                //ce($"[FlowControl] InitialClientStreamWindowSize: {StreamWindowSize}, StreamWindowThreshold: {StreamWindowThreshold}, WindowScaleThresholdMultiplier: {WindowScaleThresholdMultiplier}");
             }
 
             // We hold off on sending WINDOW_UPDATE until we hit the minimum threshold.
@@ -115,12 +115,9 @@ namespace System.Net.Http
                         windowUpdateIncrement += extendedWindowSize - _streamWindowSize;
                         _streamWindowSize = extendedWindowSize;
 
-                        if (NetEventSource.Log.IsEnabled()) stream.Trace($"[FlowControl] Updated Stream Window. StreamWindowSize: {StreamWindowSize}, StreamWindowThreshold: {StreamWindowThreshold}");
-
                         Debug.Assert(_streamWindowSize <= MaxStreamWindowSize);
                         if (_streamWindowSize == MaxStreamWindowSize)
                         {
-                            if (NetEventSource.Log.IsEnabled()) stream.Trace($"[FlowControl] StreamWindowSize reached the configured maximum of {MaxStreamWindowSize}.");
                         }
                     }
                 }
@@ -192,10 +189,10 @@ namespace System.Net.Http
                 _pingSentTimestamp = Stopwatch.GetTimestamp();
             }
 
-            internal void OnInitialSettingsAckReceived(Http2Connection connection)
+            internal void OnInitialSettingsAckReceived()
             {
                 if (_state == State.Disabled) return;
-                RefreshRtt(connection);
+                RefreshRtt();
                 _state = State.Waiting;
             }
 
@@ -219,18 +216,18 @@ namespace System.Net.Http
 
                     // Send a PING
                     _pingCounter--;
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
+                    //ce($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
                     connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
                     _pingSentTimestamp = now;
                     _state = State.PingSent;
                 }
             }
 
-            internal void OnPingAckReceived(long payload, Http2Connection connection)
+            internal void OnPingAckReceived(long payload)
             {
                 if (_state != State.PingSent && _state != State.TerminatingMayReceivePingAck)
                 {
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Unexpected PING ACK in state {_state}");
+                    //ce($"[FlowControl] Unexpected PING ACK in state {_state}");
                     ThrowProtocolError();
                 }
 
@@ -245,11 +242,11 @@ namespace System.Net.Http
 
                 if (_pingCounter != payload)
                 {
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Unexpected RTT PING ACK payload {payload}, should be {_pingCounter}.");
+                    //ce($"[FlowControl] Unexpected RTT PING ACK payload {payload}, should be {_pingCounter}.");
                     ThrowProtocolError();
                 }
 
-                RefreshRtt(connection);
+                RefreshRtt();
                 _state = State.Waiting;
             }
 
@@ -266,7 +263,7 @@ namespace System.Net.Http
                 }
             }
 
-            private void RefreshRtt(Http2Connection connection)
+            private void RefreshRtt()
             {
                 long prevRtt = _minRtt == 0 ? long.MaxValue : _minRtt;
                 TimeSpan currentRtt = Stopwatch.GetElapsedTime(_pingSentTimestamp);
@@ -274,7 +271,7 @@ namespace System.Net.Http
 
                 Interlocked.Exchange(ref _minRtt, minRtt); // MinRtt is being queried from another thread
 
-                if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Updated MinRtt: {MinRtt.TotalMilliseconds} ms");
+                //ce($"[FlowControl] Updated MinRtt: {MinRtt.TotalMilliseconds} ms");
             }
         }
     }

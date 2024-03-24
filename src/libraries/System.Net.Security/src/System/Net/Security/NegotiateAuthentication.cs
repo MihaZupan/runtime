@@ -407,25 +407,25 @@ namespace System.Net.Security
 
             if (_pal.Package == NegotiationInfoClass.Kerberos)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_no_spn_kerberos);
+                //NetEventSource.Info(this, SR.net_log_listener_no_spn_kerberos);
                 return true;
             }
 
             if (_extendedProtectionPolicy.PolicyEnforcement == PolicyEnforcement.Never)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_no_spn_disabled);
+                //NetEventSource.Info(this, SR.net_log_listener_no_spn_disabled);
                 return true;
             }
 
             if (_isSecureConnection && _extendedProtectionPolicy.ProtectionScenario == ProtectionScenario.TransportSelected)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_no_spn_cbt);
+                //NetEventSource.Info(this, SR.net_log_listener_no_spn_cbt);
                 return true;
             }
 
             if (_extendedProtectionPolicy.CustomServiceNames == null)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_no_spns);
+                //NetEventSource.Info(this, SR.net_log_listener_no_spns);
                 return true;
             }
 
@@ -435,43 +435,18 @@ namespace System.Net.Security
             {
                 if (_extendedProtectionPolicy.PolicyEnforcement == PolicyEnforcement.WhenSupported)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_no_spn_whensupported);
+                    //NetEventSource.Info(this, SR.net_log_listener_no_spn_whensupported);
                     return true;
                 }
                 else
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_spn_failed_always);
+                    //NetEventSource.Info(this, SR.net_log_listener_spn_failed_always);
                     return false;
                 }
             }
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, SR.net_log_listener_spn, clientSpn);
+            //NetEventSource.Info(this, SR.net_log_listener_spn, clientSpn);
             bool found = _extendedProtectionPolicy.CustomServiceNames.Contains(clientSpn);
-
-            if (NetEventSource.Log.IsEnabled())
-            {
-                if (found)
-                {
-                    NetEventSource.Info(this, SR.net_log_listener_spn_passed);
-                }
-                else
-                {
-                    NetEventSource.Info(this, SR.net_log_listener_spn_failed);
-
-                    if (_extendedProtectionPolicy.CustomServiceNames.Count == 0)
-                    {
-                        NetEventSource.Info(this, SR.net_log_listener_spn_failed_empty);
-                    }
-                    else
-                    {
-                        NetEventSource.Info(this, SR.net_log_listener_spn_failed_dump);
-                        foreach (string serviceName in _extendedProtectionPolicy.CustomServiceNames)
-                        {
-                            NetEventSource.Info(this, "\t" + serviceName);
-                        }
-                    }
-                }
-            }
 
             return found;
         }

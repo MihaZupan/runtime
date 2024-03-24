@@ -42,7 +42,7 @@ namespace System.Net.Http
             {
                 _start = content.Position;
             }
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Associate(this, content);
+            //tEventSource.Associate(this, content);
         }
 
         protected override void SerializeToStream(Stream stream, TransportContext? context, CancellationToken cancellationToken)

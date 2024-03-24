@@ -22,7 +22,7 @@ namespace System.Net.Sockets
         // Initializes a new instance of the TcpListener class with the specified local end point.
         public TcpListener(IPEndPoint localEP)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, localEP);
+            //etEventSource.Info(this, localEP);
 
             ArgumentNullException.ThrowIfNull(localEP);
             _serverSocketEP = localEP;
@@ -33,7 +33,7 @@ namespace System.Net.Sockets
         // and port.
         public TcpListener(IPAddress localaddr, int port)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, localaddr);
+            //etEventSource.Info(this, localaddr);
 
             ArgumentNullException.ThrowIfNull(localaddr);
             if (!TcpValidationHelpers.ValidatePortNumber(port))

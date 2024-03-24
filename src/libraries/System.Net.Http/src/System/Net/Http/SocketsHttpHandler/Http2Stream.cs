@@ -101,7 +101,7 @@ namespace System.Net.Http
 
                 _responseBuffer = new MultiArrayBuffer(InitialStreamBufferSize);
 
-                _windowManager = new Http2StreamWindowManager(connection, this);
+                _windowManager = new Http2StreamWindowManager(connection);
 
                 _headerBudgetRemaining = connection._pool.Settings.MaxResponseHeadersByteLength;
 
@@ -148,7 +148,7 @@ namespace System.Net.Http
             {
                 StreamId = streamId;
                 _availableCredit = initialWindowSize;
-                if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(initialWindowSize)}={initialWindowSize}");
+                //ce($"{nameof(initialWindowSize)}={initialWindowSize}");
             }
 
             public int StreamId { get; private set; }
@@ -183,7 +183,7 @@ namespace System.Net.Http
                     return;
                 }
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"{_request.Content}");
+                //ce($"{_request.Content}");
                 Debug.Assert(_requestBodyCancellationSource != null);
 
                 // Cancel the request body sending if cancellation is requested on the supplied cancellation token.
@@ -235,11 +235,11 @@ namespace System.Net.Http
                         if (HttpTelemetry.Log.IsEnabled()) HttpTelemetry.Log.RequestContentStop(writeStream.BytesWritten);
                     }
 
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Finished sending request body.");
+                    //ce($"Finished sending request body.");
                 }
-                catch (Exception e)
+                catch
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Failed to send request body: {e}");
+                    //ce($"Failed to send request body: {e}");
                     bool signalWaiter;
 
                     Debug.Assert(!Monitor.IsEntered(SyncObject));
@@ -333,7 +333,7 @@ namespace System.Net.Http
             public async ValueTask<bool> WaitFor100ContinueAsync(CancellationToken cancellationToken)
             {
                 Debug.Assert(_request?.Content != null);
-                if (NetEventSource.Log.IsEnabled()) Trace($"Waiting to send request body content for 100-Continue.");
+                //ce($"Waiting to send request body content for 100-Continue.");
 
                 // Use TCS created in constructor. It will complete when one of three things occurs:
                 // 1. we receive the relevant response from the server.
@@ -348,7 +348,6 @@ namespace System.Net.Http
                 await using (new Timer(static s =>
                 {
                     var thisRef = (Http2Stream)s!;
-                    if (NetEventSource.Log.IsEnabled()) thisRef.Trace($"100-Continue timer expired.");
                     thisRef._expect100ContinueWaiter?.TrySetResult(true);
                 }, this, _connection._pool.Settings._expect100ContinueTimeout, Timeout.InfiniteTimeSpan).ConfigureAwait(false))
                 {
@@ -367,7 +366,7 @@ namespace System.Net.Http
                 Debug.Assert(_requestCompletionState == StreamCompletionState.Failed || _responseCompletionState == StreamCompletionState.Failed,
                     "Reset called but neither request nor response is failed");
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Stream reset. Request={_requestCompletionState}, Response={_responseCompletionState}.");
+                //ce($"Stream reset. Request={_requestCompletionState}, Response={_responseCompletionState}.");
 
                 // Don't send a RST_STREAM if we've already received one from the server.
                 if (_resetException == null)
@@ -384,7 +383,7 @@ namespace System.Net.Http
                 Debug.Assert(_requestCompletionState != StreamCompletionState.InProgress);
                 Debug.Assert(_responseCompletionState != StreamCompletionState.InProgress);
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Stream complete. Request={_requestCompletionState}, Response={_responseCompletionState}.");
+                //ce($"Stream complete. Request={_requestCompletionState}, Response={_responseCompletionState}.");
 
                 _connection.RemoveStream(this);
 
@@ -401,7 +400,7 @@ namespace System.Net.Http
 
             private void Cancel()
             {
-                if (NetEventSource.Log.IsEnabled()) Trace("");
+                //ce("");
 
                 CancellationTokenSource? requestBodyCancellationSource = null;
                 bool signalWaiter = false;
@@ -556,7 +555,7 @@ namespace System.Net.Http
 
                 if (index <= LastHPackRequestPseudoHeaderId)
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Invalid request pseudo-header ID {index}.");
+                    //ce($"Invalid request pseudo-header ID {index}.");
                     throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                 }
                 else if (index <= LastHPackStatusPseudoHeaderId)
@@ -579,7 +578,7 @@ namespace System.Net.Http
 
                 if (index <= LastHPackRequestPseudoHeaderId)
                 {
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Invalid request pseudo-header ID {index}.");
+                    //ce($"Invalid request pseudo-header ID {index}.");
                     throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                 }
                 else if (index <= LastHPackStatusPseudoHeaderId)
@@ -612,7 +611,7 @@ namespace System.Net.Http
 
             private void OnStatus(int statusCode)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"Status code is {statusCode}");
+                //ce($"Status code is {statusCode}");
 
                 AdjustHeaderBudget(10); // for ":status" plus 3-digit status code
 
@@ -627,14 +626,14 @@ namespace System.Net.Http
 
                     if (_responseProtocolState == ResponseProtocolState.ExpectingHeaders)
                     {
-                        if (NetEventSource.Log.IsEnabled()) Trace("Received extra status header.");
+                        //ce("Received extra status header.");
                         throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response_multiple_status_codes);
                     }
 
                     if (_responseProtocolState != ResponseProtocolState.ExpectingStatus)
                     {
                         // Pseudo-headers are allowed only in header block
-                        if (NetEventSource.Log.IsEnabled()) Trace($"Status pseudo-header received in {_responseProtocolState} state.");
+                        //ce($"Status pseudo-header received in {_responseProtocolState} state.");
                         throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response_pseudo_header_in_trailer);
                     }
 
@@ -648,7 +647,7 @@ namespace System.Net.Http
 
                         if (_response.StatusCode == HttpStatusCode.Continue && _expect100ContinueWaiter != null)
                         {
-                            if (NetEventSource.Log.IsEnabled()) Trace("Received 100-Continue status.");
+                            //ce("Received 100-Continue status.");
                             _expect100ContinueWaiter.TrySetResult(true);
                         }
                     }
@@ -667,7 +666,7 @@ namespace System.Net.Http
                             // If the final status code is >= 300, skip sending the body.
                             bool shouldSendBody = (statusCode < 300);
 
-                            if (NetEventSource.Log.IsEnabled()) Trace($"Expecting 100 Continue but received final status {statusCode}.");
+                            //ce($"Expecting 100 Continue but received final status {statusCode}.");
                             _expect100ContinueWaiter.TrySetResult(shouldSendBody);
                         }
                     }
@@ -676,7 +675,7 @@ namespace System.Net.Http
 
             private void OnHeader(HeaderDescriptor descriptor, ReadOnlySpan<byte> value)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"{descriptor.Name}: {Encoding.ASCII.GetString(value)}");
+                //ce($"{descriptor.Name}: {Encoding.ASCII.GetString(value)}");
 
                 AdjustHeaderBudget(descriptor.Name.Length + value.Length);
 
@@ -697,7 +696,7 @@ namespace System.Net.Http
 
                     if (_responseProtocolState != ResponseProtocolState.ExpectingHeaders && _responseProtocolState != ResponseProtocolState.ExpectingTrailingHeaders)
                     {
-                        if (NetEventSource.Log.IsEnabled()) Trace("Received header before status.");
+                        //ce("Received header before status.");
                         throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                     }
 
@@ -741,7 +740,7 @@ namespace System.Net.Http
                     }
                     else
                     {
-                        if (NetEventSource.Log.IsEnabled()) Trace($"Invalid response pseudo-header '{Encoding.ASCII.GetString(name)}'.");
+                        //ce($"Invalid response pseudo-header '{Encoding.ASCII.GetString(name)}'.");
                         throw new HttpRequestException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                     }
                 }
@@ -800,7 +799,7 @@ namespace System.Net.Http
                         case ResponseProtocolState.ExpectingTrailingHeaders:
                             if (!endStream)
                             {
-                                if (NetEventSource.Log.IsEnabled()) Trace("Trailing headers received without endStream");
+                                //ce("Trailing headers received without endStream");
                                 ThrowProtocolError();
                             }
                             _responseProtocolState = ResponseProtocolState.Complete;
@@ -941,7 +940,7 @@ namespace System.Net.Http
             // (4) Receiving EOF from the server. If so, resetException will contain an exception like "expected 9 bytes of data", and canRetry will be false.
             public void OnReset(Exception resetException, Http2ProtocolErrorCode? resetStreamErrorCode = null, bool canRetry = false)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"{nameof(resetException)}={resetException}, {nameof(resetStreamErrorCode)}={resetStreamErrorCode}");
+                //ce($"{nameof(resetException)}={resetException}, {nameof(resetStreamErrorCode)}={resetStreamErrorCode}");
 
                 bool cancel = false;
                 CancellationTokenSource? requestBodyCancellationSource = null;
@@ -1094,7 +1093,7 @@ namespace System.Net.Http
                 {
                     responseContent.SetStream(new Http2ReadStream(this));
                 }
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received response: {_response}");
+                //ce($"Received response: {_response}");
 
                 // Process Set-Cookie headers.
                 if (_connection._pool.Settings._useCookies)
@@ -1557,14 +1556,12 @@ namespace System.Net.Http
 
                 ~Http2ReadWriteStream()
                 {
-                    if (NetEventSource.Log.IsEnabled()) _http2Stream?.Trace("");
                     try
                     {
                         Dispose(disposing: false);
                     }
-                    catch (Exception e)
+                    catch
                     {
-                        if (NetEventSource.Log.IsEnabled()) _http2Stream?.Trace($"Error: {e}");
                     }
                 }
 
