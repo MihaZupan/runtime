@@ -29,7 +29,7 @@ namespace System.Net.Http
                 }
 
                 HttpConnection connection = GetConnectionOrThrow();
-                Debug.Assert(connection._currentRequest != null);
+                Debug.Assert(connection._request != null);
                 connection.Write(buffer);
             }
 
@@ -43,7 +43,7 @@ namespace System.Net.Http
                 }
 
                 HttpConnection connection = GetConnectionOrThrow();
-                Debug.Assert(connection._currentRequest != null);
+                Debug.Assert(connection._request != null);
                 return connection.WriteAsync(buffer);
             }
 

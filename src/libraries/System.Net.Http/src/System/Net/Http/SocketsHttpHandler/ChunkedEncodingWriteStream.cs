@@ -23,7 +23,7 @@ namespace System.Net.Http
                 BytesWritten += buffer.Length;
 
                 HttpConnection connection = GetConnectionOrThrow();
-                Debug.Assert(connection._currentRequest != null);
+                Debug.Assert(connection._request != null);
 
                 if (buffer.Length == 0)
                 {
@@ -32,7 +32,8 @@ namespace System.Net.Http
                 }
 
                 // Write chunk length in hex followed by \r\n
-                ValueTask writeTask = connection.WriteHexInt32Async(buffer.Length, async: false);
+                connection._async = false;
+                ValueTask writeTask = connection.WriteHexInt32Async(buffer.Length);
                 Debug.Assert(writeTask.IsCompleted);
                 writeTask.GetAwaiter().GetResult();
                 connection.Write(s_crlfBytes);
@@ -47,16 +48,18 @@ namespace System.Net.Http
                 BytesWritten += buffer.Length;
 
                 HttpConnection connection = GetConnectionOrThrow();
-                Debug.Assert(connection._currentRequest != null);
+                Debug.Assert(connection._request != null);
 
                 // The token is ignored because it's coming from SendAsync and the only operations
                 // here are those that are already covered by the token having been registered with
                 // to close the connection.
 
+                connection._async = true;
+
                 ValueTask task = buffer.Length == 0 ?
                     // Don't write if nothing was given, especially since we don't want to accidentally send a 0 chunk,
                     // which would indicate end of body.  Instead, just ensure no content is stuck in the buffer.
-                    connection.FlushAsync(async: true) :
+                    connection.FlushAsync() :
                     WriteChunkAsync(connection, buffer);
 
                 return task;
@@ -64,7 +67,7 @@ namespace System.Net.Http
                 static async ValueTask WriteChunkAsync(HttpConnection connection, ReadOnlyMemory<byte> buffer)
                 {
                     // Write chunk length in hex followed by \r\n
-                    await connection.WriteHexInt32Async(buffer.Length, async: true).ConfigureAwait(false);
+                    await connection.WriteHexInt32Async(buffer.Length).ConfigureAwait(false);
                     await connection.WriteAsync(s_crlfBytes).ConfigureAwait(false);
 
                     // Write chunk contents followed by \r\n

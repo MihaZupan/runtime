@@ -61,7 +61,7 @@ namespace System.Net.Http
                 }
                 else
                 {
-                    CancellationTokenRegistration ctr = connection.RegisterCancellation(cancellationToken);
+                    connection.RegisterCancellation(cancellationToken);
                     try
                     {
                         bytesRead = await readTask.ConfigureAwait(false);
@@ -72,7 +72,8 @@ namespace System.Net.Http
                     }
                     finally
                     {
-                        ctr.Dispose();
+                        connection._cancellationRegistration.Dispose();
+                        connection._cancellationRegistration = default;
                     }
                 }
 
@@ -117,7 +118,7 @@ namespace System.Net.Http
 
             private async Task CompleteCopyToAsync(Task copyTask, HttpConnection connection, CancellationToken cancellationToken)
             {
-                CancellationTokenRegistration ctr = connection.RegisterCancellation(cancellationToken);
+                connection.RegisterCancellation(cancellationToken);
                 try
                 {
                     await copyTask.ConfigureAwait(false);
@@ -128,7 +129,8 @@ namespace System.Net.Http
                 }
                 finally
                 {
-                    ctr.Dispose();
+                    connection._cancellationRegistration.Dispose();
+                    connection._cancellationRegistration = default;
                 }
 
                 // If cancellation is requested and tears down the connection, it could cause the copy
@@ -179,7 +181,7 @@ namespace System.Net.Http
                     return default;
                 }
 
-                ValueTask writeTask = connection.WriteWithoutBufferingAsync(buffer, async: true);
+                ValueTask writeTask = connection.WriteWithoutBufferingAsync(buffer);
                 return writeTask.IsCompleted ?
                     writeTask :
                     new ValueTask(WaitWithConnectionCancellationAsync(writeTask, connection, cancellationToken));
@@ -200,7 +202,8 @@ namespace System.Net.Http
                     return Task.CompletedTask;
                 }
 
-                ValueTask flushTask = connection.FlushAsync(async: true);
+                connection._async = true;
+                ValueTask flushTask = connection.FlushAsync();
                 return flushTask.IsCompleted ?
                     flushTask.AsTask() :
                     WaitWithConnectionCancellationAsync(flushTask, connection, cancellationToken);
@@ -208,7 +211,7 @@ namespace System.Net.Http
 
             private static async Task WaitWithConnectionCancellationAsync(ValueTask task, HttpConnection connection, CancellationToken cancellationToken)
             {
-                CancellationTokenRegistration ctr = connection.RegisterCancellation(cancellationToken);
+                connection.RegisterCancellation(cancellationToken);
                 try
                 {
                     await task.ConfigureAwait(false);
@@ -219,7 +222,8 @@ namespace System.Net.Http
                 }
                 finally
                 {
-                    ctr.Dispose();
+                    connection._cancellationRegistration.Dispose();
+                    connection._cancellationRegistration = default;
                 }
             }
         }

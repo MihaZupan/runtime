@@ -54,7 +54,7 @@ namespace System.Net.Http
                 }
                 else
                 {
-                    CancellationTokenRegistration ctr = connection.RegisterCancellation(cancellationToken);
+                    connection.RegisterCancellation(cancellationToken);
                     try
                     {
                         bytesRead = await readTask.ConfigureAwait(false);
@@ -65,7 +65,8 @@ namespace System.Net.Http
                     }
                     finally
                     {
-                        ctr.Dispose();
+                        connection._cancellationRegistration.Dispose();
+                        connection._cancellationRegistration = default;
                     }
                 }
 
@@ -115,7 +116,7 @@ namespace System.Net.Http
 
             private async Task CompleteCopyToAsync(Task copyTask, HttpConnection connection, CancellationToken cancellationToken)
             {
-                CancellationTokenRegistration ctr = connection.RegisterCancellation(cancellationToken);
+                connection.RegisterCancellation(cancellationToken);
                 try
                 {
                     await copyTask.ConfigureAwait(false);
@@ -126,7 +127,8 @@ namespace System.Net.Http
                 }
                 finally
                 {
-                    ctr.Dispose();
+                    connection._cancellationRegistration.Dispose();
+                    connection._cancellationRegistration = default;
                 }
 
                 // If cancellation is requested and tears down the connection, it could cause the copy

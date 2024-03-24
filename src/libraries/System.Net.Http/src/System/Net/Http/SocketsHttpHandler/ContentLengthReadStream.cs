@@ -54,14 +54,17 @@ namespace System.Net.Http
                 return bytesRead;
             }
 
-            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
             {
-                CancellationHelper.ThrowIfCancellationRequested(cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return ValueTask.FromCanceled<int>(cancellationToken);
+                }
 
-                if (_connection == null)
+                if (_connection is null)
                 {
                     // Response body fully consumed
-                    return 0;
+                    return new ValueTask<int>(0);
                 }
 
                 Debug.Assert(_contentBytesRemaining > 0);
@@ -72,38 +75,90 @@ namespace System.Net.Http
                 }
 
                 ValueTask<int> readTask = _connection.ReadAsync(buffer);
-                int bytesRead;
+
                 if (readTask.IsCompletedSuccessfully)
                 {
-                    bytesRead = readTask.Result;
+                    int bytesRead = readTask.Result;
+
+                    if (!buffer.IsEmpty)
+                    {
+                        if (bytesRead == 0)
+                        {
+                            return ValueTask.FromException<int>(CreateEOFException());
+                        }
+
+                        AccountForBytesRead(bytesRead);
+                    }
+
+                    return new ValueTask<int>(bytesRead);
+                }
+
+                _connection._cancellationToken = cancellationToken;
+                _connection.RegisterCancellation(cancellationToken);
+
+                if (buffer.IsEmpty)
+                {
+                    return AwaitZeroByteReadTaskAsync(readTask);
                 }
                 else
                 {
-                    CancellationTokenRegistration ctr = _connection.RegisterCancellation(cancellationToken);
-                    try
-                    {
-                        bytesRead = await readTask.ConfigureAwait(false);
-                    }
-                    catch (Exception exc) when (CancellationHelper.ShouldWrapInOperationCanceledException(exc, cancellationToken))
-                    {
-                        throw CancellationHelper.CreateOperationCanceledException(exc, cancellationToken);
-                    }
-                    finally
-                    {
-                        ctr.Dispose();
-                    }
+                    return AwaitReadAsyncTaskAsync(readTask);
                 }
+            }
 
-                if (bytesRead == 0 && buffer.Length != 0)
+            private async ValueTask<int> AwaitZeroByteReadTaskAsync(ValueTask<int> readTask)
+            {
+                Debug.Assert(_connection is not null);
+                try
                 {
-                    // A cancellation request may have caused the EOF.
-                    CancellationHelper.ThrowIfCancellationRequested(cancellationToken);
-
-                    // Unexpected end of response stream.
-                    throw new HttpIOException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _contentBytesRemaining));
+                    return await readTask.ConfigureAwait(false);
                 }
+                catch (Exception exc) when (CancellationHelper.ShouldWrapInOperationCanceledException(exc, _connection._cancellationToken))
+                {
+                    throw CancellationHelper.CreateOperationCanceledException(exc, _connection._cancellationToken);
+                }
+                finally
+                {
+                    _connection._cancellationRegistration.Dispose();
+                    _connection._cancellationRegistration = default;
 
+                    _connection._cancellationToken = default;
+                }
+            }
+
+            private async ValueTask<int> AwaitReadAsyncTaskAsync(ValueTask<int> readTask)
+            {
+                Debug.Assert(_connection is not null);
+                try
+                {
+                    int bytesRead = await readTask.ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        throw CreateEOFException();
+                    }
+
+                    AccountForBytesRead(bytesRead);
+                    return bytesRead;
+                }
+                catch (Exception exc) when (CancellationHelper.ShouldWrapInOperationCanceledException(exc, _connection._cancellationToken))
+                {
+                    throw CancellationHelper.CreateOperationCanceledException(exc, _connection._cancellationToken);
+                }
+                finally
+                {
+                    _connection._cancellationRegistration.Dispose();
+                    _connection._cancellationRegistration = default;
+
+                    _connection._cancellationToken = default;
+                }
+            }
+
+            private void AccountForBytesRead(int bytesRead)
+            {
+                Debug.Assert(_connection is not null);
+                Debug.Assert(bytesRead > 0);
                 Debug.Assert((ulong)bytesRead <= _contentBytesRemaining);
+
                 _contentBytesRemaining -= (ulong)bytesRead;
 
                 if (_contentBytesRemaining == 0)
@@ -112,9 +167,10 @@ namespace System.Net.Http
                     _connection.CompleteResponse();
                     _connection = null;
                 }
-
-                return bytesRead;
             }
+
+            private HttpIOException CreateEOFException() =>
+                new(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _contentBytesRemaining));
 
             public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
             {
@@ -138,24 +194,29 @@ namespace System.Net.Http
                     return Task.CompletedTask;
                 }
 
-                return CompleteCopyToAsync(copyTask, cancellationToken);
+                _connection._cancellationToken = cancellationToken;
+                _connection.RegisterCancellation(cancellationToken);
+
+                return CompleteCopyToAsync(copyTask);
             }
 
-            private async Task CompleteCopyToAsync(Task copyTask, CancellationToken cancellationToken)
+            private async Task CompleteCopyToAsync(Task copyTask)
             {
                 Debug.Assert(_connection != null);
-                CancellationTokenRegistration ctr = _connection.RegisterCancellation(cancellationToken);
                 try
                 {
                     await copyTask.ConfigureAwait(false);
                 }
-                catch (Exception exc) when (CancellationHelper.ShouldWrapInOperationCanceledException(exc, cancellationToken))
+                catch (Exception exc) when (CancellationHelper.ShouldWrapInOperationCanceledException(exc, _connection._cancellationToken))
                 {
-                    throw CancellationHelper.CreateOperationCanceledException(exc, cancellationToken);
+                    throw CancellationHelper.CreateOperationCanceledException(exc, _connection._cancellationToken);
                 }
                 finally
                 {
-                    ctr.Dispose();
+                    _connection._cancellationRegistration.Dispose();
+                    _connection._cancellationRegistration = default;
+
+                    _connection._cancellationToken = default;
                 }
 
                 Finish();
@@ -210,7 +271,6 @@ namespace System.Net.Http
                 }
 
                 CancellationTokenSource? cts = null;
-                CancellationTokenRegistration ctr = default;
                 TimeSpan drainTime = _connection._pool.Settings._maxResponseDrainTime;
 
                 if (drainTime == TimeSpan.Zero)
@@ -221,14 +281,16 @@ namespace System.Net.Http
                 if (drainTime != Timeout.InfiniteTimeSpan)
                 {
                     cts = new CancellationTokenSource((int)drainTime.TotalMilliseconds);
-                    ctr = cts.Token.Register(static s => ((HttpConnection)s!).Dispose(), _connection);
+                    _connection.RegisterCancellation(cts.Token);
                 }
+
+                _connection._async = true;
 
                 try
                 {
                     while (true)
                     {
-                        await _connection.FillAsync(async: true).ConfigureAwait(false);
+                        await _connection.FillAsync().ConfigureAwait(false);
                         ReadFromConnectionBuffer(int.MaxValue);
                         if (_contentBytesRemaining == 0)
                         {
@@ -239,8 +301,8 @@ namespace System.Net.Http
                             // we then return a connection to the pool that has been or will be disposed
                             // (e.g. if a timer is used and has already queued its callback but the
                             // callback hasn't yet run).
-                            ctr.Dispose();
-                            CancellationHelper.ThrowIfCancellationRequested(ctr.Token);
+                            _connection._cancellationRegistration.Dispose();
+                            CancellationHelper.ThrowIfCancellationRequested(_connection._cancellationRegistration.Token);
 
                             Finish();
                             return true;
@@ -249,7 +311,9 @@ namespace System.Net.Http
                 }
                 finally
                 {
-                    ctr.Dispose();
+                    _connection._cancellationRegistration.Dispose();
+                    _connection._cancellationRegistration = default;
+
                     cts?.Dispose();
                 }
             }
