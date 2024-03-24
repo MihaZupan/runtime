@@ -499,6 +499,15 @@ namespace System.Net.Http
 
         public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
         {
+            void TraceStartingRequest() => Trace($"Sending request: {_currentRequest}");
+            void TraceSawRequestContent(bool hasExpectContinue) => Trace($"Request content is not null, start processing it. hasExpectContinueHeader = {hasExpectContinue}");
+            void TraceReadAheadCompletedAsyncForSyncRequest() => Trace("Pre-emptive read completed asynchronously for a synchronous request.");
+            void TraceBytesRead(int bytesRead) => Trace($"Received {bytesRead} bytes.");
+            void TraceInterimResponse(HttpResponseMessage response) => Trace($"Current {response.StatusCode} response is an interim response or not expected, need to read for a final response.");
+            void TraceRequestFullySent() => Trace("Request is fully sent.");
+            void TraceReceivedResponseMessage(HttpResponseMessage response) => Trace($"Received response: {response}");
+            void TraceErrorSendingRequest(Exception error) => Trace($"Error sending request: {error}");
+
             Debug.Assert(_currentRequest == null, $"Expected null {nameof(_currentRequest)}.");
             Debug.Assert(_readBuffer.ActiveLength == 0, "Unexpected data in read buffer");
             Debug.Assert(_readAheadTaskStatus != ReadAheadTask_Started);
@@ -514,7 +523,7 @@ namespace System.Net.Http
             _canRetry = false;
 
             // Send the request.
-            if (NetEventSource.Log.IsEnabled()) Trace($"Sending request: {request}");
+            if (NetEventSource.Log.IsEnabled()) TraceStartingRequest();
             CancellationTokenRegistration cancellationRegistration = RegisterCancellation(cancellationToken);
             try
             {
@@ -532,7 +541,7 @@ namespace System.Net.Http
                 else
                 {
                     bool hasExpectContinueHeader = request.HasHeaders && request.Headers.ExpectContinue == true;
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Request content is not null, start processing it. hasExpectContinueHeader = {hasExpectContinueHeader}");
+                    if (NetEventSource.Log.IsEnabled()) TraceSawRequestContent(hasExpectContinueHeader);
 
                     // Send the body if there is one.  We prefer to serialize the sending of the content before
                     // we try to receive any response, but if ExpectContinue has been set, we allow the sending
@@ -594,7 +603,7 @@ namespace System.Net.Http
                     {
                         if (NetEventSource.Log.IsEnabled() && !async)
                         {
-                            Trace($"Pre-emptive read completed asynchronously for a synchronous request.");
+                            TraceReadAheadCompletedAsyncForSyncRequest();
                         }
 
                         bytesRead = await vt.ConfigureAwait(false);
@@ -602,7 +611,7 @@ namespace System.Net.Http
 
                     _readBuffer.Commit(bytesRead);
 
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
+                    if (NetEventSource.Log.IsEnabled()) TraceBytesRead(bytesRead);
 
                     _readAheadTaskStatus = ReadAheadTask_NotStarted;
                 }
@@ -662,7 +671,7 @@ namespace System.Net.Http
                     }
 
                     // In case read hangs which eventually leads to connection timeout.
-                    if (NetEventSource.Log.IsEnabled()) Trace($"Current {response.StatusCode} response is an interim response or not expected, need to read for a final response.");
+                    if (NetEventSource.Log.IsEnabled()) TraceInterimResponse(response);
 
                     // Discard headers that come with the interim 1xx responses.
                     while (!ParseHeaders(response: null, isFromTrailer: false))
@@ -733,7 +742,7 @@ namespace System.Net.Http
                 }
 
                 // Now we are sure that the request was fully sent.
-                if (NetEventSource.Log.IsEnabled()) Trace("Request is fully sent.");
+                if (NetEventSource.Log.IsEnabled()) TraceRequestFullySent();
 
                 // We're about to create the response stream, at which point responsibility for canceling
                 // the remainder of the response lies with the stream.  Thus we dispose of our registration
@@ -796,7 +805,7 @@ namespace System.Net.Http
                 }
                 ((HttpConnectionResponseContent)response.Content).SetStream(responseStream);
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Received response: {response}");
+                if (NetEventSource.Log.IsEnabled()) TraceReceivedResponseMessage(response);
 
                 // Process Set-Cookie headers.
                 if (_pool.Settings._useCookies)
@@ -825,7 +834,7 @@ namespace System.Net.Http
                     LogExceptions(_readAheadTask.AsTask());
                 }
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Error sending request: {error}");
+                if (NetEventSource.Log.IsEnabled()) TraceErrorSendingRequest(error);
 
                 // In the rare case where Expect: 100-continue was used and then processing
                 // of the response headers encountered an error such that we weren't able to
