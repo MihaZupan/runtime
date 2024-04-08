@@ -2071,15 +2071,15 @@ namespace System.Text
             {
                 if (Vector512.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector512<byte>.Count)
                 {
-                    WidenAsciiToUtf16_Vector<Vector512<byte>, Vector512<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf1_Vector<Vector512<byte>, Vector512<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
                 else if (Vector256.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector256<byte>.Count)
                 {
-                    WidenAsciiToUtf16_Vector<Vector256<byte>, Vector256<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf1_Vector<Vector256<byte>, Vector256<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
                 else if (Vector128.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector128<byte>.Count)
                 {
-                    WidenAsciiToUtf16_Vector<Vector128<byte>, Vector128<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf1_Vector<Vector128<byte>, Vector128<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
             }
 
@@ -2182,7 +2182,7 @@ namespace System.Text
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe void WidenAsciiToUtf16_Vector<TVectorByte, TVectorUInt16>(byte* pAsciiBuffer, char* pUtf16Buffer, ref nuint currentOffset, nuint elementCount)
+        private static unsafe void WidenAsciiToUtf1_Vector<TVectorByte, TVectorUInt16>(byte* pAsciiBuffer, char* pUtf16Buffer, ref nuint currentOffset, nuint elementCount)
             where TVectorByte : unmanaged, ISimdVector<TVectorByte, byte>
             where TVectorUInt16 : unmanaged, ISimdVector<TVectorUInt16, ushort>
         {
