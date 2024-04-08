@@ -1517,6 +1517,38 @@ namespace System.Text
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool VectorContainsNonAsciiChar(Vector256<byte> asciiVector)
+        {
+            return Avx.IsSupported
+                ? !Avx.TestZ(asciiVector, Vector256.Create((byte)0x80))
+                : asciiVector.ExtractMostSignificantBits() != 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool VectorContainsNonAsciiChar(Vector512<byte> asciiVector)
+        {
+            return asciiVector.ExtractMostSignificantBits() != 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool VectorContainsNonAsciiChar<TVectorByte>(TVectorByte vector)
+            where TVectorByte : unmanaged, ISimdVector<TVectorByte, byte>
+        {
+            if (typeof(TVectorByte) == typeof(Vector128<byte>))
+            {
+                return VectorContainsNonAsciiChar((Vector128<byte>)(object)vector);
+            }
+            else if (typeof(TVectorByte) == typeof(Vector256<byte>))
+            {
+                return VectorContainsNonAsciiChar((Vector256<byte>)(object)vector);
+            }
+            else
+            {
+                return VectorContainsNonAsciiChar((Vector512<byte>)(object)vector);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool VectorContainsNonAsciiChar(Vector128<ushort> utf16Vector)
         {
             // prefer architecture specific intrinsic as they offer better perf
@@ -1614,7 +1646,6 @@ namespace System.Text
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx))]
         private static bool AllCharsInVectorAreAscii<T>(Vector256<T> vector)
             where T : unmanaged
         {
@@ -2040,15 +2071,15 @@ namespace System.Text
             {
                 if (Vector512.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector512<byte>.Count)
                 {
-                    WidenAsciiToUtf1_Vector<Vector512<byte>, Vector512<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf16_Vector<Vector512<byte>, Vector512<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
                 else if (Vector256.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector256<byte>.Count)
                 {
-                    WidenAsciiToUtf1_Vector<Vector256<byte>, Vector256<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf16_Vector<Vector256<byte>, Vector256<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
                 else if (Vector128.IsHardwareAccelerated && (elementCount - currentOffset) >= (uint)Vector128<byte>.Count)
                 {
-                    WidenAsciiToUtf1_Vector<Vector128<byte>, Vector128<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
+                    WidenAsciiToUtf16_Vector<Vector128<byte>, Vector128<ushort>>(pAsciiBuffer, pUtf16Buffer, ref currentOffset, elementCount);
                 }
             }
 
@@ -2151,7 +2182,7 @@ namespace System.Text
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe void WidenAsciiToUtf1_Vector<TVectorByte, TVectorUInt16>(byte* pAsciiBuffer, char* pUtf16Buffer, ref nuint currentOffset, nuint elementCount)
+        private static unsafe void WidenAsciiToUtf16_Vector<TVectorByte, TVectorUInt16>(byte* pAsciiBuffer, char* pUtf16Buffer, ref nuint currentOffset, nuint elementCount)
             where TVectorByte : unmanaged, ISimdVector<TVectorByte, byte>
             where TVectorUInt16 : unmanaged, ISimdVector<TVectorUInt16, ushort>
         {
@@ -2160,32 +2191,36 @@ namespace System.Text
             // perf wins vs. relying on the JIT to fold memory addressing logic into the
             // write instructions. See: https://github.com/dotnet/runtime/issues/33002
             nuint finalOffsetWhereCanRunLoop = elementCount - (nuint)TVectorByte.Count;
+
             TVectorByte asciiVector = TVectorByte.Load(pAsciiBuffer + currentOffset);
-            if (!HasMatch<TVectorByte>(asciiVector))
+            if (VectorContainsNonAsciiChar(asciiVector))
             {
                 (TVectorUInt16 utf16LowVector, TVectorUInt16 utf16HighVector) = Widen<TVectorByte, TVectorUInt16>(asciiVector);
                 utf16LowVector.Store(pCurrentWriteAddress);
                 utf16HighVector.Store(pCurrentWriteAddress + TVectorUInt16.Count);
+
                 pCurrentWriteAddress += (nuint)(TVectorUInt16.Count * 2);
                 if (((nuint)pCurrentWriteAddress % sizeof(char)) == 0)
                 {
                     // Bump write buffer up to the next aligned boundary
                     pCurrentWriteAddress = (ushort*)((nuint)pCurrentWriteAddress & ~(nuint)(TVectorUInt16.Alignment - 1));
                     nuint numBytesWritten = (nuint)pCurrentWriteAddress - (nuint)pUtf16Buffer;
-                    currentOffset += (nuint)numBytesWritten / 2;
+                    currentOffset += numBytesWritten / 2;
                 }
                 else
                 {
                     // If input isn't char aligned, we won't be able to align it to a Vector
                     currentOffset += (nuint)TVectorByte.Count;
                 }
+
                 while (currentOffset <= finalOffsetWhereCanRunLoop)
                 {
                     asciiVector = TVectorByte.Load(pAsciiBuffer + currentOffset);
-                    if (HasMatch<TVectorByte>(asciiVector))
+                    if (VectorContainsNonAsciiChar(asciiVector))
                     {
                         break;
                     }
+
                     (utf16LowVector, utf16HighVector) = Widen<TVectorByte, TVectorUInt16>(asciiVector);
                     utf16LowVector.Store(pCurrentWriteAddress);
                     utf16HighVector.Store(pCurrentWriteAddress + TVectorUInt16.Count);
@@ -2194,16 +2229,7 @@ namespace System.Text
                     pCurrentWriteAddress += (nuint)(TVectorUInt16.Count * 2);
                 }
             }
-            return;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool HasMatch<TVectorByte>(TVectorByte vector)
-            where TVectorByte : unmanaged, ISimdVector<TVectorByte, byte>
-        {
-            return !(vector & TVectorByte.Create((byte)0x80)).Equals(TVectorByte.Zero);
-        }
-
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe (TVectorUInt16 Lower, TVectorUInt16 Upper) Widen<TVectorByte, TVectorUInt16>(TVectorByte vector)
