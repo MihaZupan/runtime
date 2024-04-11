@@ -121,7 +121,7 @@ namespace System.Buffers
                 span = span.Slice(offset);
             }
 
-            int index = ProbabilisticMap.IndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(
+            int index = ProbabilisticMapState.IndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(
                 ref MemoryMarshal.GetReference(span),
                 span.Length,
                 ref _map);
@@ -210,7 +210,7 @@ namespace System.Buffers
                 span = span.Slice(0, offset + 1);
             }
 
-            return ProbabilisticMap.LastIndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(
+            return ProbabilisticMapState.LastIndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(
                 ref MemoryMarshal.GetReference(span),
                 span.Length,
                 ref _map);

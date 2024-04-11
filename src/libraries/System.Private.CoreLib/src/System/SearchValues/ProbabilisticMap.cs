@@ -377,7 +377,7 @@ namespace System.Buffers
                     : IndexOfAnyVectorized<TUseFastContains>(ref searchSpace, searchSpaceLength, ref state);
             }
 
-            return IndexOfAnySimpleLoop<TUseFastContains, IndexOfAnyAsciiSearcher.DontNegate>(ref searchSpace, searchSpaceLength, ref state);
+            return ProbabilisticMapState.IndexOfAnySimpleLoop<TUseFastContains, IndexOfAnyAsciiSearcher.DontNegate>(ref searchSpace, searchSpaceLength, ref state);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -386,7 +386,7 @@ namespace System.Buffers
         {
             // TODO: Implement vectorized LastIndexOfAny.
 
-            return LastIndexOfAnySimpleLoop<TUseFastContains, IndexOfAnyAsciiSearcher.DontNegate>(ref searchSpace, searchSpaceLength, ref state);
+            return ProbabilisticMapState.LastIndexOfAnySimpleLoop<TUseFastContains, IndexOfAnyAsciiSearcher.DontNegate>(ref searchSpace, searchSpaceLength, ref state);
         }
 
         [CompExactlyDependsOn(typeof(Avx512Vbmi.VL))]
@@ -667,28 +667,6 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static int IndexOfAnySimpleLoop<TUseFastContains, TNegator>(ref char searchSpace, int searchSpaceLength, ref ProbabilisticMapState state)
-            where TUseFastContains : struct, SearchValues.IRuntimeConst
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            ref char searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
-            ref char cur = ref searchSpace;
-
-            while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
-            {
-                char c = cur;
-                if (TNegator.NegateIfNeeded(state.ProbabilisticContains<TUseFastContains>(c)))
-                {
-                    return MatchOffset(ref searchSpace, ref cur);
-                }
-
-                cur = ref Unsafe.Add(ref cur, 1);
-            }
-
-            return -1;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int IndexOfAnySimpleLoop<TNegator>(ref char searchSpace, int searchSpaceLength, ReadOnlySpan<char> values)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
@@ -704,23 +682,6 @@ namespace System.Buffers
                 }
 
                 cur = ref Unsafe.Add(ref cur, 1);
-            }
-
-            return -1;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static int LastIndexOfAnySimpleLoop<TUseFastContains, TNegator>(ref char searchSpace, int searchSpaceLength, ref ProbabilisticMapState state)
-            where TUseFastContains : struct, SearchValues.IRuntimeConst
-            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
-        {
-            for (int i = searchSpaceLength - 1; i >= 0; i--)
-            {
-                char c = Unsafe.Add(ref searchSpace, i);
-                if (TNegator.NegateIfNeeded(state.ProbabilisticContains<TUseFastContains>(c)))
-                {
-                    return i;
-                }
             }
 
             return -1;

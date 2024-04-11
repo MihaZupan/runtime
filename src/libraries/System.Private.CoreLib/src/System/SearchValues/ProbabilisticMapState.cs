@@ -48,9 +48,13 @@ namespace System.Buffers
             Debug.Assert(_hashEntries is not null);
             Debug.Assert(_slowContainsValuesSpanPtr == IntPtr.Zero);
 
-            char[] hashEntries = _hashEntries;
+            return FastContains(_hashEntries, _multiplier, value);
+        }
 
-            ulong offset = FastMod(value, (uint)hashEntries.Length, _multiplier);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool FastContains(char[] hashEntries, uint multiplier, char value)
+        {
+            ulong offset = FastMod(value, (uint)hashEntries.Length, multiplier);
             Debug.Assert(offset < (ulong)hashEntries.Length);
 
             return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(hashEntries), (nuint)offset) == value;
@@ -75,20 +79,6 @@ namespace System.Buffers
             Debug.Assert(_slowContainsValuesSpanPtr != IntPtr.Zero);
 
             return ProbabilisticMap.Contains(*(ReadOnlySpan<char>*)_slowContainsValuesSpanPtr, value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ProbabilisticContains<TUseFastContains>(char value)
-            where TUseFastContains : struct, SearchValues.IRuntimeConst
-        {
-            if (TUseFastContains.Value)
-            {
-                return FastContains(value);
-            }
-            else
-            {
-                return SlowProbabilisticContains(value);
-            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -211,6 +201,85 @@ namespace System.Buffers
 
             Debug.Assert(result == (value % divisor));
             return result;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int IndexOfAnySimpleLoop<TUseFastContains, TNegator>(ref char searchSpace, int searchSpaceLength, ref ProbabilisticMapState state)
+            where TUseFastContains : struct, SearchValues.IRuntimeConst
+            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
+        {
+            ref char searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
+            ref char cur = ref searchSpace;
+
+            if (TUseFastContains.Value)
+            {
+                Debug.Assert(state._hashEntries is not null);
+
+                char[] hashEntries = state._hashEntries;
+                uint multiplier = state._multiplier;
+
+                while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
+                {
+                    char c = cur;
+                    if (TNegator.NegateIfNeeded(FastContains(hashEntries, multiplier, c)))
+                    {
+                        return (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
+                    }
+
+                    cur = ref Unsafe.Add(ref cur, 1);
+                }
+            }
+            else
+            {
+                while (!Unsafe.AreSame(ref cur, ref searchSpaceEnd))
+                {
+                    char c = cur;
+                    if (TNegator.NegateIfNeeded(state.SlowProbabilisticContains(c)))
+                    {
+                        return (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref cur) / sizeof(char));
+                    }
+
+                    cur = ref Unsafe.Add(ref cur, 1);
+                }
+            }
+
+            return -1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int LastIndexOfAnySimpleLoop<TUseFastContains, TNegator>(ref char searchSpace, int searchSpaceLength, ref ProbabilisticMapState state)
+            where TUseFastContains : struct, SearchValues.IRuntimeConst
+            where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
+        {
+            if (TUseFastContains.Value)
+            {
+                Debug.Assert(state._hashEntries is not null);
+
+                char[] hashEntries = state._hashEntries;
+                uint multiplier = state._multiplier;
+
+                while (--searchSpaceLength >= 0)
+                {
+                    char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
+                    if (TNegator.NegateIfNeeded(FastContains(hashEntries, multiplier, c)))
+                    {
+                        return searchSpaceLength;
+                    }
+                }
+            }
+            else
+            {
+                while (--searchSpaceLength >= 0)
+                {
+                    char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
+                    if (TNegator.NegateIfNeeded(state.SlowProbabilisticContains(c)))
+                    {
+                        return searchSpaceLength;
+                    }
+                }
+            }
+
+            return -1;
         }
     }
 }

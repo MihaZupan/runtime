@@ -27,12 +27,12 @@ namespace System.Buffers
             ProbabilisticMap.IndexOfAny<SearchValues.TrueConst>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
 
         internal override int IndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            ProbabilisticMap.IndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
+            ProbabilisticMapState.IndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
 
         internal override int LastIndexOfAny(ReadOnlySpan<char> span) =>
             ProbabilisticMap.LastIndexOfAny<SearchValues.TrueConst>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
 
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
-            ProbabilisticMap.LastIndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
+            ProbabilisticMapState.LastIndexOfAnySimpleLoop<SearchValues.TrueConst, IndexOfAnyAsciiSearcher.Negate>(ref MemoryMarshal.GetReference(span), span.Length, ref _map);
     }
 }
