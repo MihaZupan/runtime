@@ -714,12 +714,12 @@ namespace System.Buffers
             where TUseFastContains : struct, SearchValues.IRuntimeConst
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
-            for (int i = searchSpaceLength - 1; i >= 0; i--)
+            while (--searchSpaceLength >= 0)
             {
-                char c = Unsafe.Add(ref searchSpace, i);
+                char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
                 if (TNegator.NegateIfNeeded(state.ProbabilisticContains<TUseFastContains>(c)))
                 {
-                    return i;
+                    return searchSpace;
                 }
             }
 
@@ -730,12 +730,12 @@ namespace System.Buffers
         internal static int LastIndexOfAnySimpleLoop<TNegator>(ref char searchSpace, int searchSpaceLength, ReadOnlySpan<char> values)
             where TNegator : struct, IndexOfAnyAsciiSearcher.INegator
         {
-            for (int i = searchSpaceLength - 1; i >= 0; i--)
+            while (--searchSpaceLength >= 0)
             {
-                char c = Unsafe.Add(ref searchSpace, i);
+                char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
                 if (TNegator.NegateIfNeeded(Contains(values, c)))
                 {
-                    return i;
+                    return searchSpaceLength;
                 }
             }
 

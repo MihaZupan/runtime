@@ -13,8 +13,8 @@ namespace System.Buffers
     internal struct ProbabilisticMapState
     {
         public ProbabilisticMap Map;
-        private readonly uint _multiplier;
-        private readonly char[]? _hashEntries;
+        internal readonly uint _multiplier;
+        internal readonly char[]? _hashEntries;
         private readonly IntPtr _slowContainsValuesSpanPtr;
 
         public ProbabilisticMapState(ReadOnlySpan<char> values)
@@ -51,6 +51,15 @@ namespace System.Buffers
             char[] hashEntries = _hashEntries;
 
             ulong offset = FastMod(value, (uint)hashEntries.Length, _multiplier);
+            Debug.Assert(offset < (ulong)hashEntries.Length);
+
+            return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(hashEntries), (nuint)offset) == value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastContains(char[] hashEntries, uint multiplier, char value)
+        {
+            ulong offset = FastMod(value, (uint)hashEntries.Length, multiplier);
             Debug.Assert(offset < (ulong)hashEntries.Length);
 
             return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(hashEntries), (nuint)offset) == value;
