@@ -350,7 +350,7 @@ namespace System.Buffers
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
             // TODO: comments
-            var state = new ProbabilisticMapState((IntPtr)(&valuesSpan));
+            var state = new ProbabilisticMapState(&valuesSpan);
 
             return IndexOfAny<SearchValues.FalseConst>(ref searchSpace, searchSpaceLength, ref state);
         }
@@ -361,7 +361,7 @@ namespace System.Buffers
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
             // TODO: comments
-            var state = new ProbabilisticMapState((IntPtr)(&valuesSpan));
+            var state = new ProbabilisticMapState(&valuesSpan);
 
             return LastIndexOfAny<SearchValues.FalseConst>(ref searchSpace, searchSpaceLength, ref state);
         }

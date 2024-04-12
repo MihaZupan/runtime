@@ -10,12 +10,12 @@ using System.Runtime.InteropServices;
 
 namespace System.Buffers
 {
-    internal struct ProbabilisticMapState
+    internal unsafe struct ProbabilisticMapState
     {
         public ProbabilisticMap Map;
         private readonly uint _multiplier;
         private readonly char[]? _hashEntries;
-        private readonly IntPtr _slowContainsValuesSpanPtr;
+        private readonly ReadOnlySpan<char>* _slowContainsValuesPtr;
 
         public ProbabilisticMapState(ReadOnlySpan<char> values)
         {
@@ -33,20 +33,20 @@ namespace System.Buffers
             }
         }
 
-        // valuesPtr must remain valid in the scope where SlowContains is called.
-        public unsafe ProbabilisticMapState(IntPtr valuesSpanPtr)
+        // valuesPtr must remain valid for as long as this ProbabilisticMapState is used.
+        public unsafe ProbabilisticMapState(ReadOnlySpan<char>* valuesPtr)
         {
-            Debug.Assert(valuesSpanPtr != IntPtr.Zero);
+            Debug.Assert((IntPtr)valuesPtr != IntPtr.Zero);
 
-            Map = new ProbabilisticMap(*(ReadOnlySpan<char>*)valuesSpanPtr);
-            _slowContainsValuesSpanPtr = valuesSpanPtr;
+            Map = new ProbabilisticMap(*valuesPtr);
+            _slowContainsValuesPtr = valuesPtr;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool FastContains(char value)
         {
             Debug.Assert(_hashEntries is not null);
-            Debug.Assert(_slowContainsValuesSpanPtr == IntPtr.Zero);
+            Debug.Assert((IntPtr)_slowContainsValuesPtr == IntPtr.Zero);
 
             return FastContains(_hashEntries, _multiplier, value);
         }
@@ -61,24 +61,24 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe bool SlowProbabilisticContains(char value)
+        private bool SlowProbabilisticContains(char value)
         {
             Debug.Assert(_hashEntries is null);
-            Debug.Assert(_slowContainsValuesSpanPtr != IntPtr.Zero);
+            Debug.Assert((IntPtr)_slowContainsValuesPtr != IntPtr.Zero);
 
             return ProbabilisticMap.Contains(
                 ref Unsafe.As<ProbabilisticMap, uint>(ref Map),
-                *(ReadOnlySpan<char>*)_slowContainsValuesSpanPtr,
+                *_slowContainsValuesPtr,
                 value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe bool SlowContains(char value)
+        private bool SlowContains(char value)
         {
             Debug.Assert(_hashEntries is null);
-            Debug.Assert(_slowContainsValuesSpanPtr != IntPtr.Zero);
+            Debug.Assert((IntPtr)_slowContainsValuesPtr != IntPtr.Zero);
 
-            return ProbabilisticMap.Contains(*(ReadOnlySpan<char>*)_slowContainsValuesSpanPtr, value);
+            return ProbabilisticMap.Contains(*_slowContainsValuesPtr, value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
