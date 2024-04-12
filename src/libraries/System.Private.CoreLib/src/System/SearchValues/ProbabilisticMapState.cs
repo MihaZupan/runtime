@@ -263,7 +263,7 @@ namespace System.Buffers
                     char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
                     if (TNegator.NegateIfNeeded(FastContains(hashEntries, multiplier, c)))
                     {
-                        return searchSpaceLength;
+                        break;
                     }
                 }
             }
@@ -274,12 +274,12 @@ namespace System.Buffers
                     char c = Unsafe.Add(ref searchSpace, searchSpaceLength);
                     if (TNegator.NegateIfNeeded(state.SlowProbabilisticContains(c)))
                     {
-                        return searchSpaceLength;
+                        break;
                     }
                 }
             }
 
-            return -1;
+            return searchSpaceLength;
         }
     }
 }
