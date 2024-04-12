@@ -23,6 +23,9 @@ namespace System.Buffers
 
         public ProbabilisticMap Map;
 
+        // Hash entries store each value from the set at the index determined by the remainder modulo the table size.
+        // As every value has a unique remainder, we can check if a value is contained in the set by checking
+        // _hashEntries[value % _hashEntries.Length] == value (see FastContains below).
         // The multiplier is used for faster modulo operations when determining the hash table index.
         // Exactly one of _hashEntries and _slowContainsValuesPtr may be initialized at the same time.
         private readonly uint _multiplier;
@@ -107,6 +110,8 @@ namespace System.Buffers
             }
             else
             {
+                // We use SlowContains instead of SlowProbabilisticContains here as we've already checked
+                // the value against the probabilistic filter and are now confirming the potential match.
                 return SlowContains(value);
             }
         }
@@ -191,6 +196,7 @@ namespace System.Buffers
             }
         }
 
+        // This is a variant of HashHelpers.GetFastModMultiplier, specialized for smaller divisors (<= 65536).
         private static uint GetFastModMultiplier(uint divisor)
         {
             Debug.Assert(divisor > 0);
