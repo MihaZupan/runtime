@@ -19,6 +19,8 @@ namespace System.Buffers
 
         public ProbabilisticMapState(ReadOnlySpan<char> values)
         {
+            Debug.Assert(!values.IsEmpty);
+
             Map = new ProbabilisticMap(values);
 
             int modulus = FindModulus(values);
@@ -26,6 +28,9 @@ namespace System.Buffers
 
             _multiplier = GetFastModMultiplier((ushort)modulus);
             _hashEntries = new char[modulus];
+
+            // TODO: Comment why we fill
+            _hashEntries.AsSpan().Fill(values[0]);
 
             foreach (char c in values)
             {
