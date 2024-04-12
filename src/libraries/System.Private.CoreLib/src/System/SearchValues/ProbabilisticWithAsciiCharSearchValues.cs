@@ -18,7 +18,7 @@ namespace System.Buffers
         private ProbabilisticMapState _map;
         private readonly string _values;
 
-        public ProbabilisticWithAsciiCharSearchValues(ReadOnlySpan<char> values)
+        public ProbabilisticWithAsciiCharSearchValues(ReadOnlySpan<char> values, int maxInclusive)
         {
             Debug.Assert(IndexOfAnyAsciiSearcher.IsVectorizationSupported);
             Debug.Assert(values.ContainsAnyInRange((char)0, (char)127));
@@ -27,7 +27,7 @@ namespace System.Buffers
             _inverseAsciiState = _asciiState.CreateInverse();
 
             _values = new string(values);
-            _map = new ProbabilisticMapState(_values);
+            _map = new ProbabilisticMapState(_values, maxInclusive);
         }
 
         internal override char[] GetValues() => _values.ToCharArray();

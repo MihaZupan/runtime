@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,31 +12,40 @@ using System.Runtime.InteropServices;
 
 namespace System.Buffers
 {
+    /// <summary>
+    /// Stores the state necessary to call vectorized members on <see cref="ProbabilisticMap"/>,
+    /// as well as (optionally) a precomputed perfect hash table for faster single-character lookups/match confirmations.
+    /// When the hash table isn't available, the structure stores a pointer to the span of values in the set instead.
+    /// </summary>
     internal unsafe struct ProbabilisticMapState
     {
+        private const int MaxModulus = char.MaxValue + 1;
+
         public ProbabilisticMap Map;
+
+        // The multiplier is used for faster modulo operations when determining the hash table index.
+        // Exactly one of _hashEntries and _slowContainsValuesPtr may be initialized at the same time.
         private readonly uint _multiplier;
         private readonly char[]? _hashEntries;
         private readonly ReadOnlySpan<char>* _slowContainsValuesPtr;
 
-        public ProbabilisticMapState(ReadOnlySpan<char> values)
+        public ProbabilisticMapState(ReadOnlySpan<char> values, int maxInclusive)
         {
             Debug.Assert(!values.IsEmpty);
 
             Map = new ProbabilisticMap(values);
 
-            int modulus = FindModulus(values);
-            Debug.Assert(modulus <= char.MaxValue);
-
-            _multiplier = GetFastModMultiplier((ushort)modulus);
+            uint modulus = FindModulus(values, maxInclusive);
+            _multiplier = GetFastModMultiplier(modulus);
             _hashEntries = new char[modulus];
 
-            // TODO: Comment why we fill
+            // Some hash entries will remain unused.
+            // We can't leave them uninitialized as that would lead to false positives for values divisible by modulus.
             _hashEntries.AsSpan().Fill(values[0]);
 
             foreach (char c in values)
             {
-                _hashEntries[FastMod(c, (uint)modulus, _multiplier)] = c;
+                _hashEntries[FastMod(c, modulus, _multiplier)] = c;
             }
         }
 
@@ -100,50 +111,59 @@ namespace System.Buffers
             }
         }
 
-        private static int FindModulus(ReadOnlySpan<char> chars)
+        /// <summary>Finds a modulus where remainders for all values in the set are unique.</summary>
+        private static uint FindModulus(ReadOnlySpan<char> values, int maxInclusive)
         {
-            bool[] seen = ArrayPool<bool>.Shared.Rent(char.MaxValue + 1);
+            Debug.Assert(maxInclusive <= char.MaxValue);
 
-            // Doesn't technically have to be prime.
-            int modulus = HashHelpers.GetPrime(chars.Length);
-            int numbersTested = 0;
+            int modulus = HashHelpers.GetPrime(values.Length);
+            bool removedDuplicates = false;
+
+            if (modulus >= maxInclusive)
+            {
+                return (uint)(maxInclusive + 1);
+            }
 
             while (true)
             {
-                if (TestModulus(chars, seen, modulus))
+                if (modulus >= maxInclusive)
                 {
-                    ArrayPool<bool>.Shared.Return(seen);
-                    return modulus;
+                    // Try to remove duplicates and try again.
+                    if (!removedDuplicates && TryRemoveDuplicates(values, out char[]? deduplicated))
+                    {
+                        removedDuplicates = true;
+                        values = deduplicated;
+                        modulus = HashHelpers.GetPrime(values.Length);
+                        continue;
+                    }
+
+                    return (uint)(maxInclusive + 1);
+                }
+
+                if (TestModulus(values, modulus))
+                {
+                    return (uint)modulus;
                 }
 
                 modulus = HashHelpers.GetPrime(modulus + 1);
-                numbersTested++;
-
-                if (modulus >= char.MaxValue)
-                {
-                    return char.MaxValue;
-                }
-
-                // We optimize for the common case of sets not containing duplicates.
-                // If we were unable to find a modulus after 10 attempts, it's likely that the set
-                // does contain duplicates. We must remove them or we won't find a valid modulus.
-                if (numbersTested == 10)
-                {
-                    chars = RemoveDuplicates(chars, seen);
-                    modulus = HashHelpers.GetPrime(chars.Length);
-                }
             }
 
-            static bool TestModulus(ReadOnlySpan<char> chars, bool[] seen, int modulus)
+            static bool TestModulus(ReadOnlySpan<char> values, int modulus)
             {
+                Debug.Assert(modulus < MaxModulus);
+
+                bool[] seen = ArrayPool<bool>.Shared.Rent(modulus);
                 seen.AsSpan(0, modulus).Clear();
 
-                foreach (char c in chars)
+                uint multiplier = GetFastModMultiplier((uint)modulus);
+
+                foreach (char c in values)
                 {
-                    int index = c % modulus;
+                    ulong index = FastMod(c, (uint)modulus, multiplier);
 
                     if (seen[index])
                     {
+                        ArrayPool<bool>.Shared.Return(seen);
                         return false;
                     }
 
@@ -151,56 +171,39 @@ namespace System.Buffers
                 }
 
                 // Saw no duplicates.
+                ArrayPool<bool>.Shared.Return(seen);
                 return true;
             }
 
-            static ReadOnlySpan<char> RemoveDuplicates(ReadOnlySpan<char> values, bool[] seen)
+            static bool TryRemoveDuplicates(ReadOnlySpan<char> values, [NotNullWhen(true)] out char[]? deduplicated)
             {
-                seen.AsSpan().Clear();
+                HashSet<char> unique = [.. values];
 
-                int duplicates = 0;
-
-                foreach (char c in values)
+                if (unique.Count == values.Length)
                 {
-                    if (seen[c])
-                    {
-                        duplicates++;
-                    }
-                    else
-                    {
-                        seen[c] = true;
-                    }
+                    deduplicated = null;
+                    return false;
                 }
 
-                if (duplicates == 0)
-                {
-                    return values;
-                }
-
-                char[] deduped = new char[values.Length - duplicates];
-                int count = 0;
-
-                for (int i = 0; i < seen.Length; i++)
-                {
-                    if (seen[i])
-                    {
-                        deduped[count++] = (char)i;
-                    }
-                }
-
-                Debug.Assert(count == deduped.Length);
-                return deduped;
+                deduplicated = new char[unique.Count];
+                unique.CopyTo(deduplicated);
+                return true;
             }
         }
 
-        private static uint GetFastModMultiplier(ushort divisor) =>
-            uint.MaxValue / divisor + 1;
+        private static uint GetFastModMultiplier(uint divisor)
+        {
+            Debug.Assert(divisor > 0);
+            Debug.Assert(divisor <= MaxModulus);
 
+            return uint.MaxValue / divisor + 1;
+        }
+
+        // This is a faster variant of HashHelpers.FastMod, specialized for smaller divisors (<= 65536).
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong FastMod(char value, uint divisor, uint multiplier)
         {
-            Debug.Assert(divisor <= char.MaxValue);
-            Debug.Assert(multiplier == GetFastModMultiplier((ushort)divisor));
+            Debug.Assert(multiplier == GetFastModMultiplier(divisor));
 
             ulong result = ((ulong)(multiplier * value) * divisor) >> 32;
 

@@ -11,10 +11,10 @@ namespace System.Buffers
         private ProbabilisticMapState _map;
         private readonly string _values;
 
-        public ProbabilisticCharSearchValues(ReadOnlySpan<char> values)
+        public ProbabilisticCharSearchValues(ReadOnlySpan<char> values, int maxInclusive)
         {
             _values = new string(values);
-            _map = new ProbabilisticMapState(values);
+            _map = new ProbabilisticMapState(values, maxInclusive);
         }
 
         internal override char[] GetValues() => _values.ToCharArray();

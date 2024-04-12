@@ -163,18 +163,46 @@ namespace System.Buffers
                 // does an optimistic ASCII fast-path and then falls back to the ProbabilisticMap.
 
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && values.Contains('\0')
-                    ? new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
-                    : new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values);
+                    ? new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values, maxInclusive)
+                    : new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values, maxInclusive);
             }
 
-            // We prefer using the ProbabilisticMap over Latin1CharSearchValues if the former is vectorized.
-            if (!(Sse41.IsSupported || AdvSimd.Arm64.IsSupported) && maxInclusive < 256)
+            if (ShouldUseProbabilisticMap(values.Length, maxInclusive))
             {
-                // This will also match ASCII values when IndexOfAnyAsciiSearcher is not supported.
-                return new Latin1CharSearchValues(values);
+                return new ProbabilisticCharSearchValues(values, maxInclusive);
             }
 
-            return new ProbabilisticCharSearchValues(values);
+            // This will also match ASCII values when IndexOfAnyAsciiSearcher is not supported.
+            return new BitmapCharSearchValues(values, maxInclusive);
+
+            static bool ShouldUseProbabilisticMap(int valuesLength, int maxInclusive)
+            {
+                // *Rough estimates*. The current implementation uses 256 bits for the bloom filter.
+                // If the implementation is vectorized we can get away with a decent false positive rate.
+                const int MaxValuesForProbabilisticMap = 256;
+
+                if (valuesLength > MaxValuesForProbabilisticMap)
+                {
+                    // If the number of values is too high, we won't see any benefits from the 'probabilistic' part.
+                    return false;
+                }
+
+                if (Sse41.IsSupported || AdvSimd.Arm64.IsSupported)
+                {
+                    // If the probabilistic map is vectorized, we prefer it.
+                    return true;
+                }
+
+                // The probabilistic map is more memory efficient for spare sets, while the bitmap is more efficient for dense sets.
+                int bitmapFootprintBytesEstimate = 64 + (maxInclusive / 8);
+                int probabilisticFootprintBytesEstimate = 128 + (valuesLength * 6);
+
+                // The bitmap is a bit faster than the perfect hash checks employed by the probabilistic map.
+                // Sacrifice some memory usage for faster lookups.
+                const int AcceptableSizeMultiplier = 2;
+
+                return AcceptableSizeMultiplier * probabilisticFootprintBytesEstimate < bitmapFootprintBytesEstimate;
+            }
         }
 
         /// <summary>
