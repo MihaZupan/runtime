@@ -349,9 +349,11 @@ namespace System.Buffers
         {
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
-            // TODO: comments
+            // ProbabilisticMapState can hold either a precomputed hash table or a pointer to the values.
+            // Precomputing the table is relatively expensive, so we only do it when using SearchValues where instances can be reused.
             var state = new ProbabilisticMapState(&valuesSpan);
 
+            // The FalseConst here indicates that we can't use the fast character checks and must instead check the values span.
             return IndexOfAny<SearchValues.FalseConst>(ref searchSpace, searchSpaceLength, ref state);
         }
 
@@ -360,9 +362,11 @@ namespace System.Buffers
         {
             var valuesSpan = new ReadOnlySpan<char>(ref values, valuesLength);
 
-            // TODO: comments
+            // ProbabilisticMapState can hold either a precomputed hash table or a pointer to the values.
+            // Precomputing the table is relatively expensive, so we only do it when using SearchValues where instances can be reused.
             var state = new ProbabilisticMapState(&valuesSpan);
 
+            // The FalseConst here indicates that we can't use the fast character checks and must instead check the values span.
             return LastIndexOfAny<SearchValues.FalseConst>(ref searchSpace, searchSpaceLength, ref state);
         }
 
