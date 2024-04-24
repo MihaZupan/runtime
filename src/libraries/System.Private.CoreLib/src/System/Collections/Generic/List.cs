@@ -1203,6 +1203,7 @@ namespace System.Collections.Generic
             {
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool MoveNext()
             {
                 List<T> localList = _list;
