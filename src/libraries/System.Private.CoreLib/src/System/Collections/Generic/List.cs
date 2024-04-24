@@ -1206,13 +1206,20 @@ namespace System.Collections.Generic
             public bool MoveNext()
             {
                 List<T> localList = _list;
+                int index = _index;
 
-                if (_version == localList._version && ((uint)_index < (uint)localList._size))
+                if (_version == localList._version && (uint)index < (uint)localList._size)
                 {
-                    _current = localList._items[_index];
-                    _index++;
-                    return true;
+                    T[] items = localList._items;
+
+                    if ((uint)index < (uint)items.Length)
+                    {
+                        _current = items[index];
+                        _index = index + 1;
+                        return true;
+                    }
                 }
+
                 return MoveNextRare();
             }
 
