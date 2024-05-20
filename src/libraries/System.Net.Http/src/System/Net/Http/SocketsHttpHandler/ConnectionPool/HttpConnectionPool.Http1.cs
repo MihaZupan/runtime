@@ -15,7 +15,7 @@ namespace System.Net.Http
     internal sealed partial class HttpConnectionPool
     {
         /// <summary>Stack of currently available HTTP/1.1 connections stored in the pool.</summary>
-        private readonly ConcurrentStack<HttpConnection> _http11Connections = new();
+        private HttpConnectionStack _http11Connections = new();
         /// <summary>Controls whether we can use a fast path when returning connections to the pool and skip calling into <see cref="ProcessHttp11RequestQueue(HttpConnection?)"/>.</summary>
         private bool _http11RequestQueueIsEmptyAndNotDisposed;
         /// <summary>The maximum number of HTTP/1.1 connections allowed to be associated with the pool.</summary>
@@ -101,7 +101,7 @@ namespace System.Net.Http
                 {
 #if DEBUG
                     // Other threads may still interact with the connections stack. Read the count once to keep the assert message accurate.
-                    int connectionCount = _http11Connections.Count;
+                    int connectionCount = _http11Connections.DebugCount;
                     Debug.Assert(_associatedHttp11ConnectionCount >= connectionCount + _pendingHttp11ConnectionCount,
                         $"Expected {_associatedHttp11ConnectionCount} >= {connectionCount} + {_pendingHttp11ConnectionCount}");
 #endif
@@ -195,7 +195,7 @@ namespace System.Net.Http
 
             if (NetEventSource.Log.IsEnabled())
             {
-                Trace($"Available HTTP/1.1 connections: {_http11Connections.Count}, Requests in the queue: {_http11RequestQueue.Count}, " +
+                Trace($"Requests in the queue: {_http11RequestQueue.Count}, " +
                     $"Requests without a connection attempt: {_http11RequestQueue.RequestsWithoutAConnectionAttempt}, " +
                     $"Pending HTTP/1.1 connections: {_pendingHttp11ConnectionCount}, Total associated HTTP/1.1 connections: {_associatedHttp11ConnectionCount}, " +
                     $"Max HTTP/1.1 connection limit: {_maxHttp11Connections}, " +
@@ -266,7 +266,9 @@ namespace System.Net.Http
         private async ValueTask<HttpConnection> ConstructHttp11ConnectionAsync(bool async, Stream stream, TransportContext? transportContext, HttpRequestMessage request, IPEndPoint? remoteEndPoint, CancellationToken cancellationToken)
         {
             Stream newStream = await ApplyPlaintextFilterAsync(async, stream, HttpVersion.Version11, request, cancellationToken).ConfigureAwait(false);
-            return new HttpConnection(this, newStream, transportContext, remoteEndPoint);
+            var connection = new HttpConnection(this, newStream, transportContext, remoteEndPoint);
+            _http11Connections.Register(connection);
+            return connection;
         }
 
         private void HandleHttp11ConnectionFailure(HttpConnectionWaiter<HttpConnection>? requestWaiter, Exception e)
@@ -379,8 +381,12 @@ namespace System.Net.Http
         {
             lock (SyncObj)
             {
+#if DEBUG
                 Debug.Assert(_associatedHttp11ConnectionCount > 0);
-                Debug.Assert(!disposing || Array.IndexOf(_http11Connections.ToArray(), connection) < 0);
+                Debug.Assert(!disposing || !_http11Connections.DebugContains(connection));
+#endif
+
+                _http11Connections.Unregister(connection);
 
                 _associatedHttp11ConnectionCount--;
 
@@ -388,7 +394,7 @@ namespace System.Net.Http
             }
         }
 
-        private static void ScavengeHttp11ConnectionStack(HttpConnectionPool pool, ConcurrentStack<HttpConnection> connections, ref List<HttpConnectionBase>? toDispose, long nowTicks, TimeSpan pooledConnectionLifetime, TimeSpan pooledConnectionIdleTimeout)
+        private static void ScavengeHttp11ConnectionStack(HttpConnectionPool pool, ref List<HttpConnectionBase>? toDispose, long nowTicks, TimeSpan pooledConnectionLifetime, TimeSpan pooledConnectionIdleTimeout)
         {
             // We can't simply enumerate the connections stack as other threads may still be adding and removing entries.
             // If we want to check the state of a connection, we must take it from the stack first to ensure we own it.
@@ -398,13 +404,15 @@ namespace System.Net.Http
             // come in during this time will be blocked waiting in ProcessHttp11RequestQueue.
             // If this were not the case, requests would repeatedly call into CheckForHttp11ConnectionInjection
             // and trigger new connection attempts, even if we have enough connections in our copy.
+#if DEBUG
             Debug.Assert(pool.HasSyncObjLock);
-            Debug.Assert(connections.Count <= pool._associatedHttp11ConnectionCount);
+            Debug.Assert(pool._http11Connections.DebugCount <= pool._associatedHttp11ConnectionCount);
+#endif
 
             HttpConnection[] stackCopy = ArrayPool<HttpConnection>.Shared.Rent(pool._associatedHttp11ConnectionCount);
             int usableConnections = 0;
 
-            while (connections.TryPop(out HttpConnection? connection))
+            while (pool._http11Connections.TryPop(out HttpConnection? connection))
             {
                 if (connection.IsUsable(nowTicks, pooledConnectionLifetime, pooledConnectionIdleTimeout))
                 {
@@ -421,8 +429,12 @@ namespace System.Net.Http
             {
                 // Add them back in reverse to maintain the LIFO order.
                 Span<HttpConnection> usable = stackCopy.AsSpan(0, usableConnections);
-                usable.Reverse();
-                connections.PushRange(stackCopy, 0, usableConnections);
+
+                for (int i = usable.Length - 1; i >= 0; i--)
+                {
+                    pool._http11Connections.Push(usable[i]);
+                }
+
                 usable.Clear();
             }
 

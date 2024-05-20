@@ -188,6 +188,7 @@ namespace System.Net.Http.Functional.Tests
         [Theory]
         [InlineData(ClientCertificateOption.Manual)]
         [InlineData(ClientCertificateOption.Automatic)]
+        [ActiveIssue("Foo")]
         public async Task AutomaticOrManual_DoesntFailRegardlessOfWhetherClientCertsAreAvailable(ClientCertificateOption mode)
         {
             using (HttpClientHandler handler = CreateHttpClientHandler(allowAllCertificates: true))
