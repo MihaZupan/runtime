@@ -9,50 +9,78 @@ using System.Collections.Concurrent;
 
 namespace System.Net.Http
 {
+    /// <summary>
+    /// A <see cref="ConcurrentStack{T}"/>-like collection, specialized for entries that can store
+    /// extra state, allowing us to avoid allocating on every <see cref="Push(HttpConnection)"/>.
+    /// </summary>
     internal struct HttpConnectionStack
     {
+        /// <summary>
+        /// Each entry is assigned a fixed index when it is created. It is bound to a single connection
+        /// for its lifetime, and that connection stores a reference to it (<see cref="HttpConnection.ConnectionStackEntry"/>).
+        /// <para>The type serves as a reusable node in the linked list that forms the stack.</para>
+        /// <para>It is explicitly a separate type (instead of just inline data on the connection object)
+        /// to allow for thread-safe modifications to its <see cref="NextIndex"/>/<see cref="StrongRef"/>
+        /// even while the <see cref="_entries"/> array is being resized.</para>
+        /// </summary>
+        internal sealed class Entry(int index)
+        {
+            public ulong PackedId => (uint)Index | ((ulong)PushCount << 32);
+
+            /// <summary>The index into the <see cref="_entries"/> array where this <see cref="Entry"/> is stored.</summary>
+            public readonly int Index = index;
+
+            public uint PushCount;
+
+            /// <summary>The index of the next <see cref="Entry"/> in the linked list.</summary>
+            public int NextIndex;
+
+            /// <summary>This is set on Push and cleared after Pop to avoid rooting active connections on the pool.</summary>
+            public HttpConnection? StrongRef;
+        }
+
 #if DEBUG
         private readonly ConcurrentDictionary<HttpConnection, bool> _debugContents = new();
-
-        public readonly int DebugCount =>
-            _debugContents.Count;
-
-        public readonly bool DebugContains(HttpConnection item) =>
-            _debugContents.ContainsKey(item);
+        public readonly int DebugCount => _debugContents.Count;
+        public readonly bool DebugContains(HttpConnection item) => _debugContents.ContainsKey(item);
 #endif
 
         /// <summary>
-        /// Contains the current head index in the lower half and the next index in the upper half.
-        /// -1 for "empty".
+        /// Contains the current head index in the lower half and the push count the upper half. -1 for "empty".
+        /// <para>This is working around the lack of a 16-byte CAS by storing a 32-bit offset
+        /// into the <see cref="_entries"/> array instead of a full 64-bit pointer.</para>
         /// </summary>
         private ulong _head;
 
-        // List of all connections on the pool.
+        /// <summary>Stores the list of indexes that are free to be assigned to new connections.</summary>
         private readonly Queue<int> _freeQueue;
-        private HttpConnection?[] _connections;
+        private Entry?[] _entries;
 
         public HttpConnectionStack()
         {
             _head = unchecked((uint)-1);
             _freeQueue = new Queue<int>();
-            _connections = [];
+            _entries = [];
         }
 
         public void Register(HttpConnection connection)
         {
+            Debug.Assert(connection.ConnectionStackEntry is null);
+
             lock (_freeQueue)
             {
                 if (_freeQueue.Count == 0)
                 {
-                    int count = _connections.Length;
-                    Array.Resize(ref _connections, Math.Max(4, count * 2));
-                    for (int i = count; i < _connections.Length; i++)
+                    int count = _entries.Length;
+                    Array.Resize(ref _entries, Math.Max(4, count * 2));
+                    for (int i = count; i < _entries.Length; i++)
                     {
                         _freeQueue.Enqueue(i);
                     }
                 }
 
-                connection.ConnectionIndex = _freeQueue.Dequeue();
+                int index = _freeQueue.Dequeue();
+                connection.ConnectionStackEntry = _entries[index] ??= new Entry(index);
             }
         }
 
@@ -60,30 +88,33 @@ namespace System.Net.Http
         {
             lock (_freeQueue)
             {
-                Debug.Assert(!_freeQueue.Contains(connection.ConnectionIndex));
-                _freeQueue.Enqueue(connection.ConnectionIndex);
+                Debug.Assert(connection.ConnectionStackEntry is not null);
+                Debug.Assert(!_freeQueue.Contains(connection.ConnectionStackEntry.Index));
+
+                _freeQueue.Enqueue(connection.ConnectionStackEntry.Index);
             }
         }
 
         public void Push(HttpConnection connection)
         {
 #if DEBUG
-            Debug.Assert((uint)connection.ConnectionIndex < (uint)_connections.Length);
+            Debug.Assert(connection.ConnectionStackEntry is not null);
+            Debug.Assert(connection.ConnectionStackEntry.StrongRef is null);
             Debug.Assert(_debugContents.TryAdd(connection, true));
-            Debug.Assert(_connections[connection.ConnectionIndex] is null);
 #endif
 
-            _connections[connection.ConnectionIndex] = connection;
+            Entry entry = connection.ConnectionStackEntry;
+            entry.StrongRef = connection;
+            entry.PushCount++;
 
             SpinWait spin = default;
 
             while (true)
             {
                 ulong head = Volatile.Read(ref _head);
-                connection.NextConnectionIndex = (int)head;
-                ulong newHead = (head << 32) | (uint)connection.ConnectionIndex;
+                entry.NextIndex = (int)head;
 
-                if (Interlocked.CompareExchange(ref _head, newHead, head) == head)
+                if (Interlocked.CompareExchange(ref _head, entry.PackedId, head) == head)
                 {
                     break;
                 }
@@ -99,49 +130,37 @@ namespace System.Net.Http
             while (true)
             {
                 ulong head = Volatile.Read(ref _head);
+                Entry?[] entries = _entries;
+                int index = (int)head;
 
-                int connectionIndex = (int)head;
-                HttpConnection?[] connections = Volatile.Read(ref _connections);
-
-                if ((uint)connectionIndex >= connections.Length)
+                if ((uint)index >= entries.Length)
                 {
                     connection = null;
                     return false;
                 }
 
-                HttpConnection? result = connections[connectionIndex];
-                if (result is null)
-                {
-                    goto Retry;
-                }
+                Entry? result = entries[index];
+                Debug.Assert(result is not null);
 
-                int next = result.NextConnectionIndex;
-                ulong newHead = (uint)next;
+                int nextIndex = result.NextIndex;
+                Debug.Assert(nextIndex == -1 || entries[nextIndex] is not null);
 
-                if ((uint)next < (uint)connections.Length)
-                {
-                    HttpConnection? newNext = connections[next];
-                    if (newNext is null)
-                    {
-                        goto Retry;
-                    }
-
-                    newHead |= (ulong)(uint)newNext.NextConnectionIndex << 32;
-                }
+                ulong newHead = (uint)nextIndex < (uint)entries.Length
+                    ? entries[nextIndex]!.PackedId
+                    : unchecked((uint)-1);
 
                 if (Interlocked.CompareExchange(ref _head, newHead, head) == head)
                 {
 #if DEBUG
-                    Debug.Assert(_debugContents.Remove(result, out _));
+                    Debug.Assert(result.StrongRef is not null);
+                    Debug.Assert(_debugContents.Remove(result.StrongRef, out _));
 #endif
 
-                    // We null out the references to avoid rooting connections.
-                    connections[connectionIndex] = null;
-                    connection = result;
+                    connection = result.StrongRef;
+                    result.StrongRef = null;
                     return true;
                 }
 
-            Retry:
                 spin.SpinOnce();
             }
         }

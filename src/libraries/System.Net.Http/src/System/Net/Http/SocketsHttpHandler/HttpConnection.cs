@@ -46,9 +46,8 @@ namespace System.Net.Http
         internal readonly Stream _stream;
         private readonly TransportContext? _transportContext;
 
-        /// <summary>Index into <see cref="HttpConnectionStack._connections"/> where this connection will be stored when idle.</summary>
-        internal int ConnectionIndex;
-        internal int NextConnectionIndex;
+        /// <summary>Initialized by calling <see cref="HttpConnectionStack.Register(HttpConnection)"/>.</summary>
+        internal HttpConnectionStack.Entry? ConnectionStackEntry;
 
         private HttpRequestMessage? _currentRequest;
         private ArrayBuffer _writeBuffer;
