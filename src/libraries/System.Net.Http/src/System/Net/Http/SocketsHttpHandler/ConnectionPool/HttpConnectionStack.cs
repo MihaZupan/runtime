@@ -119,13 +119,14 @@ namespace System.Net.Http
                     break;
                 }
 
-                spin.SpinOnce();
+                spin.SpinOnce(sleep1Threshold: -1);
             }
         }
 
         public bool TryPop([NotNullWhen(true)] out HttpConnection? connection)
         {
             SpinWait spin = default;
+            int backoff = 1;
 
             while (true)
             {
@@ -161,7 +162,15 @@ namespace System.Net.Http
                     return true;
                 }
 
-                spin.SpinOnce();
+                // Mimics the backoff behavior of ConcurrentStack<T>
+                for (int i = 0; i < backoff; i++)
+                {
+                    spin.SpinOnce(sleep1Threshold: -1);
+                }
+
+                backoff = spin.NextSpinWillYield
+                    ? Random.Shared.Next(1, 8)
+                    : backoff *= 2;
             }
         }
     }
