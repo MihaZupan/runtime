@@ -97,9 +97,9 @@ namespace System.Net.Http
 
         public void Push(HttpConnection connection)
         {
-#if DEBUG
             Debug.Assert(connection.ConnectionStackEntry is not null);
             Debug.Assert(connection.ConnectionStackEntry.StrongRef is null);
+#if DEBUG
             Debug.Assert(_debugContents.TryAdd(connection, true));
 #endif
 
@@ -151,8 +151,8 @@ namespace System.Net.Http
 
                 if (Interlocked.CompareExchange(ref _head, newHead, head) == head)
                 {
-#if DEBUG
                     Debug.Assert(result.StrongRef is not null);
+#if DEBUG
                     Debug.Assert(_debugContents.Remove(result.StrongRef, out _));
 #endif
 
