@@ -2619,6 +2619,46 @@ namespace System
                     valueLength);
         }
 
+        /// <inheritdoc cref="StartsWith{T}(ReadOnlySpan{T}, T)"/>
+        public static bool StartsWith<T>(this Span<T> span, T value) where T : IEquatable<T>? =>
+            StartsWith((ReadOnlySpan<T>)span, value);
+
+        /// <summary>
+        /// Determines whether the specified value appears at the start of the span.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="value">The value to compare.</param>
+        public static bool StartsWith<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T>?
+        {
+            if (span.Length > 0)
+            {
+                T temp = span[0];
+                return temp?.Equals(value) ?? (object?)value is null;
+            }
+
+            return false;
+        }
+
+        /// <inheritdoc cref="EndsWith{T}(ReadOnlySpan{T}, T)"/>
+        public static bool EndsWith<T>(this Span<T> span, T value) where T : IEquatable<T>? =>
+            EndsWith((ReadOnlySpan<T>)span, value);
+
+        /// <summary>
+        /// Determines whether the specified value appears at the end of the span.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="value">The value to compare.</param>
+        public static bool EndsWith<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T>?
+        {
+            if (span.Length > 0)
+            {
+                T temp = span[^1];
+                return temp?.Equals(value) ?? (object?)value is null;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Reverses the sequence of the elements in the entire span.
         /// </summary>
