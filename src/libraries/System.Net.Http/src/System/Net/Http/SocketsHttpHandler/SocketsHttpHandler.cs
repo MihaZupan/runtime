@@ -662,5 +662,37 @@ namespace System.Net.Http
 
             return null;
         }
+
+        internal static HttpResponseMessage CreateHttpResponse(HttpRequestMessage request)
+        {
+            if (HttpResponseMessage.ReuseEnabled &&
+                request._options is { } options &&
+                options.ExperimentalReuseResponseMessage)
+            {
+                HttpResponseMessage response = options.ReusableResponse ??= new();
+                response.ResetDisposed();
+
+                response.RequestMessage = request;
+
+                if (response._content is HttpConnectionResponseContent)
+                {
+                    response._content.ResetInternalState();
+                }
+                else
+                {
+                    response.Content = new HttpConnectionResponseContent();
+                }
+
+                return response;
+            }
+            else
+            {
+                return new HttpResponseMessage
+                {
+                    RequestMessage = request,
+                    Content = new HttpConnectionResponseContent()
+                };
+            }
+        }
     }
 }

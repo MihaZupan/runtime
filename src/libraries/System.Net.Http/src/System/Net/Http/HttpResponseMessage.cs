@@ -10,6 +10,8 @@ namespace System.Net.Http
 {
     public class HttpResponseMessage : IDisposable
     {
+        internal static bool ReuseEnabled = AppContext.TryGetSwitch("Experimental.System.Net.Http.EnableResponseMessageReuse", out bool enabled) && enabled;
+
         private const HttpStatusCode DefaultStatusCode = HttpStatusCode.OK;
         private static Version DefaultResponseVersion => HttpVersion.Version11;
 
@@ -19,7 +21,7 @@ namespace System.Net.Http
         private string? _reasonPhrase;
         private HttpRequestMessage? _requestMessage;
         private Version _version;
-        private HttpContent? _content;
+        internal HttpContent? _content;
         private bool _disposed;
 
         public Version Version
@@ -228,5 +230,7 @@ namespace System.Net.Http
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
         }
+
+        internal void ResetDisposed() => _disposed = false;
     }
 }

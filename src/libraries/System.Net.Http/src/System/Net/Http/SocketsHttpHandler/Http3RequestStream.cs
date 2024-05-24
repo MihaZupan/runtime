@@ -1006,13 +1006,11 @@ namespace System.Net.Http
                     statusCode = HttpConnectionBase.ParseStatusCode(literalValue);
                 }
 
-                _response = new HttpResponseMessage()
-                {
-                    Version = HttpVersion.Version30,
-                    RequestMessage = _request,
-                    Content = new HttpConnectionResponseContent(),
-                    StatusCode = (HttpStatusCode)statusCode
-                };
+#pragma warning disable CA1416 // Validate platform compatibility
+                _response = SocketsHttpHandler.CreateHttpResponse(_request);
+#pragma warning restore CA1416
+                _response.Version = HttpVersion.Version30;
+                _response.StatusCode = (HttpStatusCode)statusCode;
 
                 if (statusCode < 200)
                 {

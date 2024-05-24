@@ -34,6 +34,18 @@ namespace System.Net.Http
         /// <summary>
         /// The initial HttpRequestMessage that is causing the stream to be used.
         /// </summary>
-        public HttpRequestMessage InitialRequestMessage => _initialRequestMessage;
+        public HttpRequestMessage InitialRequestMessage
+        {
+            get
+            {
+                if (HttpResponseMessage.ReuseEnabled &&
+                    _initialRequestMessage._options is { ExperimentalReuseResponseMessage: true })
+                {
+                    throw new InvalidOperationException($"{nameof(InitialRequestMessage)} may not be used for reusable requests.");
+                }
+
+                return _initialRequestMessage;
+            }
+        }
     }
 }

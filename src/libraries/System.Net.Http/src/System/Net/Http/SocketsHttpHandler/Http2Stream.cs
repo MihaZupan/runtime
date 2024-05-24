@@ -134,12 +134,8 @@ namespace System.Net.Http
                     }
                 }
 
-                _response = new HttpResponseMessage()
-                {
-                    Version = HttpVersion.Version20,
-                    RequestMessage = _request,
-                    Content = new HttpConnectionResponseContent()
-                };
+                _response = SocketsHttpHandler.CreateHttpResponse(request);
+                _response.Version = HttpVersion.Version20;
             }
 
             private object SyncObject => this; // this isn't handed out to code that may lock on it

@@ -14,6 +14,11 @@ namespace System.Net.Http
     [DebuggerTypeProxy(typeof(HttpRequestOptionsDebugView))]
     public sealed class HttpRequestOptions : IDictionary<string, object?>, IReadOnlyDictionary<string, object?>
     {
+        internal bool ExperimentalReuseResponseMessage;
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
+        internal HttpResponseMessage? ReusableResponse;
+#pragma warning restore CS0649
+
         private Dictionary<string, object?> Options { get; } = new Dictionary<string, object?>();
         bool IReadOnlyDictionary<string, object?>.TryGetValue(string key, out object? value) => Options.TryGetValue(key, out value);
         object? IReadOnlyDictionary<string, object?>.this[string key] => Options[key];
@@ -81,6 +86,15 @@ namespace System.Net.Http
         /// <typeparam name="TValue">The type of the HTTP value as defined by <code>key</code> parameter.</typeparam>
         public void Set<TValue>(HttpRequestOptionsKey<TValue> key, TValue value)
         {
+            if (HttpResponseMessage.ReuseEnabled &&
+                typeof(TValue) == typeof(bool) &&
+                key.Key == nameof(ExperimentalReuseResponseMessage) &&
+                (bool)(object)value!)
+            {
+                ExperimentalReuseResponseMessage = true;
+                return;
+            }
+
             Options[key.Key] = value;
         }
 

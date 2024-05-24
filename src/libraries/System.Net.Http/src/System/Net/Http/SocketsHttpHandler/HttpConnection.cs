@@ -622,7 +622,7 @@ namespace System.Net.Http
 
 
                 // Parse the response status line.
-                var response = new HttpResponseMessage() { RequestMessage = request, Content = new HttpConnectionResponseContent() };
+                HttpResponseMessage response = SocketsHttpHandler.CreateHttpResponse(request);
 
                 while (!ParseStatusLine(response))
                 {

@@ -25,6 +25,18 @@ namespace System.Net.Http
         /// <summary>
         /// The initial HttpRequestMessage that is causing the connection to be created.
         /// </summary>
-        public HttpRequestMessage InitialRequestMessage => _initialRequestMessage;
+        public HttpRequestMessage InitialRequestMessage
+        {
+            get
+            {
+                if (HttpResponseMessage.ReuseEnabled &&
+                    _initialRequestMessage._options is { ExperimentalReuseResponseMessage: true})
+                {
+                    throw new InvalidOperationException($"{nameof(InitialRequestMessage)} may not be used for reusable requests.");
+                }
+
+                return _initialRequestMessage;
+            }
+        }
     }
 }

@@ -17,9 +17,9 @@ namespace System.Net.Http
         {
             Debug.Assert(stream != null);
             Debug.Assert(stream.CanRead);
-            Debug.Assert(!_consumedStream);
 
             _stream = stream;
+            _consumedStream = false;
         }
 
         private Stream ConsumeStream()

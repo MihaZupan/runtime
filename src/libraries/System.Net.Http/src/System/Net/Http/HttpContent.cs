@@ -110,6 +110,14 @@ namespace System.Net.Http
         }
 #endif
 
+        internal void ResetInternalState()
+        {
+            _bufferedContent = null;
+            _contentReadStream = null;
+            _disposed = false;
+            _canCalculateLength = true;
+        }
+
         public HttpContentHeaders Headers => _headers ??= new HttpContentHeaders(this);
 
         private bool IsBuffered
