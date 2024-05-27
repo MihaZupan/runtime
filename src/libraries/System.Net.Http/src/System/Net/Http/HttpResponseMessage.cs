@@ -10,7 +10,7 @@ namespace System.Net.Http
 {
     public class HttpResponseMessage : IDisposable
     {
-        internal static bool ReuseEnabled = AppContext.TryGetSwitch("Experimental.System.Net.Http.EnableResponseMessageReuse", out bool enabled) && enabled;
+        internal static readonly bool ReuseEnabled = AppContext.TryGetSwitch("Experimental.System.Net.Http.EnableResponseMessageReuse", out bool enabled) && enabled;
 
         private const HttpStatusCode DefaultStatusCode = HttpStatusCode.OK;
         private static Version DefaultResponseVersion => HttpVersion.Version11;
