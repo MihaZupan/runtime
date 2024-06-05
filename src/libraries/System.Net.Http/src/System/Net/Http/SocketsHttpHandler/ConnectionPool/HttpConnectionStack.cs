@@ -107,31 +107,27 @@ namespace System.Net.Http
             entry.StrongRef = connection;
             entry.PushCount++;
 
-            SpinWait spin = default;
+            ulong id = entry.PackedId;
 
             while (true)
             {
                 ulong head = Volatile.Read(ref _head);
                 entry.NextIndex = (int)head;
 
-                if (Interlocked.CompareExchange(ref _head, entry.PackedId, head) == head)
+                if (Interlocked.CompareExchange(ref _head, id, head) == head)
                 {
                     break;
                 }
-
-                spin.SpinOnce(sleep1Threshold: -1);
             }
         }
 
         public bool TryPop([NotNullWhen(true)] out HttpConnection? connection)
         {
-            SpinWait spin = default;
-            int backoff = 1;
+            Entry?[] entries = _entries;
 
             while (true)
             {
                 ulong head = Volatile.Read(ref _head);
-                Entry?[] entries = _entries;
                 int index = (int)head;
 
                 if ((uint)index >= entries.Length)
@@ -161,16 +157,6 @@ namespace System.Net.Http
                     result.StrongRef = null;
                     return true;
                 }
-
-                // Mimics the backoff behavior of ConcurrentStack<T>
-                for (int i = 0; i < backoff; i++)
-                {
-                    spin.SpinOnce(sleep1Threshold: -1);
-                }
-
-                backoff = spin.NextSpinWillYield
-                    ? Random.Shared.Next(1, 8)
-                    : backoff *= 2;
             }
         }
     }
