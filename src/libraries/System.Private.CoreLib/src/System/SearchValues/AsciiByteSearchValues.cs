@@ -17,11 +17,11 @@ namespace System.Buffers
             IndexOfAnyAsciiSearcher.ComputeAsciiState(values, out _state);
 
         internal override byte[] GetValues() =>
-            _state.Lookup.GetByteValues();
+            _state.AsciiLookup.GetByteValues();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override bool ContainsCore(byte value) =>
-            _state.Lookup.Contains(value);
+            _state.AsciiLookup.Contains(value);
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]

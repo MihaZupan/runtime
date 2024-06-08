@@ -142,9 +142,11 @@ namespace System.Buffers
                     }
                 }
 
+                IndexOfAnyAsciiSearcher.ComputeAsciiState(values, out IndexOfAnyAsciiSearcher.AsciiState state);
+
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
-                    ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
-                    : new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values);
+                    ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle, FalseConst>(state)
+                    : new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default, FalseConst>(state);
             }
 
             if (values.Length == 4)
@@ -159,9 +161,18 @@ namespace System.Buffers
 
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && minInclusive < 128)
             {
-                // If we have both ASCII and non-ASCII characters, use an implementation that
-                // does an optimistic ASCII fast-path and then falls back to the ProbabilisticMap.
+                // We have a mix of ASCII and non-ASCII characters.
 
+                if (IndexOfAnyAsciiSearcher.TryComputeAsciiWithSecondSetState(values, maxInclusive, out IndexOfAnyAsciiSearcher.AsciiState state))
+                {
+                    // All of the non-ASCII values fit within a range of 128 characters.
+                    // Use an implementation that checks against two 128-bit bitmaps, with the second one at a variable offset to the start of the non-ASCII set.
+                    return (Ssse3.IsSupported || PackedSimd.IsSupported) && values.Contains('\0')
+                        ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle, TrueConst>(state)
+                        : new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default, TrueConst>(state);
+                }
+
+                // Use an implementation that does an optimistic ASCII fast-path and then falls back to the ProbabilisticMap.
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && values.Contains('\0')
                     ? new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values, maxInclusive)
                     : new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values, maxInclusive);
