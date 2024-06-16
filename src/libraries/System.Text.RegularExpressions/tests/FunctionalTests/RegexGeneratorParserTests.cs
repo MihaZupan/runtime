@@ -10,6 +10,9 @@ using System.Linq;
 using System.Globalization;
 using System.Threading.Tasks;
 using Xunit;
+using System.Runtime.InteropServices;
+using System.IO;
+using System.Text.Json;
 
 namespace System.Text.RegularExpressions.Tests
 {
@@ -18,6 +21,63 @@ namespace System.Text.RegularExpressions.Tests
     [ConditionalClass(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported), nameof(PlatformDetection.IsNotMobile), nameof(PlatformDetection.IsNotBrowser))]
     public class RegexGeneratorParserTests
     {
+
+
+        private record RegexEntry(string Pattern, RegexOptions Options, int Count);
+        private record EntryWithGeneratedSource(string Pattern, RegexOptions Options, int Count, string InputSource, string OutputSource);
+
+        [Fact]
+        public async Task GenerateAllSources()
+        {
+            // dotnet build .\src\libraries\System.Text.RegularExpressions\tests\FunctionalTests\ /t:Test -c Release /p:XUnitMethodName=System.Text.RegularExpressions.Tests.RegexGeneratorParserTests.GenerateAllSources
+
+            if (RuntimeInformation.FrameworkDescription.Contains("Framework", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string jsonPath = @"C:\Users\mizupan\Downloads\Regex_RealWorldPatterns.json";
+            var regexEntries = JsonSerializer.Deserialize<RegexEntry[]>(File.ReadAllText(jsonPath), new JsonSerializerOptions
+            {
+                ReadCommentHandling = JsonCommentHandling.Skip,
+            });
+
+            List<EntryWithGeneratedSource> sources = new();
+
+            await Parallel.ForEachAsync(regexEntries, async (entry, _) =>
+            {
+                string program =
+                    $$"""
+                    using System.Text.RegularExpressions;
+                    partial class C
+                    {
+                        [GeneratedRegex({{SymbolDisplay.FormatLiteral(entry.Pattern, quote: true)}}, (RegexOptions){{(int)entry.Options}})]
+                        public static partial Regex Valid();
+                    }
+                    """;
+
+                try
+                {
+                    string actual = await RegexGeneratorHelper.GenerateSourceText(program, allowUnsafe: true, checkOverflow: false);
+
+                    lock (sources)
+                    {
+                        sources.Add(new EntryWithGeneratedSource(entry.Pattern, entry.Options, entry.Count, program, actual));
+                    }
+                }
+                catch (Exception ex) when (ex.ToString().Contains("info SYSLIB1044", StringComparison.Ordinal))
+                {
+
+                }
+            });
+
+            sources = sources.OrderByDescending(e => e.Count).ToList();
+
+            File.WriteAllText(
+                Path.ChangeExtension(jsonPath, ".results.json"),
+                JsonSerializer.Serialize(sources, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
         [Fact]
         public async Task Diagnostic_MultipleAttributes()
         {
