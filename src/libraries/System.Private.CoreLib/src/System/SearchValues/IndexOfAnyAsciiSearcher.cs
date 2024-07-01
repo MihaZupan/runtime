@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
@@ -28,6 +29,9 @@ namespace System.Buffers
 
             public readonly AsciiState CreateInverse() =>
                 new AsciiState(~Bitmap128(), Lookup.CreateInverse());
+
+            public static unsafe AsciiState* AlignedAlloc() =>
+                (AsciiState*)NativeMemory.AlignedAlloc((uint)sizeof(AsciiState), (uint)Vector512<byte>.Count);
         }
 
         public struct AnyByteState(Vector128<byte> bitmap0, Vector128<byte> bitmap1, BitVector256 lookup)
