@@ -974,7 +974,7 @@ namespace System.Text.RegularExpressions.Generator
             {
                 RegexFindOptimizations opts = regexTree.FindOptimizations;
 
-                string substring = "", stringComparison = "Ordinal", offset = "", offsetDescription = "";
+                string substring = "", stringComparison = "", offset = "", offsetDescription = "";
 
                 switch (opts.FindMode)
                 {
@@ -986,7 +986,7 @@ namespace System.Text.RegularExpressions.Generator
 
                     case FindNextStartingPositionMode.LeadingString_OrdinalIgnoreCase_LeftToRight:
                         substring = regexTree.FindOptimizations.LeadingPrefix;
-                        stringComparison = "OrdinalIgnoreCase";
+                        stringComparison = ", StringComparison.OrdinalIgnoreCase";
                         offsetDescription = "ordinal case-insensitive at the beginning of the pattern";
                         Debug.Assert(!string.IsNullOrEmpty(substring));
                         break;
@@ -1006,54 +1006,13 @@ namespace System.Text.RegularExpressions.Generator
                         break;
                 }
 
-                string substringAndComparison = $"{substring}_{stringComparison}";
-                string fieldName = "s_indexOfString_";
-                fieldName = IsValidInFieldName(substring) ?
-                    fieldName + substringAndComparison :
-                    GetSHA256FieldName(fieldName, substringAndComparison);
-
-                if (!requiredHelpers.ContainsKey(fieldName))
-                {
-                    requiredHelpers.Add(fieldName,
-                    [
-                        $"/// <summary>Supports searching for the string {EscapeXmlComment(Literal(substring))}.</summary>",
-                        $"internal static readonly SearchValues<string> {fieldName} = SearchValues.Create([{Literal(substring)}], StringComparison.{stringComparison});",
-                    ]);
-                }
-
                 writer.WriteLine($"// The pattern has the literal {Literal(substring)} {offsetDescription}. Find the next occurrence.");
                 writer.WriteLine($"// If it can't be found, there's no match.");
-                writer.WriteLine($"int i = inputSpan.Slice(pos{offset}).IndexOfAny({HelpersTypeName}.{fieldName});");
+                writer.WriteLine($"int i = inputSpan.Slice(pos{offset}).IndexOf({Literal(substring)}{stringComparison});");
                 using (EmitBlock(writer, "if (i >= 0)"))
                 {
                     writer.WriteLine("base.runtextpos = pos + i;");
                     writer.WriteLine("return true;");
-                }
-
-                // Determines whether its ok to embed the string in the field name.
-                // This is the same algorithm used by Roslyn.
-                static bool IsValidInFieldName(string s)
-                {
-                    foreach (char c in s)
-                    {
-                        if (char.GetUnicodeCategory(c) is not
-                            (UnicodeCategory.UppercaseLetter or
-                             UnicodeCategory.LowercaseLetter or
-                             UnicodeCategory.TitlecaseLetter or
-                             UnicodeCategory.ModifierLetter or
-                             UnicodeCategory.LetterNumber or
-                             UnicodeCategory.OtherLetter or
-                             UnicodeCategory.DecimalDigitNumber or
-                             UnicodeCategory.ConnectorPunctuation or
-                             UnicodeCategory.SpacingCombiningMark or
-                             UnicodeCategory.NonSpacingMark or
-                             UnicodeCategory.Format))
-                        {
-                            return false;
-                        }
-                    }
-
-                    return true;
                 }
             }
 

@@ -778,11 +778,19 @@ namespace System.Text.RegularExpressions
                 }
                 else
                 {
-                    string literalString = opts.FindMode is FindNextStartingPositionMode.LeadingString_LeftToRight or FindNextStartingPositionMode.LeadingString_OrdinalIgnoreCase_LeftToRight ?
+                    Ldstr(opts.FindMode is FindNextStartingPositionMode.LeadingString_LeftToRight or FindNextStartingPositionMode.LeadingString_OrdinalIgnoreCase_LeftToRight ?
                         opts.LeadingPrefix :
-                        opts.FixedDistanceLiteral.String!;
-                    LoadSearchValues([literalString], opts.FindMode is FindNextStartingPositionMode.LeadingString_OrdinalIgnoreCase_LeftToRight ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-                    Call(s_spanIndexOfAnySearchValuesString);
+                        opts.FixedDistanceLiteral.String!);
+                    Call(s_stringAsSpanMethod);
+                    if (opts.FindMode is FindNextStartingPositionMode.LeadingString_OrdinalIgnoreCase_LeftToRight)
+                    {
+                        Ldc((int)StringComparison.OrdinalIgnoreCase);
+                        Call(s_spanIndexOfSpanStringComparison);
+                    }
+                    else
+                    {
+                        Call(s_spanIndexOfSpan);
+                    }
                 }
                 Stloc(i);
 
