@@ -34,10 +34,12 @@ namespace System.Buffers
             _state.Lookup.Contains128(value);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
         internal override int IndexOfAny(ReadOnlySpan<char> span) =>
             PackedSpanHelpers.IndexOfAnyInRangeIgnoreCase(ref MemoryMarshal.GetReference(span), _lowInclusive, _highMinusLow, span.Length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
         internal override int IndexOfAnyExcept(ReadOnlySpan<char> span) =>
             PackedSpanHelpers.IndexOfAnyExceptInRangeIgnoreCase(ref MemoryMarshal.GetReference(span), _lowInclusive, _highMinusLow, span.Length);
 
