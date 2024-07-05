@@ -142,6 +142,27 @@ namespace System.Buffers
                     }
                 }
 
+                // TODO comment
+                if (PackedSpanHelpers.PackedIndexOfIsSupported && minInclusive != 0 &&
+                    // The lower range must not have the 0x20 bit set, the upper range must have it set.
+                    (minInclusive & 0x20) == 0 && (maxInclusive & 0x20) != 0 &&
+                    // We make detection simpler by assuming there are no duplicates (range is exactly half the length).
+                    values.Length % 2 == 0 &&
+                    values.Length / 2 is int range &&
+                    minInclusive + range - 1 is int firstRangeHigh &&
+                    maxInclusive - range + 1 is int secondRangeLow &&
+                    // The whole lower range must not have the 0x20 bit set, and the whole upper range must have it set.
+                    range <= 0x20 &&
+                    (firstRangeHigh & 0x20) == 0 && (secondRangeLow & 0x20) != 0 &&
+                    // There musn't be anything between the ranges.
+                    !values.ContainsAnyInRange((char)(firstRangeHigh + 1), (char)(secondRangeLow - 1)) &&
+                    // The ranges must not have any holes (from duplicate values).
+                    ContainsAllInRange(values, minInclusive, range) &&
+                    ContainsAllInRange(values, (char)secondRangeLow, range))
+                {
+                    return new RangeCharPackedIgnoreCaseSearchValues(values, minInclusive, (char)secondRangeLow, range);
+                }
+
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
                     ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
                     : new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values);
@@ -243,22 +264,23 @@ namespace System.Buffers
                 return false;
             }
 
+            return ContainsAllInRange(values, min, (int)range);
+        }
+
+        private static bool ContainsAllInRange<T>(ReadOnlySpan<T> values, T minInclusive, int range)
+            where T : struct, INumber<T>, IMinMaxValue<T>
+        {
             Span<bool> seenValues = range <= 256 ? stackalloc bool[256] : new bool[range];
-            seenValues = seenValues.Slice(0, (int)range);
+            seenValues = seenValues.Slice(0, range);
             seenValues.Clear();
 
             foreach (T value in values)
             {
-                int offset = int.CreateChecked(value - min);
+                int offset = int.CreateChecked(value) - range;
                 seenValues[offset] = true;
             }
 
-            if (seenValues.Contains(false))
-            {
-                return false;
-            }
-
-            return true;
+            return !seenValues.Contains(false);
         }
 
         internal interface IRuntimeConst

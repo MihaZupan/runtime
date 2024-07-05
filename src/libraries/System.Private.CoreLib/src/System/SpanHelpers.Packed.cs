@@ -101,12 +101,32 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
-            IndexOfAnyInRange<SpanHelpers.DontNegate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+            IndexOfAnyInRange<SpanHelpers.DontNegate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
         public static int IndexOfAnyExceptInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
-            IndexOfAnyInRange<SpanHelpers.Negate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+            IndexOfAnyInRange<SpanHelpers.Negate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static int IndexOfAnyInRangeIgnoreCase(ref char searchSpace, char lowInclusive, char rangeInclusive, int length)
+        {
+            Debug.Assert((lowInclusive & 0x20) != 0);
+            Debug.Assert(((lowInclusive + rangeInclusive + 1) & 0x20) != 0);
+
+            return IndexOfAnyInRange<SpanHelpers.DontNegate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        public static int IndexOfAnyExceptInRangeIgnoreCase(ref char searchSpace, char lowInclusive, char rangeInclusive, int length)
+        {
+            Debug.Assert((lowInclusive & 0x20) == 0x20);
+            Debug.Assert(((lowInclusive + rangeInclusive + 1) & 0x20) == 0x20);
+
+            return IndexOfAnyInRange<SpanHelpers.Negate<short>, Or20Transform>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
+        }
 
         [CompExactlyDependsOn(typeof(Sse2))]
         public static bool Contains(ref short searchSpace, short value, int length)
@@ -946,8 +966,9 @@ namespace System
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
-        private static int IndexOfAnyInRange<TNegator>(ref short searchSpace, short lowInclusive, short rangeInclusive, int length)
+        private static int IndexOfAnyInRange<TNegator, TTransform>(ref short searchSpace, short lowInclusive, short rangeInclusive, int length)
             where TNegator : struct, SpanHelpers.INegator<short>
+            where TTransform : struct, ITransform
         {
             Debug.Assert(CanUsePackedIndexOf(lowInclusive));
             Debug.Assert(CanUsePackedIndexOf((short)(lowInclusive + rangeInclusive)));
@@ -959,7 +980,7 @@ namespace System
                 uint rangeInclusiveUint = (uint)rangeInclusive;
                 for (int i = 0; i < length; i++)
                 {
-                    uint current = (uint)Unsafe.Add(ref searchSpace, i);
+                    uint current = (uint)TTransform.TransformInput(Unsafe.Add(ref searchSpace, i));
                     if (TNegator.NegateIfNeeded((current - lowInclusiveUint) <= rangeInclusiveUint))
                     {
                         return i;
@@ -989,7 +1010,7 @@ namespace System
                         {
                             Vector512<short> source0 = Vector512.LoadUnsafe(ref currentSearchSpace);
                             Vector512<short> source1 = Vector512.LoadUnsafe(ref currentSearchSpace, (nuint)Vector512<short>.Count);
-                            Vector512<byte> packedSource = PackSources(source0, source1) - lowVector;
+                            Vector512<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1)) - lowVector;
 
                             if (HasMatchInRange<TNegator>(packedSource, rangeVector))
                             {
@@ -1012,7 +1033,7 @@ namespace System
 
                         Vector512<short> source0 = Vector512.LoadUnsafe(ref firstVector);
                         Vector512<short> source1 = Vector512.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector512<byte> packedSource = PackSources(source0, source1) - lowVector;
+                        Vector512<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1)) - lowVector;
 
                         if (HasMatchInRange<TNegator>(packedSource, rangeVector))
                         {
@@ -1039,7 +1060,7 @@ namespace System
                         {
                             Vector256<short> source0 = Vector256.LoadUnsafe(ref currentSearchSpace);
                             Vector256<short> source1 = Vector256.LoadUnsafe(ref currentSearchSpace, (nuint)Vector256<short>.Count);
-                            Vector256<byte> packedSource = PackSources(source0, source1);
+                            Vector256<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1));
                             Vector256<byte> result = Vector256.LessThanOrEqual(packedSource - lowVector, rangeVector);
                             result = NegateIfNeeded<TNegator>(result);
 
@@ -1064,7 +1085,7 @@ namespace System
 
                         Vector256<short> source0 = Vector256.LoadUnsafe(ref firstVector);
                         Vector256<short> source1 = Vector256.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector256<byte> packedSource = PackSources(source0, source1);
+                        Vector256<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1));
                         Vector256<byte> result = Vector256.LessThanOrEqual(packedSource - lowVector, rangeVector);
                         result = NegateIfNeeded<TNegator>(result);
 
@@ -1100,7 +1121,7 @@ namespace System
                         {
                             Vector128<short> source0 = Vector128.LoadUnsafe(ref currentSearchSpace);
                             Vector128<short> source1 = Vector128.LoadUnsafe(ref currentSearchSpace, (nuint)Vector128<short>.Count);
-                            Vector128<byte> packedSource = PackSources(source0, source1);
+                            Vector128<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1));
                             Vector128<byte> result = Vector128.LessThanOrEqual(packedSource - lowVector, rangeVector);
                             result = NegateIfNeeded<TNegator>(result);
 
@@ -1125,7 +1146,7 @@ namespace System
 
                         Vector128<short> source0 = Vector128.LoadUnsafe(ref firstVector);
                         Vector128<short> source1 = Vector128.LoadUnsafe(ref oneVectorAwayFromEnd);
-                        Vector128<byte> packedSource = PackSources(source0, source1);
+                        Vector128<byte> packedSource = TTransform.TransformInput(PackSources(source0, source1));
                         Vector128<byte> result = Vector128.LessThanOrEqual(packedSource - lowVector, rangeVector);
                         result = NegateIfNeeded<TNegator>(result);
 
