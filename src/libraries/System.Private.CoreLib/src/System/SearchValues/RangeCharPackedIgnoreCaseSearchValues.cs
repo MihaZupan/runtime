@@ -13,6 +13,7 @@ namespace System.Buffers
     internal sealed class RangeCharPackedIgnoreCaseSearchValues : SearchValues<char>
     {
         private readonly char _lowInclusive, _highMinusLow;
+        private readonly uint _lowUint, _highMinusLowUint;
         private IndexOfAnyAsciiSearcher.AsciiState _state;
 
         public RangeCharPackedIgnoreCaseSearchValues(ReadOnlySpan<char> values, char firstRangeLow, char secondRangeLow, int range)
@@ -23,6 +24,8 @@ namespace System.Buffers
             // PackedSpanHelpers.IndexOfAnyInRangeIgnoreCase assumes that the range describes the uppercase range.
             _lowInclusive = secondRangeLow;
             _highMinusLow = (char)(range - 1);
+            _lowUint = _lowInclusive;
+            _highMinusLowUint = _highMinusLow;
             IndexOfAnyAsciiSearcher.ComputeAsciiState(values, out _state);
         }
 
@@ -31,7 +34,7 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override bool ContainsCore(char value) =>
-            _state.Lookup.Contains128(value);
+            ((uint)value | 0x20) - _lowUint <= _highMinusLowUint;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
