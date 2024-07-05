@@ -142,25 +142,16 @@ namespace System.Buffers
                     }
                 }
 
-                // TODO comment
+                // If the values represent two ranges that only differ in the 0x20 bit, we can look for just a single range while ignoring the 0x20 bit.
                 if (PackedSpanHelpers.PackedIndexOfIsSupported && minInclusive != 0 &&
                     // The lower range must not have the 0x20 bit set, the upper range must have it set.
                     (minInclusive & 0x20) == 0 && (maxInclusive & 0x20) != 0 &&
-                    // We make detection simpler by assuming there are no duplicates (range is exactly half the length).
-                    values.Length % 2 == 0 &&
-                    values.Length / 2 is int range &&
-                    minInclusive + range - 1 is int firstRangeHigh &&
-                    maxInclusive - range + 1 is int secondRangeLow &&
+                    values.Length <= 0x20 * 2 &&
+                    TryGetDoubleRange(values, minInclusive, maxInclusive, out char firstRangeHigh, out char secondRangeLow, out int range) &&
                     // The whole lower range must not have the 0x20 bit set, and the whole upper range must have it set.
-                    range <= 0x20 &&
-                    (firstRangeHigh & 0x20) == 0 && (secondRangeLow & 0x20) != 0 &&
-                    // There musn't be anything between the ranges.
-                    !values.ContainsAnyInRange((char)(firstRangeHigh + 1), (char)(secondRangeLow - 1)) &&
-                    // The ranges must not have any holes (from duplicate values).
-                    ContainsAllInRange(values, minInclusive, range) &&
-                    ContainsAllInRange(values, (char)secondRangeLow, range))
+                    range <= 0x20 && (firstRangeHigh & 0x20) == 0 && (secondRangeLow & 0x20) != 0)
                 {
-                    return new RangeCharPackedIgnoreCaseSearchValues(values, minInclusive, (char)secondRangeLow, range);
+                    return new RangeCharPackedIgnoreCaseSearchValues(values, minInclusive, secondRangeLow, range);
                 }
 
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
@@ -264,7 +255,27 @@ namespace System.Buffers
                 return false;
             }
 
+            // The range must not have any holes (from duplicate values).
             return ContainsAllInRange(values, min, (int)range);
+        }
+
+        private static bool TryGetDoubleRange(ReadOnlySpan<char> values, char minInclusive, char maxInclusive, out char firstRangeHigh, out char secondRangeLow, out int range)
+        {
+            Debug.Assert(!TryGetSingleRange(values, out _, out _));
+
+            // We make detection simpler by assuming there are no duplicates (range is exactly half the length).
+            range = values.Length / 2;
+            firstRangeHigh = (char)(minInclusive + range - 1);
+            secondRangeLow = (char)(maxInclusive - range + 1);
+
+            return
+                values.Length % 2 == 0 &&
+                // There mustn't be anything between the ranges.
+                firstRangeHigh < secondRangeLow &&
+                !values.ContainsAnyInRange((char)(firstRangeHigh + 1), (char)(secondRangeLow - 1)) &&
+                // The ranges must not have any holes (from duplicate values).
+                ContainsAllInRange(values, minInclusive, range) &&
+                ContainsAllInRange(values, secondRangeLow, range);
         }
 
         private static bool ContainsAllInRange<T>(ReadOnlySpan<T> values, T minInclusive, int range)
@@ -277,7 +288,11 @@ namespace System.Buffers
             foreach (T value in values)
             {
                 int offset = int.CreateChecked(value) - range;
-                seenValues[offset] = true;
+
+                if ((uint)offset < (uint)seenValues.Length)
+                {
+                    seenValues[offset] = true;
+                }
             }
 
             return !seenValues.Contains(false);
