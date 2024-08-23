@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 namespace System
@@ -13,9 +14,7 @@ namespace System
     // included in this file which are specific to the packed implementation.
     internal static partial class PackedSpanHelpers
     {
-        // We only do this optimization if we have support for X86 intrinsics (Sse2) as the packing is noticeably cheaper compared to ARM (AdvSimd).
-        // While the impact on the worst-case (match at the start) is minimal on X86, it's prohibitively large on ARM.
-        public static bool PackedIndexOfIsSupported => Sse2.IsSupported;
+        public static bool PackedIndexOfIsSupported => Sse2.IsSupported || AdvSimd.IsSupported;
 
         // Not all values can benefit from packing the searchSpace. See comments in PackSources below.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -25,41 +24,50 @@ namespace System
             Debug.Assert(RuntimeHelpers.IsBitwiseEquatable<T>());
             Debug.Assert(sizeof(T) == sizeof(ushort));
 
-            return Unsafe.BitCast<T, ushort>(value) - 1u < 254u;
+            return
+                Sse2.IsSupported ? Unsafe.BitCast<T, ushort>(value) - 1u < 254u :
+                Unsafe.BitCast<T, ushort>(value) < 255u;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOf(ref char searchSpace, char value, int length) =>
             IndexOf<SpanHelpers.DontNegate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value, int length) =>
             IndexOf<SpanHelpers.Negate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAny(ref char searchSpace, char value0, char value1, int length) =>
             IndexOfAny<SpanHelpers.DontNegate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value0, char value1, int length) =>
             IndexOfAny<SpanHelpers.Negate<short>, NopTransform>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAny(ref char searchSpace, char value0, char value1, char value2, int length) =>
             IndexOfAny<SpanHelpers.DontNegate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExcept(ref char searchSpace, char value0, char value1, char value2, int length) =>
             IndexOfAny<SpanHelpers.Negate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)value0, (short)value1, (short)value2, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyIgnoreCase(ref char searchSpace, char value, int length)
         {
             Debug.Assert((value | 0x20) == value);
@@ -69,6 +77,7 @@ namespace System
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExceptIgnoreCase(ref char searchSpace, char value, int length)
         {
             Debug.Assert((value | 0x20) == value);
@@ -78,6 +87,7 @@ namespace System
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyIgnoreCase(ref char searchSpace, char value0, char value1, int length)
         {
             Debug.Assert((value0 | 0x20) == value0);
@@ -88,6 +98,7 @@ namespace System
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExceptIgnoreCase(ref char searchSpace, char value0, char value1, int length)
         {
             Debug.Assert((value0 | 0x20) == value0);
@@ -98,15 +109,18 @@ namespace System
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
             IndexOfAnyInRange<SpanHelpers.DontNegate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static int IndexOfAnyExceptInRange(ref char searchSpace, char lowInclusive, char rangeInclusive, int length) =>
             IndexOfAnyInRange<SpanHelpers.Negate<short>>(ref Unsafe.As<char, short>(ref searchSpace), (short)lowInclusive, (short)rangeInclusive, length);
 
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         public static bool Contains(ref short searchSpace, short value, int length)
         {
             Debug.Assert(CanUsePackedIndexOf(value));
@@ -309,6 +323,7 @@ namespace System
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static int IndexOf<TNegator, TTransform>(ref short searchSpace, short value, int length)
             where TNegator : struct, SpanHelpers.INegator<short>
             where TTransform : struct, ITransform
@@ -512,6 +527,7 @@ namespace System
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static int IndexOfAny<TNegator, TTransform>(ref short searchSpace, short value0, short value1, int length)
             where TNegator : struct, SpanHelpers.INegator<short>
             where TTransform : struct, ITransform
@@ -726,6 +742,7 @@ namespace System
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static int IndexOfAny<TNegator>(ref short searchSpace, short value0, short value1, short value2, int length)
             where TNegator : struct, SpanHelpers.INegator<short>
         {
@@ -944,6 +961,7 @@ namespace System
         }
 
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static int IndexOfAnyInRange<TNegator>(ref short searchSpace, short lowInclusive, short rangeInclusive, int length)
             where TNegator : struct, SpanHelpers.INegator<short>
         {
@@ -1164,6 +1182,7 @@ namespace System
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
         private static Vector128<byte> PackSources(Vector128<short> source0, Vector128<short> source1)
         {
             Debug.Assert(Sse2.IsSupported);
@@ -1171,13 +1190,12 @@ namespace System
             // X86: Downcast every character using saturation.
             // - Values <= 32767 result in min(value, 255).
             // - Values  > 32767 result in 0. Because of this we can't accept needles that contain 0.
-            return Sse2.PackUnsignedSaturate(source0, source1).AsByte();
+            // ARM:
+            // - All values result in min(value, 255).
+            return
+                Sse2.IsSupported ? Sse2.PackUnsignedSaturate(source0, source1).AsByte() :
+                AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(source0.AsUInt16()), source1.AsUInt16());
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool NegateIfNeeded<TNegator>(bool result)
-            where TNegator : struct, SpanHelpers.INegator<short> =>
-            typeof(TNegator) == typeof(SpanHelpers.DontNegate<short>) ? result : !result;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> NegateIfNeeded<TNegator>(Vector128<byte> result)
