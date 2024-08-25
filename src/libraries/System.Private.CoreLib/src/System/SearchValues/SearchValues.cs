@@ -41,6 +41,11 @@ namespace System.Buffers
                 return new RangeByteSearchValues(minInclusive, maxInclusive);
             }
 
+            if (values.Length >= 4 && IndexOfAnyAsciiSearcher.CanUseUniqueLow6BitsSearch(values, maxInclusive))
+            {
+                return new UniqueLow6BitsByteSearchValues(values);
+            }
+
             if (values.Length <= 5)
             {
                 Debug.Assert(values.Length is 2 or 3 or 4 or 5);
@@ -120,6 +125,13 @@ namespace System.Buffers
                 return PackedSpanHelpers.PackedIndexOfIsSupported && PackedSpanHelpers.CanUsePackedIndexOf(value0) && PackedSpanHelpers.CanUsePackedIndexOf(value1) && PackedSpanHelpers.CanUsePackedIndexOf(value2)
                     ? new Any3CharPackedSearchValues(value0, value1, value2)
                     : new Any3SearchValues<char, short>(shortValues);
+            }
+
+            if (IndexOfAnyAsciiSearcher.CanUseUniqueLow6BitsSearch(values, maxInclusive))
+            {
+                return minInclusive == 0
+                    ? new UniqueLow6BitsCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
+                    : new UniqueLow6BitsCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values);
             }
 
             // IndexOfAnyAsciiSearcher for chars is slower than Any3CharSearchValues, but faster than Any4SearchValues
