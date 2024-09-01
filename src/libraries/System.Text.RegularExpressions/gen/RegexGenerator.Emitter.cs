@@ -1614,7 +1614,8 @@ namespace System.Text.RegularExpressions.Generator
             // the span isn't long enough for the specified length.
             string SpanLengthCheck(int requiredLength, string? dynamicRequiredLength = null) =>
                 dynamicRequiredLength is null && sliceStaticPos + requiredLength == 1 ? $"{sliceSpan}.IsEmpty" :
-                $"(uint){sliceSpan}.Length < {Sum(sliceStaticPos + requiredLength, dynamicRequiredLength)}";
+                dynamicRequiredLength is null ? $"{sliceSpan}.Length < {Sum(sliceStaticPos + requiredLength)}" :
+                $"(uint){sliceSpan}.Length < (uint){Sum(sliceStaticPos + requiredLength, dynamicRequiredLength)}";
 
             // Adds the value of sliceStaticPos into the pos local, slices slice by the corresponding amount,
             // and zeros out sliceStaticPos.
@@ -4018,7 +4019,7 @@ namespace System.Text.RegularExpressions.Generator
                 }
                 else if (iterations <= MaxUnrollSize)
                 {
-                    // if ((uint)(sliceStaticPos + iterations - 1) >= (uint)slice.Length ||
+                    // if ((sliceStaticPos + iterations - 1) >= slice.Length ||
                     //     slice[sliceStaticPos] != c1 ||
                     //     slice[sliceStaticPos + 1] != c2 ||
                     //     ...)
@@ -4046,7 +4047,7 @@ namespace System.Text.RegularExpressions.Generator
                 }
                 else
                 {
-                    // if ((uint)(sliceStaticPos + iterations - 1) >= (uint)slice.Length) goto doneLabel;
+                    // if ((sliceStaticPos + iterations - 1) >= slice.Length) goto doneLabel;
                     if (emitLengthCheck)
                     {
                         EmitSpanLengthCheck(iterations);
@@ -4239,7 +4240,7 @@ namespace System.Text.RegularExpressions.Generator
 
                 string spaceAvailable =
                     rtl ? "pos > 0" :
-                    sliceStaticPos != 0 ? $"(uint){sliceSpan}.Length > (uint){sliceStaticPos}" :
+                    sliceStaticPos != 0 ? $"{sliceSpan}.Length > {sliceStaticPos}" :
                     $"!{sliceSpan}.IsEmpty";
 
                 using (EmitBlock(writer, $"if ({spaceAvailable} && {expr})"))
