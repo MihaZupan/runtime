@@ -1612,7 +1612,15 @@ namespace System.Text.RegularExpressions
                 EmitSum(sliceStaticPos + requiredLength - 1, dynamicRequiredLength);
                 Ldloca(slice);
                 Call(s_spanGetLengthMethod);
-                BgeUnFar(doneLabel);
+                if (dynamicRequiredLength is null)
+                {
+                    // if ((sliceStaticPos + requiredLength - 1) >= slice.Length) goto Done;
+                    BgeFar(doneLabel);
+                }
+                else
+                {
+                    BgeUnFar(doneLabel);
+                }
             }
 
             // Adds the value of sliceStaticPos into the pos local, zeros out sliceStaticPos,
@@ -4260,7 +4268,7 @@ namespace System.Text.RegularExpressions
                     return;
                 }
 
-                // if ((uint)(sliceStaticPos + iterations - 1) >= (uint)slice.Length) goto doneLabel;
+                // if ((sliceStaticPos + iterations - 1) >= slice.Length) goto doneLabel;
                 if (emitLengthChecksIfRequired)
                 {
                     EmitSpanLengthCheck(iterations);
@@ -4614,11 +4622,11 @@ namespace System.Text.RegularExpressions
 
                 if (!rtl)
                 {
-                    // if ((uint)sliceStaticPos >= (uint)slice.Length) goto skipUpdatesLabel;
+                    // if (sliceStaticPos >= slice.Length) goto skipUpdatesLabel;
                     Ldc(sliceStaticPos);
                     Ldloca(slice);
                     Call(s_spanGetLengthMethod);
-                    BgeUnFar(skipUpdatesLabel);
+                    BgeFar(skipUpdatesLabel);
                 }
                 else
                 {
