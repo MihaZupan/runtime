@@ -1687,9 +1687,7 @@ namespace System.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector512<byte> ExtractAsciiVector(Vector512<ushort> vectorFirst, Vector512<ushort> vectorSecond)
         {
-            return Avx512BW.IsSupported
-                ? PackedSpanHelpers.FixUpPackedVector512Result(Avx512BW.PackUnsignedSaturate(vectorFirst.AsInt16(), vectorSecond.AsInt16()))
-                : Vector512.Narrow(vectorFirst, vectorSecond);
+            return Vector512.Narrow(vectorFirst, vectorSecond);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
