@@ -48,10 +48,7 @@ namespace System.Buffers
                 _nodes[i].OptimizeChildren();
             }
 
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
-            {
-                GenerateStartingAsciiCharsBitmap();
-            }
+            GenerateStartingAsciiCharsBitmap();
 
             return new AhoCorasick(_nodes.AsSpan().ToArray(), _startingAsciiChars);
         }

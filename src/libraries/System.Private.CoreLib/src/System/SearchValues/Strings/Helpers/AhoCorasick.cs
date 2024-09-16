@@ -30,7 +30,7 @@ namespace System.Buffers
         {
             get
             {
-                if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && _startingAsciiChars.Bitmap != default)
+                if (_startingAsciiChars.Bitmap != default)
                 {
                     // If there are a lot of starting characters such that we often find one early,
                     // the ASCII fast scan may end up performing worse than checking one character at a time.
@@ -87,27 +87,37 @@ namespace System.Buffers
             Debug.Assert(nodeIndex == 0);
             // We are currently in the root node and trying to find the next position of any starting character.
             // If all the values start with an ASCII character, use a vectorized helper to quickly skip over characters that can't start a match.
-            if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && typeof(TFastScanVariant) == typeof(IndexOfAnyAsciiFastScan))
+            if (typeof(TFastScanVariant) == typeof(IndexOfAnyAsciiFastScan))
             {
-                int remainingLength = span.Length - i;
-
-                if (remainingLength >= Vector128<ushort>.Count)
+                if (IndexOfAnyAsciiSearcher.IsVectorizationSupported)
                 {
-                    // If '\0' is one of the starting chars and we're running on Ssse3 hardware, this may return false-positives.
-                    // False-positives here are okay, we'll just rule them out below. While we could flow the Ssse3AndWasmHandleZeroInNeedle
-                    // generic through, we expect such values to be rare enough that introducing more code is not worth it.
-                    int offset = IndexOfAnyAsciiSearcher.IndexOfAny<IndexOfAnyAsciiSearcher.DontNegate, IndexOfAnyAsciiSearcher.Default, SearchValues.FalseConst>(
-                        ref Unsafe.As<char, short>(ref Unsafe.Add(ref MemoryMarshal.GetReference(span), i)),
-                        remainingLength,
-                        ref Unsafe.AsRef(in _startingAsciiChars));
+                    int remainingLength = span.Length - i;
 
-                    if (offset < 0)
+                    if (remainingLength >= Vector128<ushort>.Count)
                     {
-                        goto Return;
-                    }
+                        // If '\0' is one of the starting chars and we're running on Ssse3 hardware, this may return false-positives.
+                        // False-positives here are okay, we'll just rule them out below. While we could flow the Ssse3AndWasmHandleZeroInNeedle
+                        // generic through, we expect such values to be rare enough that introducing more code is not worth it.
+                        int offset = IndexOfAnyAsciiSearcher.IndexOfAny<IndexOfAnyAsciiSearcher.DontNegate, IndexOfAnyAsciiSearcher.Default, SearchValues.FalseConst>(
+                            ref Unsafe.As<char, short>(ref Unsafe.Add(ref MemoryMarshal.GetReference(span), i)),
+                            remainingLength,
+                            ref Unsafe.AsRef(in _startingAsciiChars));
 
-                    i += offset;
-                    goto LoopWithoutRangeCheck;
+                        if (offset < 0)
+                        {
+                            goto Return;
+                        }
+
+                        i += offset;
+                        goto LoopWithoutRangeCheck;
+                    }
+                }
+                else
+                {
+                    while ((uint)i < (uint)span.Length && !_startingAsciiChars.Lookup.Contains256(span[i]))
+                    {
+                        i++;
+                    }
                 }
             }
 
