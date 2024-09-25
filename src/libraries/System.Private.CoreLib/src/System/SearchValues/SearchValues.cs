@@ -179,6 +179,13 @@ namespace System.Buffers
                 // If we have both ASCII and non-ASCII characters, use an implementation that
                 // does an optimistic ASCII fast-path and then falls back to the ProbabilisticMap.
 
+                if (!ShouldUseProbabilisticMap(values.Length, maxInclusive))
+                {
+                    return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
+                        ? new BitmapWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values, maxInclusive)
+                        : new BitmapWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values, maxInclusive);
+                }
+
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
                     ? new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values, maxInclusive)
                     : new ProbabilisticWithAsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values, maxInclusive);
