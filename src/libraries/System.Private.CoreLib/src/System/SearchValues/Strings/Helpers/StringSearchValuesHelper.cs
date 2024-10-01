@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 
 namespace System.Buffers
@@ -157,12 +158,22 @@ namespace System.Buffers
                 {
                     Debug.Assert(candidate.Length is 2 or 3);
 
-                    // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
-                    // We only have to to check the last 2 characters also match.
-                    nuint offset = byteLength - sizeof(uint);
+                    if (Sse2.IsSupported)
+                    {
+                        // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
+                        // We only have to to check the last 2 characters also match.
+                        nuint offset = byteLength - sizeof(uint);
 
-                    return Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref first, offset))
-                        == Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref second, offset));
+                        return Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref first, offset))
+                            == Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref second, offset));
+                    }
+                    else
+                    {
+                        nuint offset = byteLength - sizeof(uint);
+                        uint differentBits = Unsafe.ReadUnaligned<uint>(ref first) - Unsafe.ReadUnaligned<uint>(ref second);
+                        differentBits |= Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref first, offset)) - Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref second, offset));
+                        return differentBits == 0;
+                    }
                 }
             }
         }
