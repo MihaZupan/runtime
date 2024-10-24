@@ -68,7 +68,7 @@ namespace System.IO
                         return 0;
                     }
 
-                    return _buffer.ActiveMemory.Length;
+                    return _buffer.ActiveLength;
                 }
             }
         }
@@ -85,7 +85,7 @@ namespace System.IO
                         throw new InvalidOperationException();
                     }
 
-                    return _maxBufferSize - _buffer.ActiveMemory.Length;
+                    return _maxBufferSize - _buffer.ActiveLength;
                 }
             }
         }
@@ -109,7 +109,7 @@ namespace System.IO
 
                 _buffer.EnsureAvailableSpaceUpToLimit(buffer.Length, _maxBufferSize);
 
-                int bytesWritten = Math.Min(buffer.Length, _buffer.AvailableMemory.Length);
+                int bytesWritten = Math.Min(buffer.Length, _buffer.AvailableLength);
                 if (bytesWritten > 0)
                 {
                     _buffer.AvailableMemory.CopyFrom(buffer.Slice(0, bytesWritten));
@@ -202,7 +202,7 @@ namespace System.IO
 
                 if (!_buffer.IsEmpty)
                 {
-                    int bytesRead = Math.Min(buffer.Length, _buffer.ActiveMemory.Length);
+                    int bytesRead = Math.Min(buffer.Length, _buffer.ActiveLength);
                     _buffer.ActiveMemory.Slice(0, bytesRead).CopyTo(buffer);
                     _buffer.Discard(bytesRead);
 

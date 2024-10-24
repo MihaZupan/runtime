@@ -61,16 +61,20 @@ namespace System.Net
 
         public bool IsEmpty => _activeStart == _availableStart;
 
-        public MultiMemory ActiveMemory => new MultiMemory(_blocks, _activeStart, _availableStart - _activeStart);
+        public int ActiveLength => (int)(_availableStart - _activeStart);
 
-        public MultiMemory AvailableMemory => new MultiMemory(_blocks, _availableStart, _allocatedEnd - _availableStart);
+        public int AvailableLength => (int)(_allocatedEnd - _availableStart);
+
+        public MultiMemory ActiveMemory => new MultiMemory(_blocks, _activeStart, (uint)ActiveLength);
+
+        public MultiMemory AvailableMemory => new MultiMemory(_blocks, _availableStart, (uint)AvailableLength);
 
         public void Discard(int byteCount)
         {
             Debug.Assert(byteCount >= 0);
-            Debug.Assert(byteCount <= ActiveMemory.Length, $"MultiArrayBuffer.Discard: Expected byteCount={byteCount} <= {ActiveMemory.Length}");
+            Debug.Assert(byteCount <= ActiveLength, $"MultiArrayBuffer.Discard: Expected byteCount={byteCount} <= {ActiveLength}");
 
-            if (byteCount == ActiveMemory.Length)
+            if (byteCount == ActiveLength)
             {
                 DiscardAll();
                 return;
@@ -118,7 +122,7 @@ namespace System.Net
         public void Commit(int byteCount)
         {
             Debug.Assert(byteCount >= 0);
-            Debug.Assert(byteCount <= AvailableMemory.Length, $"MultiArrayBuffer.Commit: Expected byteCount={byteCount} <= {AvailableMemory.Length}");
+            Debug.Assert(byteCount <= AvailableLength, $"MultiArrayBuffer.Commit: Expected byteCount={byteCount} <= {AvailableLength}");
 
             uint ubyteCount = (uint)byteCount;
 
@@ -130,14 +134,14 @@ namespace System.Net
             Debug.Assert(byteCount >= 0);
             Debug.Assert(limit >= 0);
 
-            if (ActiveMemory.Length >= limit)
+            if (ActiveLength >= limit)
             {
                 // Already past limit. Do nothing.
                 return;
             }
 
             // Enforce the limit.
-            byteCount = Math.Min(byteCount, limit - ActiveMemory.Length);
+            byteCount = Math.Min(byteCount, limit - ActiveLength);
 
             EnsureAvailableSpace(byteCount);
         }
@@ -146,7 +150,7 @@ namespace System.Net
         {
             Debug.Assert(byteCount >= 0);
 
-            if (byteCount > AvailableMemory.Length)
+            if (byteCount > AvailableLength)
             {
                 GrowAvailableSpace(byteCount);
             }
@@ -154,13 +158,13 @@ namespace System.Net
 
         public void GrowAvailableSpace(int byteCount)
         {
-            Debug.Assert(byteCount > AvailableMemory.Length);
+            Debug.Assert(byteCount > AvailableLength);
 
             CheckState();
 
             uint ubyteCount = (uint)byteCount;
 
-            uint newBytesNeeded = ubyteCount - (uint)AvailableMemory.Length;
+            uint newBytesNeeded = ubyteCount - (uint)AvailableLength;
             uint newBlocksNeeded = (newBytesNeeded + BlockSize - 1) / BlockSize;
 
             // Ensure we have enough space in the block array for the new blocks needed.
