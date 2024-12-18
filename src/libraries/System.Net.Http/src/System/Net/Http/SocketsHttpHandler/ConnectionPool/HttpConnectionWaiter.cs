@@ -99,16 +99,18 @@ namespace System.Net.Http
                 }
 
                 CancelledByOriginatingRequestCompletion = true;
+
+                // The CTS may be nulled out at any point, hence the null-conditional '?'.
                 if (timeout > 0)
                 {
                     // Cancel after the specified timeout. This cancellation will not fire if the connection
                     // succeeds within the delay and the CTS becomes disposed.
-                    ConnectionCancellationTokenSource.CancelAfter(timeout);
+                    ConnectionCancellationTokenSource?.CancelAfter(timeout);
                 }
                 else
                 {
                     // Cancel immediately if no timeout specified.
-                    ConnectionCancellationTokenSource.Cancel();
+                    ConnectionCancellationTokenSource?.Cancel();
                 }
             }
         }

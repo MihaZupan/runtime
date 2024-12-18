@@ -323,7 +323,7 @@ namespace System.Net.Http
                 if (NetEventSource.Log.IsEnabled()) Trace("Downgrading queued HTTP2 request to HTTP/1.1");
 
                 // We are done with the HTTP2 connection attempt, no point to cancel it.
-                Volatile.Write(ref waiter.ConnectionCancellationTokenSource, null);
+                waiter.ConnectionCancellationTokenSource = null;
 
                 // We don't care if this fails; that means the request was previously canceled or handled by a different connection.
                 waiter.TrySetResult(null);
