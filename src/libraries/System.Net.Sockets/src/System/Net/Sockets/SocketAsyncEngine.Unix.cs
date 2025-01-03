@@ -75,14 +75,6 @@ namespace System.Net.Sockets
             return engines;
         }
 
-        /// <summary>
-        /// Each <see cref="SocketAsyncContext"/> is assigned an index into this table while registered with a <see cref="SocketAsyncEngine"/>.
-        /// <para>The index is used as the <see cref="Interop.Sys.SocketEvent.Data"/> to quickly map events to <see cref="SocketAsyncContext"/>s.</para>
-        /// <para>It is also stored in <see cref="SocketAsyncContext.GlobalContextIndex"/> so that we can efficiently remove it when unregistering the socket.</para>
-        /// </summary>
-        private static SocketAsyncContext?[] s_registeredContexts = [];
-        private static readonly Queue<int> s_registeredContextsFreeList = [];
-
         private readonly IntPtr _port;
         private readonly Interop.Sys.SocketEvent* _buffer;
 
@@ -123,33 +115,10 @@ namespace System.Net.Sockets
 
         private bool TryRegisterCore(IntPtr socketHandle, SocketAsyncContext context, out Interop.Error error)
         {
-            Debug.Assert(context.GlobalContextIndex == -1);
-
-            lock (s_registeredContextsFreeList)
-            {
-                if (!s_registeredContextsFreeList.TryDequeue(out int index))
-                {
-                    int previousLength = s_registeredContexts.Length;
-                    int newLength = Math.Max(4, 2 * previousLength);
-
-                    Array.Resize(ref s_registeredContexts, newLength);
-
-                    for (int i = previousLength + 1; i < newLength; i++)
-                    {
-                        s_registeredContextsFreeList.Enqueue(i);
-                    }
-
-                    index = previousLength;
-                }
-
-                Debug.Assert(s_registeredContexts[index] is null);
-
-                s_registeredContexts[index] = context;
-                context.GlobalContextIndex = index;
-            }
+            nint contextHandle = ContextMap.Alloc(context);
 
             error = Interop.Sys.TryChangeSocketEventRegistration(_port, socketHandle, Interop.Sys.SocketEvents.None,
-                Interop.Sys.SocketEvents.Read | Interop.Sys.SocketEvents.Write, context.GlobalContextIndex);
+                Interop.Sys.SocketEvents.Read | Interop.Sys.SocketEvents.Write, contextHandle);
             if (error == Interop.Error.SUCCESS)
             {
                 return true;
@@ -161,16 +130,7 @@ namespace System.Net.Sockets
 
         public static void UnregisterSocket(SocketAsyncContext context)
         {
-            Debug.Assert(context.GlobalContextIndex >= 0);
-            Debug.Assert(ReferenceEquals(s_registeredContexts[context.GlobalContextIndex], context));
-
-            lock (s_registeredContextsFreeList)
-            {
-                s_registeredContexts[context.GlobalContextIndex] = null;
-                s_registeredContextsFreeList.Enqueue(context.GlobalContextIndex);
-            }
-
-            context.GlobalContextIndex = -1;
+            ContextMap.Free(context);
         }
 
         private SocketAsyncEngine()
@@ -368,13 +328,8 @@ namespace System.Net.Sockets
                 bool enqueuedEvent = false;
                 foreach (var socketEvent in new ReadOnlySpan<Interop.Sys.SocketEvent>(Buffer, numEvents))
                 {
-                    Debug.Assert((uint)socketEvent.Data < (uint)s_registeredContexts.Length);
+                    SocketAsyncContext? context = ContextMap.GetTarget(socketEvent.Data);
 
-                    SocketAsyncContext? context = s_registeredContexts[socketEvent.Data];
-
-                    // The context may be null if the socket was unregistered right before the event was processed.
-                    // The slot in s_registeredContexts may have been reused by a different context, in which case the
-                    // incorrect socket will notice that no information is available yet and retry, waiting for new events.
                     if (context is not null)
                     {
                         if (context.PreferInlineCompletions)
@@ -407,6 +362,60 @@ namespace System.Net.Sockets
             {
                 Context = context;
                 Events = events;
+            }
+        }
+
+        private static class ContextMap
+        {
+            private const int BucketSize = 64;
+            private static readonly List<SocketAsyncContext?[]> s_buckets = [];
+            private static readonly ConcurrentQueue<(int Bucket, int Offset)> s_freeList = [];
+
+            public static SocketAsyncContext? GetTarget(nint handle)
+            {
+                return Unsafe.AsRef<SocketAsyncContext?>((void*)handle);
+            }
+
+            public static nint Alloc(SocketAsyncContext context)
+            {
+                Debug.Assert(context.ContextMap.Bucket == -1 && context.ContextMap.Offset == -1);
+
+                if (!s_freeList.TryDequeue(out (int Bucket, int Offset) bucketOffset))
+                {
+                    lock (s_buckets)
+                    {
+                        if (!s_freeList.TryDequeue(out bucketOffset))
+                        {
+                            int bucketIndex = s_buckets.Count;
+                            SocketAsyncContext?[] newBucket = GC.AllocateArray<SocketAsyncContext?>(BucketSize, pinned: true);
+                            s_buckets.Add(newBucket);
+
+                            for (int i = 1; i < BucketSize; i++)
+                            {
+                                s_freeList.Enqueue((bucketIndex, i));
+                            }
+
+                            bucketOffset = (bucketIndex, 0);
+                        }
+                    }
+                }
+
+                SocketAsyncContext?[] bucket = s_buckets[bucketOffset.Bucket];
+                bucket[bucketOffset.Offset] = context;
+                context.ContextMap = bucketOffset;
+                return Marshal.UnsafeAddrOfPinnedArrayElement(bucket, bucketOffset.Offset);
+            }
+
+            public static void Free(SocketAsyncContext context)
+            {
+                Debug.Assert(context.ContextMap.Bucket >= 0 && context.ContextMap.Offset >= 0);
+                Debug.Assert(ReferenceEquals(s_buckets[context.ContextMap.Bucket][context.ContextMap.Offset], context));
+
+                (int bucket, int offset) = context.ContextMap;
+                context.ContextMap = (-1, -1);
+
+                s_buckets[bucket][offset] = null;
+                s_freeList.Enqueue((bucket, offset));
             }
         }
     }
