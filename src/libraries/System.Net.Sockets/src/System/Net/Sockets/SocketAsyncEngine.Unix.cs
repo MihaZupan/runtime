@@ -75,6 +75,11 @@ namespace System.Net.Sockets
             return engines;
         }
 
+        /// <summary>
+        /// Each <see cref="SocketAsyncContext"/> is assigned an index into this table while registered with a <see cref="SocketAsyncEngine"/>.
+        /// <para>The index is used as the <see cref="Interop.Sys.SocketEvent.Data"/> to quickly map events to <see cref="SocketAsyncContext"/>s.</para>
+        /// <para>It is also stored in <see cref="SocketAsyncContext.GlobalContextIndex"/> so that we can efficiently remove it when unregistering the socket.</para>
+        /// </summary>
         private static SocketAsyncContext?[] s_registeredContexts = [];
         private static readonly Queue<int> s_registeredContextsFreeList = [];
 
@@ -368,6 +373,8 @@ namespace System.Net.Sockets
                     SocketAsyncContext? context = s_registeredContexts[socketEvent.Data];
 
                     // The context may be null if the socket was unregistered right before the event was processed.
+                    // The slot in s_registeredContexts may have been reused by a different context, in which case the
+                    // incorrect socket will notice that no information is available yet and retry, waiting for new events.
                     if (context is not null)
                     {
                         if (context.PreferInlineCompletions)
