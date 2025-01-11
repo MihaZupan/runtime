@@ -590,15 +590,9 @@ namespace System.Text.Unicode.Tests
                 ToStringState.LastProvider = provider;
                 ToStringState.ToStringMode = ToStringMode.ISpanFormattableTryFormat;
 
-                ReadOnlySpan<byte> src = Encoding.UTF8.GetBytes(_value.ToString(format.ToString(), provider)).AsSpan();
-                if (src.TryCopyTo(utf8Destination))
-                {
-                    bytesWritten = src.Length;
-                    return true;
-                }
+                byte[] src = Encoding.UTF8.GetBytes(_value.ToString(format.ToString(), provider));
 
-                bytesWritten = 0;
-                return false;
+                return src.AsSpan().TryCopyTo(utf8Destination, out bytesWritten);
             }
 
             public string ToString(string format, IFormatProvider formatProvider)

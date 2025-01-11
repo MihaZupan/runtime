@@ -506,6 +506,10 @@ namespace System.Tests
 
                 Assert.False(s.TryCopyTo(destination));
                 Assert.All(destination, c => Assert.Equal(0, c));
+
+                Assert.False(s.TryCopyTo(destination, out int charsWritten));
+                Assert.All(destination, c => Assert.Equal(0, c));
+                Assert.Equal(0, charsWritten);
             }
             else
             {
@@ -518,6 +522,13 @@ namespace System.Tests
                 Assert.True(s.TryCopyTo(destination));
                 Assert.Equal(s, new Span<char>(destination, 0, s.Length).ToString());
                 Assert.All(destination.AsSpan(s.Length).ToArray(), c => Assert.Equal(0, c));
+
+                Array.Clear(destination);
+
+                Assert.True(s.TryCopyTo(destination, out int charsWritten));
+                Assert.Equal(s, new Span<char>(destination, 0, s.Length).ToString());
+                Assert.All(destination.AsSpan(s.Length).ToArray(), c => Assert.Equal(0, c));
+                Assert.Equal(s.Length, charsWritten);
             }
         }
 
