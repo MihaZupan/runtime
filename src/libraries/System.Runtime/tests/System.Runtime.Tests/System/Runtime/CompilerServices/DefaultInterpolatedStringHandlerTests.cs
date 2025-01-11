@@ -465,15 +465,7 @@ namespace System.Runtime.CompilerServices.Tests
                     return true;
                 }
 
-                if (_value.Length > destination.Length)
-                {
-                    charsWritten = 0;
-                    return false;
-                }
-
-                charsWritten = _value.Length;
-                _value.AsSpan().CopyTo(destination);
-                return true;
+                return _value.TryCopyTo(destination, out charsWritten);
             }
 
             public string ToString(string format, IFormatProvider formatProvider)

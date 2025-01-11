@@ -86,18 +86,6 @@ namespace Internal.Cryptography
 #endif
         }
 
-        internal static bool TryCopyToDestination(this ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
-        {
-            if (source.TryCopyTo(destination))
-            {
-                bytesWritten = source.Length;
-                return true;
-            }
-
-            bytesWritten = 0;
-            return false;
-        }
-
         internal static int HashOidToByteLength(string hashOid)
         {
             // This file is compiled in netstandard2.0, can't use the HashSizeInBytes consts.

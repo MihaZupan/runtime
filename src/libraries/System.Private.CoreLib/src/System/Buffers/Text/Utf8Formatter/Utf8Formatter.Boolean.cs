@@ -32,55 +32,26 @@ namespace System.Buffers.Text
             {
                 if (symbol == 'G')
                 {
-                    if (!"True"u8.TryCopyTo(destination))
-                    {
-                        goto BufferTooSmall;
-                    }
+                    return "True"u8.TryCopyTo(destination, out bytesWritten);
                 }
                 else if (symbol == 'l')
                 {
-                    if (!"true"u8.TryCopyTo(destination))
-                    {
-                        goto BufferTooSmall;
-                    }
+                    return "true"u8.TryCopyTo(destination, out bytesWritten);
                 }
-                else
-                {
-                    goto BadFormat;
-                }
-
-                bytesWritten = 4;
-                return true;
             }
             else
             {
                 if (symbol == 'G')
                 {
-                    if (!"False"u8.TryCopyTo(destination))
-                    {
-                        goto BufferTooSmall;
-                    }
+                    return "False"u8.TryCopyTo(destination, out bytesWritten);
                 }
                 else if (symbol == 'l')
                 {
-                    if (!"false"u8.TryCopyTo(destination))
-                    {
-                        goto BufferTooSmall;
-                    }
+                    return "false"u8.TryCopyTo(destination, out bytesWritten);
                 }
-                else
-                {
-                    goto BadFormat;
-                }
-
-                bytesWritten = 5;
-                return true;
             }
 
-        BadFormat:
             ThrowHelper.ThrowFormatException_BadFormatSpecifier();
-
-        BufferTooSmall:
             bytesWritten = 0;
             return false;
         }

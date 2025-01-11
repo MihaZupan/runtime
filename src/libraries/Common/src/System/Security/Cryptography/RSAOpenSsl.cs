@@ -308,7 +308,7 @@ namespace System.Security.Cryptography
             {
                 ReadOnlyMemory<byte> pkcs1 = VerifyPkcs8(p8);
                 ReadOnlyMemory<byte> selected = selector(p8, pkcs1);
-                return selected.Span.TryCopyToDestination(destination, out bytesWritten);
+                return selected.Span.TryCopyTo(destination, out bytesWritten);
             }
             finally
             {
@@ -352,7 +352,7 @@ namespace System.Security.Cryptography
                     data = transform(data);
                 }
 
-                return data.Span.TryCopyToDestination(destination, out bytesWritten);
+                return data.Span.TryCopyTo(destination, out bytesWritten);
             }
             finally
             {

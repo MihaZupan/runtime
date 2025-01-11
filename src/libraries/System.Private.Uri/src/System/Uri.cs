@@ -1627,14 +1627,7 @@ namespace System
                 }
             }
 
-            if (result.TryCopyTo(destination))
-            {
-                charsWritten = result.Length;
-                return true;
-            }
-
-            charsWritten = 0;
-            return false;
+            return result.TryCopyTo(destination, out charsWritten);
         }
 
         /// <inheritdoc/>
@@ -2761,8 +2754,7 @@ namespace System
 
             scoped ReadOnlySpan<char> result = RecreateParts(ref dest, str, parts, nonCanonical, formatAs);
 
-            bool copied = result.TryCopyTo(span);
-            charsWritten = copied ? result.Length : 0;
+            bool copied = result.TryCopyTo(span, out charsWritten);
             dest.Dispose();
             return copied;
         }

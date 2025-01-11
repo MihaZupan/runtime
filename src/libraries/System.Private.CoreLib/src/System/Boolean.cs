@@ -96,23 +96,12 @@ namespace System
         {
             if (m_value)
             {
-                if (TrueLiteral.TryCopyTo(destination))
-                {
-                    charsWritten = TrueLiteral.Length;
-                    return true;
-                }
+                return TrueLiteral.TryCopyTo(destination, out charsWritten);
             }
             else
             {
-                if (FalseLiteral.TryCopyTo(destination))
-                {
-                    charsWritten = FalseLiteral.Length;
-                    return true;
-                }
+                return FalseLiteral.TryCopyTo(destination, out charsWritten);
             }
-
-            charsWritten = 0;
-            return false;
         }
 
         // Determines whether two Boolean objects are equal.

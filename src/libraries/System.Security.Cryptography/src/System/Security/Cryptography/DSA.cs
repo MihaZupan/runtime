@@ -513,7 +513,7 @@ namespace System.Security.Cryptography
                 sig = AsymmetricAlgorithmHelpers.ConvertFromIeeeP1363Signature(sig, signatureFormat);
             }
 
-            return Helpers.TryCopyToDestination(sig, destination, out bytesWritten);
+            return sig.AsSpan().TryCopyTo(destination, out bytesWritten);
         }
 
         protected virtual bool TryHashData(
@@ -531,7 +531,7 @@ namespace System.Security.Cryptography
             // If this is not our algorithm implementation, for compatibility purposes we need to
             // call out to the HashData virtual.
             byte[] hash = HashSpanToArray(data, hashAlgorithm);
-            return Helpers.TryCopyToDestination(hash, destination, out bytesWritten);
+            return hash.AsSpan().TryCopyTo(destination, out bytesWritten);
         }
 
         public virtual bool TrySignData(

@@ -614,14 +614,7 @@ namespace System
 
             if (typeof(TChar) == typeof(char))
             {
-                if (source.TryCopyTo(Unsafe.BitCast<Span<TChar>, Span<char>>(destination)))
-                {
-                    charsWritten = source.Length;
-                    return true;
-                }
-
-                charsWritten = 0;
-                return false;
+                return source.TryCopyTo(Unsafe.BitCast<Span<TChar>, Span<char>>(destination), out charsWritten);
             }
             else
             {

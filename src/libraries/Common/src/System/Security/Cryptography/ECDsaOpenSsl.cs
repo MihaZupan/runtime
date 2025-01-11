@@ -144,7 +144,7 @@ namespace System.Security.Cryptography
                 bytesWritten = Interop.Crypto.EcDsaSignHash(key, hash, tmpDerSignature);
                 tmpDerSignature = tmpDerSignature.Slice(0, bytesWritten);
 
-                return Helpers.TryCopyToDestination(tmpDerSignature, destination, out bytesWritten);
+                return tmpDerSignature.TryCopyTo(destination, out bytesWritten);
             }
             else
             {

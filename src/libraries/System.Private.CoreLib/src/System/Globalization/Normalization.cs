@@ -48,14 +48,7 @@ namespace System.Globalization
             // If it's ASCII && one of the 4 main forms, then it's already normalized.
             if (GlobalizationMode.Invariant || Ascii.IsValid(source))
             {
-                if (source.TryCopyTo(destination))
-                {
-                    charsWritten = source.Length;
-                    return true;
-                }
-
-                charsWritten = 0;
-                return false;
+                return source.TryCopyTo(destination, out charsWritten);
             }
 
             return GlobalizationMode.UseNls ?

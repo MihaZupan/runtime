@@ -628,14 +628,7 @@ namespace System
             if (indexOfFirstToUnescape < 0)
             {
                 // Nothing to unescape, just copy the original chars.
-                if (charsToUnescape.TryCopyTo(destination))
-                {
-                    charsWritten = charsToUnescape.Length;
-                    return true;
-                }
-
-                charsWritten = 0;
-                return false;
+                return charsToUnescape.TryCopyTo(destination, out charsWritten);
             }
 
             // We may throw for very large inputs (when growing the ValueStringBuilder).

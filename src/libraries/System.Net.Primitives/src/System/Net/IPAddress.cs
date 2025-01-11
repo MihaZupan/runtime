@@ -511,14 +511,7 @@ namespace System.Net
                 IPAddressParser.FormatIPv4Address(PrivateAddress, tmpDestination) :
                 IPAddressParser.FormatIPv6Address(_numbers, PrivateScopeId, tmpDestination);
 
-            if (tmpDestination.Slice(0, written).TryCopyTo(destination))
-            {
-                charsWritten = written;
-                return true;
-            }
-
-            charsWritten = 0;
-            return false;
+            return tmpDestination.Slice(0, written).TryCopyTo(destination, out charsWritten);
         }
 
         public static long HostToNetworkOrder(long host)

@@ -275,7 +275,7 @@ namespace System.Security.Cryptography
                         return true;
                     }
 
-                    return Helpers.TryCopyToDestination(derSignature, destination, out bytesWritten);
+                    return derSignature.TryCopyTo(destination, out bytesWritten);
                 }
                 else
                 {

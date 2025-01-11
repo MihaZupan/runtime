@@ -1103,7 +1103,7 @@ namespace System.Security.Cryptography
             // The only available implementation here is abstract method, use it
             byte[] result = SignHash(hash.ToArray());
             byte[] converted = AsymmetricAlgorithmHelpers.ConvertFromIeeeP1363Signature(result, signatureFormat);
-            return Helpers.TryCopyToDestination(converted, destination, out bytesWritten);
+            return converted.AsSpan().TryCopyTo(destination, out bytesWritten);
         }
 
         public virtual bool VerifyHash(ReadOnlySpan<byte> hash, ReadOnlySpan<byte> signature) =>
