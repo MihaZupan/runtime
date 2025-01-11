@@ -736,7 +736,7 @@ namespace System.Net.WebSockets
             private int _bytesTransferred;
             private HttpListenerAsyncOperation _completedOperation;
             private Interop.HttpApi.HTTP_DATA_CHUNK[]? _dataChunks;
-            private GCHandle _dataChunksGCHandle;
+            private PinnedGCHandle<Interop.HttpApi.HTTP_DATA_CHUNK[]?> _dataChunksGCHandle;
             private ushort _dataChunkCount;
             private Exception? _exception;
             private bool _shouldCloseOutput;
@@ -839,7 +839,7 @@ namespace System.Net.WebSockets
                 }
             }
 
-            public IntPtr EntityChunks
+            public unsafe IntPtr EntityChunks
             {
                 get
                 {
@@ -848,7 +848,8 @@ namespace System.Net.WebSockets
                         return IntPtr.Zero;
                     }
 
-                    return Marshal.UnsafeAddrOfPinnedArrayElement(_dataChunks, 0);
+                    Debug.Assert(_dataChunksGCHandle.IsAllocated);
+                    return (IntPtr)_dataChunksGCHandle.GetAddressOfArrayData();
                 }
             }
 
@@ -923,7 +924,7 @@ namespace System.Net.WebSockets
 
                     if (_dataChunksGCHandle.IsAllocated)
                     {
-                        _dataChunksGCHandle.Free();
+                        _dataChunksGCHandle.Dispose();
                         _dataChunks = null;
                     }
                 }
@@ -983,7 +984,7 @@ namespace System.Net.WebSockets
                 if (_dataChunks == null)
                 {
                     _dataChunks = new Interop.HttpApi.HTTP_DATA_CHUNK[2];
-                    _dataChunksGCHandle = GCHandle.Alloc(_dataChunks, GCHandleType.Pinned);
+                    _dataChunksGCHandle = new PinnedGCHandle<Interop.HttpApi.HTTP_DATA_CHUNK[]?>(_dataChunks);
                     _dataChunks[0] = default;
                     _dataChunks[0].DataChunkType = Interop.HttpApi.HTTP_DATA_CHUNK_TYPE.HttpDataChunkFromMemory;
                     _dataChunks[1] = default;

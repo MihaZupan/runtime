@@ -71,7 +71,7 @@ namespace System.Net.Security
 
         public static ProtocolToken EncryptMessage(
             SafeDeleteSslContext securityContext,
-            ReadOnlyMemory<byte> input,
+            ReadOnlySpan<byte> input,
             int headerSize,
             int trailerSize)
         {

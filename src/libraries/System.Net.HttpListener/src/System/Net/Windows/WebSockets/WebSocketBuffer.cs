@@ -31,7 +31,7 @@ namespace System.Net.WebSockets
         // Indicates the range of the pinned byte[] that can be used by the WSPC (nativeBuffer + pinnedSendBuffer)
         private readonly long _startAddress;
         private readonly long _endAddress;
-        private GCHandle _gcHandle;
+        private PinnedGCHandle<byte[]?> _gcHandle;
         private readonly ArraySegment<byte> _internalBuffer;
         private readonly ArraySegment<byte> _nativeBuffer;
         private readonly ArraySegment<byte> _payloadBuffer;
@@ -42,7 +42,7 @@ namespace System.Net.WebSockets
         private long _pinnedSendBufferStartAddress;
         private long _pinnedSendBufferEndAddress;
         private ArraySegment<byte> _pinnedSendBuffer;
-        private GCHandle _pinnedSendBufferHandle;
+        private PinnedGCHandle<byte[]?> _pinnedSendBufferHandle;
         private int _stateWhenDisposing = int.MinValue;
         private SendBufferState _sendBufferState;
 
@@ -57,7 +57,7 @@ namespace System.Net.WebSockets
             _receiveBufferSize = receiveBufferSize;
             _sendBufferSize = sendBufferSize;
             _internalBuffer = internalBuffer;
-            _gcHandle = GCHandle.Alloc(internalBuffer.Array, GCHandleType.Pinned);
+            _gcHandle = new PinnedGCHandle<byte[]?>(internalBuffer.Array);
             // Size of the internal buffer owned exclusively by the WSPC.
             int nativeBufferSize = _receiveBufferSize + _sendBufferSize + NativeOverheadBufferSize;
             _startAddress = Marshal.UnsafeAddrOfPinnedArrayElement(internalBuffer.Array, internalBuffer.Offset).ToInt64();
@@ -106,13 +106,13 @@ namespace System.Net.WebSockets
             this.Dispose(WebSocketState.None);
         }
 
-        internal Interop.WebSocket.Property[] CreateProperties(bool useZeroMaskingKey)
+        internal unsafe Interop.WebSocket.Property[] CreateProperties(bool useZeroMaskingKey)
         {
             ThrowIfDisposed();
 
             // serialize marshaled property values in the property segment of the internal buffer
-            // m_GCHandle.AddrOfPinnedObject() points to the address of m_InternalBuffer.Array
-            IntPtr internalBufferPtr = _gcHandle.AddrOfPinnedObject();
+            // _gcHandle.GetAddressOfArrayData() points to the address of _internalBuffer.Array
+            IntPtr internalBufferPtr = (IntPtr)_gcHandle.GetAddressOfArrayData();
             int offset = _propertyBuffer.Offset;
             Marshal.WriteInt32(internalBufferPtr, offset, _receiveBufferSize);
             offset += sizeof(uint);
@@ -180,7 +180,7 @@ namespace System.Net.WebSockets
                 throw new AccessViolationException();
             }
             _pinnedSendBuffer = payload;
-            _pinnedSendBufferHandle = GCHandle.Alloc(_pinnedSendBuffer.Array, GCHandleType.Pinned);
+            _pinnedSendBufferHandle = new PinnedGCHandle<byte[]?>(_pinnedSendBuffer.Array);
             bufferHasBeenPinned = true;
             _pinnedSendBufferStartAddress =
                 Marshal.UnsafeAddrOfPinnedArrayElement(_pinnedSendBuffer.Array!, _pinnedSendBuffer.Offset).ToInt64();
@@ -283,7 +283,7 @@ namespace System.Net.WebSockets
 
             if (_pinnedSendBufferHandle.IsAllocated)
             {
-                _pinnedSendBufferHandle.Free();
+                _pinnedSendBufferHandle.Dispose();
             }
 
             _pinnedSendBuffer = ArraySegment<byte>.Empty;

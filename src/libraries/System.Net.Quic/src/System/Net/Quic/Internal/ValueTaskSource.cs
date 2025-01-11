@@ -25,7 +25,7 @@ internal sealed class ValueTaskSource : IValueTaskSource
     private State _state;
     private ManualResetValueTaskSourceCore<bool> _valueTaskSource;
     private CancellationTokenRegistration _cancellationRegistration;
-    private GCHandle _keepAlive;
+    private GCHandle<object> _keepAlive;
 
     public ValueTaskSource()
     {
@@ -82,7 +82,7 @@ internal sealed class ValueTaskSource : IValueTaskSource
                 if (keepAlive is not null)
                 {
                     Debug.Assert(!_keepAlive.IsAllocated);
-                    _keepAlive = GCHandle.Alloc(keepAlive);
+                    _keepAlive = new GCHandle<object>(keepAlive);
                 }
 
                 _state = State.Awaiting;
@@ -134,7 +134,7 @@ internal sealed class ValueTaskSource : IValueTaskSource
                     // Un-root the kept alive object in all cases.
                     if (_keepAlive.IsAllocated)
                     {
-                        _keepAlive.Free();
+                        _keepAlive.Dispose();
                     }
                 }
             }

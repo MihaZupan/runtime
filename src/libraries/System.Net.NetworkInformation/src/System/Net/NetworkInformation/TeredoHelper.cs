@@ -31,7 +31,7 @@ namespace System.Net.NetworkInformation
 
         private bool _runCallbackCalled;
 
-        private GCHandle _gcHandle;
+        private GCHandle<TeredoHelper> _gcHandle;
 
         // Used to cancel notification after receiving the first callback, or when the AppDomain is going down.
         private SafeCancelMibChangeNotify? _cancelHandle;
@@ -41,7 +41,7 @@ namespace System.Net.NetworkInformation
             _callback = callback;
             _state = state;
 
-            _gcHandle = GCHandle.Alloc(this);
+            _gcHandle = new GCHandle<TeredoHelper>(this);
         }
 
         // Returns true if the address table is already stable.  Otherwise, calls callback when it becomes stable.
@@ -54,7 +54,7 @@ namespace System.Net.NetworkInformation
             try
             {
                 uint err = Interop.IpHlpApi.NotifyStableUnicastIpAddressTable(AddressFamily.Unspecified,
-                    out SafeFreeMibTable table, &OnStabilized, GCHandle.ToIntPtr(helper._gcHandle), out helper._cancelHandle);
+                    out SafeFreeMibTable table, &OnStabilized, GCHandle<TeredoHelper>.ToIntPtr(helper._gcHandle), out helper._cancelHandle);
 
                 table.Dispose();
 
@@ -85,7 +85,7 @@ namespace System.Net.NetworkInformation
             _cancelHandle?.Dispose();
 
             if (_gcHandle.IsAllocated)
-                _gcHandle.Free();
+                _gcHandle.Dispose();
         }
 
         // This callback gets run on a native worker thread, which we don't want to allow arbitrary user code to
@@ -96,7 +96,7 @@ namespace System.Net.NetworkInformation
         {
             Interop.IpHlpApi.FreeMibTable(table);
 
-            TeredoHelper helper = (TeredoHelper)GCHandle.FromIntPtr(context).Target!;
+            TeredoHelper helper = GCHandle<TeredoHelper>.FromIntPtr(context).Target;
 
             // Lock the TeredoHelper instance to ensure that only the first call to OnStabilized will get to call
             // RunCallback.  This is the only place that TeredoHelpers get locked, as individual instances are not

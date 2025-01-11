@@ -1380,13 +1380,13 @@ namespace System.Net
                     (&httpResponse.Headers.KnownHeaders)[(int)HttpResponseHeader.ContentLength].RawValueLength = (ushort)byteContentLength.Length;
 
                     httpResponse.Headers.UnknownHeaderCount = checked((ushort)(challenges == null ? 0 : challenges.Count));
-                    GCHandle[]? challengeHandles = null;
+                    PinnedGCHandle<byte[]>[]? challengeHandles = null;
                     Interop.HttpApi.HTTP_UNKNOWN_HEADER[]? headersArray = null;
-                    GCHandle headersArrayHandle = default;
-                    GCHandle wwwAuthenticateHandle = default;
+                    PinnedGCHandle<Interop.HttpApi.HTTP_UNKNOWN_HEADER[]?> headersArrayHandle = default;
+                    PinnedGCHandle<byte[]> wwwAuthenticateHandle = default;
                     if (httpResponse.Headers.UnknownHeaderCount > 0)
                     {
-                        challengeHandles = new GCHandle[httpResponse.Headers.UnknownHeaderCount];
+                        challengeHandles = new PinnedGCHandle<byte[]>[httpResponse.Headers.UnknownHeaderCount];
                         headersArray = new Interop.HttpApi.HTTP_UNKNOWN_HEADER[httpResponse.Headers.UnknownHeaderCount];
                     }
 
@@ -1394,15 +1394,16 @@ namespace System.Net
                     {
                         if (httpResponse.Headers.UnknownHeaderCount > 0)
                         {
-                            headersArrayHandle = GCHandle.Alloc(headersArray, GCHandleType.Pinned);
+                            headersArrayHandle = new PinnedGCHandle<Interop.HttpApi.HTTP_UNKNOWN_HEADER[]?>(headersArray);
                             httpResponse.Headers.pUnknownHeaders = (Interop.HttpApi.HTTP_UNKNOWN_HEADER*)Marshal.UnsafeAddrOfPinnedArrayElement(headersArray!, 0);
-                            wwwAuthenticateHandle = GCHandle.Alloc(s_wwwAuthenticateBytes, GCHandleType.Pinned);
-                            sbyte* wwwAuthenticate = (sbyte*)Marshal.UnsafeAddrOfPinnedArrayElement(s_wwwAuthenticateBytes, 0);
+                            wwwAuthenticateHandle = new PinnedGCHandle<byte[]>(s_wwwAuthenticateBytes);
+                            // TODO nullable of GetAddress
+                            sbyte* wwwAuthenticate = (sbyte*)wwwAuthenticateHandle!.GetAddressOfArrayData();
 
                             for (int i = 0; i < challengeHandles!.Length; i++)
                             {
                                 byte[] byteChallenge = Encoding.Default.GetBytes((string)challenges![i]!);
-                                challengeHandles[i] = GCHandle.Alloc(byteChallenge, GCHandleType.Pinned);
+                                challengeHandles[i] = new PinnedGCHandle<byte[]>(byteChallenge);
                                 headersArray![i].pName = wwwAuthenticate;
                                 headersArray[i].NameLength = (ushort)s_wwwAuthenticateBytes.Length;
                                 headersArray[i].pRawValue = (sbyte*)Marshal.UnsafeAddrOfPinnedArrayElement(byteChallenge, 0);
@@ -1428,11 +1429,11 @@ namespace System.Net
                     {
                         if (headersArrayHandle.IsAllocated)
                         {
-                            headersArrayHandle.Free();
+                            headersArrayHandle.Dispose();
                         }
                         if (wwwAuthenticateHandle.IsAllocated)
                         {
-                            wwwAuthenticateHandle.Free();
+                            wwwAuthenticateHandle.Dispose();
                         }
                         if (challengeHandles != null)
                         {
@@ -1440,7 +1441,7 @@ namespace System.Net
                             {
                                 if (challengeHandles[i].IsAllocated)
                                 {
-                                    challengeHandles[i].Free();
+                                    challengeHandles[i].Dispose();
                                 }
                             }
                         }

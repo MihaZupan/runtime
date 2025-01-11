@@ -75,7 +75,7 @@ namespace System.Net
         [UnmanagedCallersOnly]
         private static unsafe void WriteToConnection(IntPtr connection, byte* data, int dataLength)
         {
-            SafeDeleteSslContext? context = (SafeDeleteSslContext?)GCHandle.FromIntPtr(connection).Target;
+            WeakGCHandle<SafeDeleteSslContext>.FromIntPtr(connection).TryGetTarget(out SafeDeleteSslContext? context);
             Debug.Assert(context != null);
 
             var inputBuffer = new ReadOnlySpan<byte>(data, dataLength);
@@ -88,7 +88,7 @@ namespace System.Net
         [UnmanagedCallersOnly]
         private static unsafe PAL_SSLStreamStatus ReadFromConnection(IntPtr connection, byte* data, int* dataLength)
         {
-            SafeDeleteSslContext? context = (SafeDeleteSslContext?)GCHandle.FromIntPtr(connection).Target;
+            WeakGCHandle<SafeDeleteSslContext>.FromIntPtr(connection).TryGetTarget(out SafeDeleteSslContext? context);
             Debug.Assert(context != null);
 
             int toRead = *dataLength;
@@ -227,7 +227,7 @@ namespace System.Net
 
             // Make sure the class instance is associated to the session and is provided
             // in the Read/Write callback connection parameter
-            IntPtr managedContextHandle = GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Weak));
+            IntPtr managedContextHandle = WeakGCHandle<SafeDeleteSslContext>.ToIntPtr(new WeakGCHandle<SafeDeleteSslContext>(this));
             string? peerHost = !isServer && !string.IsNullOrEmpty(authOptions.TargetHost) ? authOptions.TargetHost : null;
             Interop.AndroidCrypto.SSLStreamInitialize(handle, isServer, managedContextHandle, &ReadFromConnection, &WriteToConnection, InitialBufferSize, peerHost);
 

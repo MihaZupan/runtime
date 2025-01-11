@@ -166,7 +166,7 @@ namespace System.Net
             // It gets created when the first timer gets added, and cleaned up when the TimerThread notices it's empty.
             // The TimerThread will always notice it's empty eventually, since the TimerThread will always wake up and
             // try to fire the timer, even if it was cancelled and removed prematurely.
-            private IntPtr _thisHandle;
+            private GCHandle<TimerQueue> _thisHandle;
 
             // This sentinel TimerNode acts as both the head and the tail, allowing nodes to go in and out of the list without updating
             // any TimerQueue members.  _timers.Next is the true head, and .Prev the true tail.  This also serves as the list's lock.
@@ -202,9 +202,9 @@ namespace System.Net
                     // If this is the first timer in the list, we need to create a queue handle and prod the timer thread.
                     if (_timers.Next == _timers)
                     {
-                        if (_thisHandle == IntPtr.Zero)
+                        if (!_thisHandle.IsAllocated)
                         {
-                            _thisHandle = (IntPtr)GCHandle.Alloc(this);
+                            _thisHandle = new GCHandle<TimerQueue>(this);
                         }
                         needProd = true;
                     }
@@ -242,10 +242,9 @@ namespace System.Net
                             timer = _timers.Next!;
                             if (timer == _timers)
                             {
-                                if (_thisHandle != IntPtr.Zero)
+                                if (_thisHandle.IsAllocated)
                                 {
-                                    ((GCHandle)_thisHandle).Free();
-                                    _thisHandle = IntPtr.Zero;
+                                    _thisHandle.Dispose();
                                 }
 
                                 nextExpiration = 0;

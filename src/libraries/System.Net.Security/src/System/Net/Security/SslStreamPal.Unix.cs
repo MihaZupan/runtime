@@ -60,13 +60,13 @@ namespace System.Net.Security
             return null;
         }
 
-        public static ProtocolToken EncryptMessage(SafeDeleteSslContext securityContext, ReadOnlyMemory<byte> input, int _ /*headerSize*/, int _1 /*trailerSize*/)
+        public static ProtocolToken EncryptMessage(SafeDeleteSslContext securityContext, ReadOnlySpan<byte> input, int _ /*headerSize*/, int _1 /*trailerSize*/)
         {
             ProtocolToken token = default;
             token.RentBuffer = true;
             try
             {
-                Interop.Ssl.SslErrorCode errorCode = Interop.OpenSsl.Encrypt((SafeSslHandle)securityContext, input.Span, ref token);
+                Interop.Ssl.SslErrorCode errorCode = Interop.OpenSsl.Encrypt((SafeSslHandle)securityContext, input, ref token);
                 token.Status = MapNativeErrorCode(errorCode);
             }
             catch (Exception ex)

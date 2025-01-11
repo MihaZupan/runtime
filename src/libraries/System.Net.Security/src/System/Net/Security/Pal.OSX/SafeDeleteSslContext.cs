@@ -191,9 +191,9 @@ namespace System.Net
 
         private void SslSetConnection(SafeSslHandle sslContext)
         {
-            GCHandle handle = GCHandle.Alloc(this, GCHandleType.Weak);
+            var handle = new WeakGCHandle<SafeDeleteSslContext>(this);
 
-            Interop.AppleCrypto.SslSetConnection(sslContext, GCHandle.ToIntPtr(handle));
+            Interop.AppleCrypto.SslSetConnection(sslContext, WeakGCHandle<SafeDeleteSslContext>.ToIntPtr(handle));
         }
 
         public override bool IsInvalid => _sslContext?.IsInvalid ?? true;
@@ -220,7 +220,7 @@ namespace System.Net
         [UnmanagedCallersOnly]
         private static unsafe int WriteToConnection(IntPtr connection, byte* data, void** dataLength)
         {
-            SafeDeleteSslContext? context = (SafeDeleteSslContext?)GCHandle.FromIntPtr(connection).Target;
+            WeakGCHandle<SafeDeleteSslContext>.FromIntPtr(connection).TryGetTarget(out SafeDeleteSslContext? context);
             Debug.Assert(context != null);
 
             // We don't pool these buffers and we can't because there's a race between their us in the native
@@ -255,7 +255,7 @@ namespace System.Net
         [UnmanagedCallersOnly]
         private static unsafe int ReadFromConnection(IntPtr connection, byte* data, void** dataLength)
         {
-            SafeDeleteSslContext? context = (SafeDeleteSslContext?)GCHandle.FromIntPtr(connection).Target;
+            WeakGCHandle<SafeDeleteSslContext>.FromIntPtr(connection).TryGetTarget(out SafeDeleteSslContext? context);
             Debug.Assert(context != null);
 
             try

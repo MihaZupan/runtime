@@ -456,7 +456,7 @@ namespace System.Net.Security
             return AcquireCredentialsHandle(direction, &credential);
         }
 
-        public static unsafe ProtocolToken EncryptMessage(SafeDeleteSslContext securityContext, ReadOnlyMemory<byte> input, int headerSize, int trailerSize)
+        public static unsafe ProtocolToken EncryptMessage(SafeDeleteSslContext securityContext, ReadOnlySpan<byte> input, int headerSize, int trailerSize)
         {
             ProtocolToken token = default;
             token.RentBuffer = true;
@@ -465,7 +465,7 @@ namespace System.Net.Security
             int bufferSizeNeeded = checked(input.Length + headerSize + trailerSize);
             token.EnsureAvailableSpace(bufferSizeNeeded);
             // Copy the input into the output buffer to prepare for SCHANNEL's expectations
-            input.Span.CopyTo(token.AvailableSpan.Slice(headerSize, input.Length));
+            input.CopyTo(token.AvailableSpan.Slice(headerSize, input.Length));
 
             const int NumSecBuffers = 4; // header + data + trailer + empty
             Span<Interop.SspiCli.SecBuffer> unmanagedBuffers = stackalloc Interop.SspiCli.SecBuffer[NumSecBuffers];

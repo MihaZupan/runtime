@@ -1274,7 +1274,7 @@ namespace System.Net.Http
             SetRequestHandleHttp2Options(state.RequestHandle, state.RequestMessage.Version);
         }
 
-        private void SetRequestHandleProxyOptions(WinHttpRequestState state)
+        private unsafe void SetRequestHandleProxyOptions(WinHttpRequestState state)
         {
             Debug.Assert(state.RequestMessage != null);
             Debug.Assert(state.RequestMessage.RequestUri != null);
@@ -1319,20 +1319,11 @@ namespace System.Net.Http
 
                     if (updateProxySettings)
                     {
-                        GCHandle pinnedHandle = GCHandle.Alloc(proxyInfo, GCHandleType.Pinned);
-
-                        try
-                        {
-                            SetWinHttpOption(
-                                state.RequestHandle,
-                                Interop.WinHttp.WINHTTP_OPTION_PROXY,
-                                pinnedHandle.AddrOfPinnedObject(),
-                                (uint)Marshal.SizeOf(proxyInfo));
-                        }
-                        finally
-                        {
-                            pinnedHandle.Free();
-                        }
+                        SetWinHttpOption(
+                            state.RequestHandle,
+                            Interop.WinHttp.WINHTTP_OPTION_PROXY,
+                            (IntPtr)(&proxyInfo),
+                            (uint)Marshal.SizeOf(proxyInfo));
                     }
                 }
                 finally

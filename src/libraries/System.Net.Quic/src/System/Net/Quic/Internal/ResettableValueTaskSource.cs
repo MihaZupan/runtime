@@ -31,7 +31,7 @@ internal sealed class ResettableValueTaskSource : IValueTaskSource
     private CancellationTokenRegistration _cancellationRegistration;
     private CancellationToken _cancelledToken;
     private Action<object?>? _cancellationAction;
-    private GCHandle _keepAlive;
+    private GCHandle<object> _keepAlive;
     private FinalTaskSource _finalTaskSource;
 
     public ResettableValueTaskSource()
@@ -99,7 +99,7 @@ internal sealed class ResettableValueTaskSource : IValueTaskSource
                 if (keepAlive is not null)
                 {
                     Debug.Assert(!_keepAlive.IsAllocated);
-                    _keepAlive = GCHandle.Alloc(keepAlive);
+                    _keepAlive = new GCHandle<object>(keepAlive);
                 }
 
                 _state = State.Awaiting;
@@ -208,7 +208,7 @@ internal sealed class ResettableValueTaskSource : IValueTaskSource
                 // Un-root the kept alive object in all cases.
                 if (_keepAlive.IsAllocated)
                 {
-                    _keepAlive.Free();
+                    _keepAlive.Dispose();
                 }
             }
         }
@@ -320,10 +320,10 @@ internal sealed class ResettableValueTaskSource : IValueTaskSource
                 _finalTaskSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (!_isCompleted)
                 {
-                    GCHandle handle = GCHandle.Alloc(keepAlive);
+                    var handle = new GCHandle<object?>(keepAlive);
                     _finalTaskSource.Task.ContinueWith(static (_, state) =>
                     {
-                        ((GCHandle)state!).Free();
+                        ((GCHandle<object>)state!).Dispose();
                     }, handle, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 }
             }

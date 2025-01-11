@@ -1004,7 +1004,7 @@ namespace System.Net.Security
 
             ProtocolToken token = SslStreamPal.EncryptMessage(
                 _securityContext!,
-                buffer,
+                buffer.Span,
                 _headerSize,
                 _trailerSize);
 

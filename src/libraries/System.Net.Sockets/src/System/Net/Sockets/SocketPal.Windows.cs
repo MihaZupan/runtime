@@ -199,25 +199,25 @@ namespace System.Net.Sockets
             return errorCode == SocketError.SocketError ? GetLastSocketError() : SocketError.Success;
         }
 
-        public static SocketError Send(SafeSocketHandle handle, IList<ArraySegment<byte>> buffers, SocketFlags socketFlags, out int bytesTransferred)
+        public static unsafe SocketError Send(SafeSocketHandle handle, IList<ArraySegment<byte>> buffers, SocketFlags socketFlags, out int bytesTransferred)
         {
             const int StackThreshold = 16; // arbitrary limit to avoid too much space on stack (note: may be over-sized, that's OK - length passed separately)
             int count = buffers.Count;
             bool useStack = count <= StackThreshold;
 
             WSABuffer[]? leasedWSA = null;
-            GCHandle[]? leasedGC = null;
+            PinnedGCHandle<byte[]?>[]? leasedGC = null;
             scoped Span<WSABuffer> WSABuffers;
-            scoped Span<GCHandle> objectsToPin;
+            scoped Span<PinnedGCHandle<byte[]?>> objectsToPin;
             if (useStack)
             {
                 WSABuffers = stackalloc WSABuffer[StackThreshold];
-                objectsToPin = stackalloc GCHandle[StackThreshold];
+                objectsToPin = stackalloc PinnedGCHandle<byte[]?>[StackThreshold];
             }
             else
             {
                 WSABuffers = leasedWSA = ArrayPool<WSABuffer>.Shared.Rent(count);
-                objectsToPin = leasedGC = ArrayPool<GCHandle>.Shared.Rent(count);
+                objectsToPin = leasedGC = ArrayPool<PinnedGCHandle<byte[]?>>.Shared.Rent(count);
             }
             objectsToPin = objectsToPin.Slice(0, count);
             objectsToPin.Clear(); // note: touched in finally
@@ -228,9 +228,10 @@ namespace System.Net.Sockets
                 {
                     ArraySegment<byte> buffer = buffers[i];
                     RangeValidationHelpers.ValidateSegment(buffer);
-                    objectsToPin[i] = GCHandle.Alloc(buffer.Array, GCHandleType.Pinned);
+                    var bufferHandle = new PinnedGCHandle<byte[]?>(buffer.Array);
+                    objectsToPin[i] = bufferHandle;
                     WSABuffers[i].Length = buffer.Count;
-                    WSABuffers[i].Pointer = Marshal.UnsafeAddrOfPinnedArrayElement(buffer.Array!, buffer.Offset);
+                    WSABuffers[i].Pointer = (nint)(bufferHandle.GetAddressOfArrayData() + buffer.Offset);
                 }
 
                 unsafe
@@ -258,13 +259,13 @@ namespace System.Net.Sockets
                 {
                     if (objectsToPin[i].IsAllocated)
                     {
-                        objectsToPin[i].Free();
+                        objectsToPin[i].Dispose();
                     }
                 }
                 if (!useStack)
                 {
                     ArrayPool<WSABuffer>.Shared.Return(leasedWSA!);
-                    ArrayPool<GCHandle>.Shared.Return(leasedGC!);
+                    ArrayPool<PinnedGCHandle<byte[]?>>.Shared.Return(leasedGC!);
                 }
             }
         }
@@ -321,25 +322,25 @@ namespace System.Net.Sockets
             return SocketError.Success;
         }
 
-        public static SocketError Receive(SafeSocketHandle handle, IList<ArraySegment<byte>> buffers, SocketFlags socketFlags, out int bytesTransferred)
+        public static unsafe SocketError Receive(SafeSocketHandle handle, IList<ArraySegment<byte>> buffers, SocketFlags socketFlags, out int bytesTransferred)
         {
             const int StackThreshold = 16; // arbitrary limit to avoid too much space on stack (note: may be over-sized, that's OK - length passed separately)
             int count = buffers.Count;
             bool useStack = count <= StackThreshold;
 
             WSABuffer[]? leasedWSA = null;
-            GCHandle[]? leasedGC = null;
+            PinnedGCHandle<byte[]?>[]? leasedGC = null;
             scoped Span<WSABuffer> WSABuffers;
-            scoped Span<GCHandle> objectsToPin;
+            scoped Span<PinnedGCHandle<byte[]?>> objectsToPin;
             if (useStack)
             {
                 WSABuffers = stackalloc WSABuffer[StackThreshold];
-                objectsToPin = stackalloc GCHandle[StackThreshold];
+                objectsToPin = stackalloc PinnedGCHandle<byte[]?>[StackThreshold];
             }
             else
             {
                 WSABuffers = leasedWSA = ArrayPool<WSABuffer>.Shared.Rent(count);
-                objectsToPin = leasedGC = ArrayPool<GCHandle>.Shared.Rent(count);
+                objectsToPin = leasedGC = ArrayPool<PinnedGCHandle<byte[]?>>.Shared.Rent(count);
             }
             objectsToPin = objectsToPin.Slice(0, count);
             objectsToPin.Clear(); // note: touched in finally
@@ -350,9 +351,10 @@ namespace System.Net.Sockets
                 {
                     ArraySegment<byte> buffer = buffers[i];
                     RangeValidationHelpers.ValidateSegment(buffer);
-                    objectsToPin[i] = GCHandle.Alloc(buffer.Array, GCHandleType.Pinned);
+                    var bufferHandle = new PinnedGCHandle<byte[]?>(buffer.Array);
+                    objectsToPin[i] = bufferHandle;
                     WSABuffers[i].Length = buffer.Count;
-                    WSABuffers[i].Pointer = Marshal.UnsafeAddrOfPinnedArrayElement(buffer.Array!, buffer.Offset);
+                    WSABuffers[i].Pointer = (nint)(bufferHandle.GetAddressOfArrayData() + buffer.Offset);
                 }
 
                 unsafe
@@ -380,13 +382,13 @@ namespace System.Net.Sockets
                 {
                     if (objectsToPin[i].IsAllocated)
                     {
-                        objectsToPin[i].Free();
+                        objectsToPin[i].Dispose();
                     }
                 }
                 if (!useStack)
                 {
                     ArrayPool<WSABuffer>.Shared.Return(leasedWSA!);
-                    ArrayPool<GCHandle>.Shared.Return(leasedGC!);
+                    ArrayPool<PinnedGCHandle<byte[]?>>.Shared.Return(leasedGC!);
                 }
             }
         }

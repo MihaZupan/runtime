@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Security;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Authentication.ExtendedProtection;
 using System.Security.Cryptography.X509Certificates;
@@ -124,7 +125,7 @@ namespace System.Net.Security
 
         public static ProtocolToken EncryptMessage(
             SafeDeleteSslContext securityContext,
-            ReadOnlyMemory<byte> input,
+            ReadOnlySpan<byte> input,
             int _ /*headerSize*/,
             int _1 /*trailerSize*/)
         {
@@ -138,12 +139,11 @@ namespace System.Net.Security
 
                 unsafe
                 {
-                    MemoryHandle memHandle = input.Pin();
-                    try
+                    fixed (byte* pInput = &MemoryMarshal.GetReference(input))
                     {
                         PAL_TlsIo status = Interop.AppleCrypto.SslWrite(
                                 sslHandle,
-                                (byte*)memHandle.Pointer,
+                                pInput,
                                 input.Length,
                                 out int written);
 
@@ -170,10 +170,6 @@ namespace System.Net.Security
                         }
 
                         securityContext.ReadPendingWrites(ref token);
-                    }
-                    finally
-                    {
-                        memHandle.Dispose();
                     }
                 }
             }

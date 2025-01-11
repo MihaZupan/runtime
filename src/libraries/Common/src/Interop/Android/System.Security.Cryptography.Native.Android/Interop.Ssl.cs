@@ -210,11 +210,11 @@ internal static partial class Interop
             int length);
         internal static unsafe PAL_SSLStreamStatus SSLStreamWrite(
             SafeSslHandle sslHandle,
-            ReadOnlyMemory<byte> buffer)
+            ReadOnlySpan<byte> buffer)
         {
-            using (MemoryHandle memHandle = buffer.Pin())
+            fixed (byte* pBuffer = &MemoryMarshal.GetReference(buffer))
             {
-                return SSLStreamWrite(sslHandle, (byte*)memHandle.Pointer, buffer.Length);
+                return SSLStreamWrite(sslHandle, pBuffer, buffer.Length);
             }
         }
 

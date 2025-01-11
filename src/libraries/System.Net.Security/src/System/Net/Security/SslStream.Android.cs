@@ -46,11 +46,11 @@ namespace System.Net.Security
             private static bool s_initialized;
 
             private readonly SslStream _sslStream;
-            private GCHandle? _handle;
+            private GCHandle<JavaProxy> _handle;
 
             public IntPtr Handle
-                => _handle is GCHandle handle
-                    ? GCHandle.ToIntPtr(handle)
+                => _handle.IsAllocated
+                    ? GCHandle<JavaProxy>.ToIntPtr(_handle)
                     : throw new ObjectDisposedException(nameof(JavaProxy));
 
             public Exception? ValidationException { get; private set; }
@@ -61,13 +61,12 @@ namespace System.Net.Security
                 RegisterRemoteCertificateValidationCallback();
 
                 _sslStream = sslStream;
-                _handle = GCHandle.Alloc(this);
+                _handle = new GCHandle<JavaProxy>(this);
             }
 
             public void Dispose()
             {
-                _handle?.Free();
-                _handle = null;
+                _handle.Dispose();
             }
 
             private static unsafe void RegisterRemoteCertificateValidationCallback()
@@ -82,7 +81,7 @@ namespace System.Net.Security
             [UnmanagedCallersOnly]
             private static unsafe bool VerifyRemoteCertificate(IntPtr sslStreamProxyHandle)
             {
-                var proxy = (JavaProxy?)GCHandle.FromIntPtr(sslStreamProxyHandle).Target;
+                JavaProxy proxy = GCHandle<JavaProxy>.FromIntPtr(sslStreamProxyHandle).Target;
                 Debug.Assert(proxy is not null);
                 Debug.Assert(proxy.ValidationResult is null);
 

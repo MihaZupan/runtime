@@ -501,9 +501,9 @@ namespace System.Net
 
             public static GetAddrInfoExState FromHandleAndFree(IntPtr handle)
             {
-                GCHandle gcHandle = GCHandle.FromIntPtr(handle);
-                var state = (GetAddrInfoExState)gcHandle.Target!;
-                gcHandle.Free();
+                GCHandle<GetAddrInfoExState> gcHandle = GCHandle<GetAddrInfoExState>.FromIntPtr(handle);
+                GetAddrInfoExState state = gcHandle.Target;
+                gcHandle.Dispose();
                 return state;
             }
 
@@ -514,7 +514,7 @@ namespace System.Net
                 return true;
             }
 
-            private IntPtr CreateHandle() => GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Normal));
+            private IntPtr CreateHandle() => GCHandle<GetAddrInfoExState>.ToIntPtr(new GCHandle<GetAddrInfoExState>(this));
         }
 
         [StructLayout(LayoutKind.Sequential)]

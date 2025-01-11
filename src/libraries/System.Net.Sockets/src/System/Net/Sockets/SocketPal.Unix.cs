@@ -296,7 +296,7 @@ namespace System.Net.Sockets
                 maxBuffers = Math.Max(maxBuffers, 1);
             }
             bool allocOnStack = maxBuffers <= IovStackThreshold;
-            Span<GCHandle> handles = allocOnStack ? stackalloc GCHandle[IovStackThreshold] : new GCHandle[maxBuffers];
+            Span<PinnedGCHandle<byte[]?>> handles = allocOnStack ? stackalloc PinnedGCHandle<byte[]?>[IovStackThreshold] : new PinnedGCHandle<byte[]?>[maxBuffers];
             Span<Interop.Sys.IOVector> iovecs = allocOnStack ? stackalloc Interop.Sys.IOVector[IovStackThreshold] : new Interop.Sys.IOVector[maxBuffers];
 
             int sent;
@@ -308,9 +308,9 @@ namespace System.Net.Sockets
                     ArraySegment<byte> buffer = buffers[startIndex + i];
                     RangeValidationHelpers.ValidateSegment(buffer);
 
-                    handles[i] = GCHandle.Alloc(buffer.Array, GCHandleType.Pinned);
+                    handles[i] = new PinnedGCHandle<byte[]?>(buffer.Array);
                     iovCount++;
-                    iovecs[i].Base = &((byte*)handles[i].AddrOfPinnedObject())[buffer.Offset + startOffset];
+                    iovecs[i].Base = &(handles[i].GetAddressOfArrayData())[buffer.Offset + startOffset];
                     iovecs[i].Count = (UIntPtr)(buffer.Count - startOffset);
                 }
 
@@ -340,7 +340,7 @@ namespace System.Net.Sockets
                 // Free GC handles.
                 for (int i = 0; i < iovCount; i++)
                 {
-                    handles[i].Free();
+                    handles[i].Dispose();
                 }
             }
 
@@ -408,7 +408,7 @@ namespace System.Net.Sockets
             }
 
             // Pin buffers and set up iovecs.
-            Span<GCHandle> handles = allocOnStack ? stackalloc GCHandle[IovStackThreshold] : new GCHandle[maxBuffers];
+            Span<PinnedGCHandle<byte[]?>> handles = allocOnStack ? stackalloc PinnedGCHandle<byte[]?>[IovStackThreshold] : new PinnedGCHandle<byte[]?>[maxBuffers];
             Span<Interop.Sys.IOVector> iovecs = allocOnStack ? stackalloc Interop.Sys.IOVector[IovStackThreshold] : new Interop.Sys.IOVector[maxBuffers];
 
             int sockAddrLen = socketAddress.Length;
@@ -422,9 +422,9 @@ namespace System.Net.Sockets
                     RangeValidationHelpers.ValidateSegment(buffer);
                     int bufferCount = buffer.Count;
 
-                    handles[i] = GCHandle.Alloc(buffer.Array, GCHandleType.Pinned);
+                    handles[i] = new PinnedGCHandle<byte[]?>(buffer.Array);
                     iovCount++;
-                    iovecs[i].Base = &((byte*)handles[i].AddrOfPinnedObject())[buffer.Offset];
+                    iovecs[i].Base = &(handles[i].GetAddressOfArrayData())[buffer.Offset];
                     iovecs[i].Count = (UIntPtr)bufferCount;
 
                     toReceive += bufferCount;
@@ -466,7 +466,7 @@ namespace System.Net.Sockets
                 // Free GC handles.
                 for (int i = 0; i < iovCount; i++)
                 {
-                    handles[i].Free();
+                    handles[i].Dispose();
                 }
             }
 
@@ -550,7 +550,7 @@ namespace System.Net.Sockets
             }
 
             bool allocOnStack = buffersCount <= IovStackThreshold;
-            Span<GCHandle> handles = allocOnStack ? stackalloc GCHandle[IovStackThreshold] : new GCHandle[buffersCount];
+            Span<PinnedGCHandle<byte[]?>> handles = allocOnStack ? stackalloc PinnedGCHandle<byte[]?>[IovStackThreshold] : new PinnedGCHandle<byte[]?>[buffersCount];
             Span<Interop.Sys.IOVector> iovecs = allocOnStack ? stackalloc Interop.Sys.IOVector[IovStackThreshold] : new Interop.Sys.IOVector[buffersCount];
             int iovCount = 0;
             try
@@ -561,9 +561,9 @@ namespace System.Net.Sockets
                     ArraySegment<byte> buffer = buffers[i];
                     RangeValidationHelpers.ValidateSegment(buffer);
 
-                    handles[i] = GCHandle.Alloc(buffer.Array, GCHandleType.Pinned);
+                    handles[i] = new PinnedGCHandle<byte[]?>(buffer.Array);
                     iovCount++;
-                    iovecs[i].Base = &((byte*)handles[i].AddrOfPinnedObject())[buffer.Offset];
+                    iovecs[i].Base = &(handles[i].GetAddressOfArrayData())[buffer.Offset];
                     iovecs[i].Count = (UIntPtr)buffer.Count;
                 }
 
@@ -618,7 +618,7 @@ namespace System.Net.Sockets
                 // Free GC handles.
                 for (int i = 0; i < iovCount; i++)
                 {
-                    handles[i].Free();
+                    handles[i].Dispose();
                 }
             }
         }
