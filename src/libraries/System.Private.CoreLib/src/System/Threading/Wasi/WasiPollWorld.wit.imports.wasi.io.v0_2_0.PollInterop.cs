@@ -26,8 +26,8 @@ namespace WasiPollWorld.wit.imports.wasi.io.v0_2_0
         {
 
             byte[] buffer = new byte[4 * @in.Count];
-            var gcHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
-            var address = gcHandle.AddrOfPinnedObject();
+            var gcHandle = new PinnedGCHandle<byte[]>(buffer);
+            var address = gcHandle.GetAddressOfArrayData();
 
             for (int index = 0; index < @in.Count; ++index) {
                 global::WasiPollWorld.wit.imports.wasi.io.v0_2_0.IPoll.Pollable element = @in[index];
@@ -45,7 +45,7 @@ namespace WasiPollWorld.wit.imports.wasi.io.v0_2_0
 
                 var array = new uint[BitConverter.ToInt32(new Span<byte>((void*)(ptr + 4), 4))];
                 new Span<uint>((void*)(BitConverter.ToInt32(new Span<byte>((void*)(ptr + 0), 4))), BitConverter.ToInt32(new Span<byte>((void*)(ptr + 4), 4))).CopyTo(new Span<uint>(array));
-                gcHandle.Free();
+                gcHandle.Dispose();
                 return array;
             }
 

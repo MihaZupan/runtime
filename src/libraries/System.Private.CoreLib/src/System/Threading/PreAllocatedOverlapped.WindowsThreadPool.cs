@@ -22,8 +22,6 @@ namespace System.Threading
             _lifetime.Release(this);
         }
 
-        internal unsafe bool IsUserObject(byte[]? buffer) => _overlappedWindowsThreadPool->IsUserObject(buffer);
-
         private void DisposeWindowsThreadPool()
         {
             _lifetime.Dispose(this);

@@ -16,7 +16,7 @@ namespace System.Threading
             {
                 Debug.Assert(waitableObject != null);
 
-                IntPtr handle = GCHandle.ToIntPtr(GCHandle.Alloc(waitableObject, GCHandleType.Normal));
+                IntPtr handle = GCHandle<WaitableObject>.ToIntPtr(new GCHandle<WaitableObject>(waitableObject));
 
                 // SafeWaitHandle treats -1 and 0 as invalid, and the handle should not be these values anyway
                 Debug.Assert(handle != IntPtr.Zero);
@@ -33,7 +33,7 @@ namespace System.Threading
 
                 // We don't know if any other handles are invalid, and this may crash or otherwise do bad things, that is by
                 // design, IntPtr is unsafe by nature.
-                return (WaitableObject)GCHandle.FromIntPtr(handle).Target!;
+                return GCHandle<WaitableObject>.FromIntPtr(handle).Target;
             }
 
             /// <summary>
@@ -49,7 +49,7 @@ namespace System.Threading
                 // We don't know if any other handles are invalid, and this may crash or otherwise do bad things, that is by
                 // design, IntPtr is unsafe by nature.
                 FromHandle(handle).OnDeleteHandle();
-                GCHandle.FromIntPtr(handle).Free();
+                GCHandle<WaitableObject>.FromIntPtr(handle).Dispose();
             }
         }
     }

@@ -23,11 +23,11 @@ namespace System.Diagnostics.Tracing
 
         private byte* scratchEnd;
         private EventSource.EventData* datasEnd;
-        private GCHandle* pinsEnd;
+        private PinnedGCHandle<object?>* pinsEnd;
         private EventSource.EventData* datasStart;
         private byte* scratch;
         private EventSource.EventData* datas;
-        private GCHandle* pins;
+        private PinnedGCHandle<object?>* pins;
         private byte[]? buffer;
         private int bufferPos;
         private int bufferNesting;          // We may merge many fields int a single blob.   If we are doing this we increment this.
@@ -38,7 +38,7 @@ namespace System.Diagnostics.Tracing
             int scratchSize,
             EventSource.EventData* datas,
             int dataCount,
-            GCHandle* pins,
+            PinnedGCHandle<object?>* pins,
             int pinCount)
         {
             this.datasStart = datas;
@@ -308,7 +308,7 @@ namespace System.Diagnostics.Tracing
 
         private void PinArray(object? value, int size)
         {
-            GCHandle* pinsTemp = this.pins;
+            PinnedGCHandle<object?>* pinsTemp = this.pins;
             if (this.pinsEnd <= pinsTemp)
             {
                 throw new IndexOutOfRangeException(SR.EventSource_PinArrayOutOfRange);
@@ -323,8 +323,8 @@ namespace System.Diagnostics.Tracing
             this.pins = pinsTemp + 1;
             this.datas = datasTemp + 1;
 
-            *pinsTemp = GCHandle.Alloc(value, GCHandleType.Pinned);
-            datasTemp->DataPointer = pinsTemp->AddrOfPinnedObject();
+            *pinsTemp = new PinnedGCHandle<object?>(value);
+            datasTemp->DataPointer = (nint)pinsTemp->GetAddressOfObjectData();
             datasTemp->m_Size = size;
         }
 

@@ -157,7 +157,7 @@ namespace System.Threading
                 pNativeOverlapped->OffsetHigh = _offsetHigh;
                 pNativeOverlapped->EventHandle = _eventHandle;
 
-                GCHandleRef(pNativeOverlapped, 0) = GCHandle.Alloc(this);
+                GCHandleRef(pNativeOverlapped, 0) = GCHandle<Overlapped>.ToIntPtr(new GCHandle<Overlapped>(this));
                 GCHandleCountRef(pNativeOverlapped)++;
 
                 if (userData != null)
@@ -167,13 +167,13 @@ namespace System.Threading
                         object[] objArray = (object[])userData;
                         for (int i = 0; i < objArray.Length; i++)
                         {
-                            GCHandleRef(pNativeOverlapped, (nuint)(i + 1)) = GCHandle.Alloc(objArray[i], GCHandleType.Pinned);
+                            GCHandleRef(pNativeOverlapped, (nuint)(i + 1)) = PinnedGCHandle<object>.ToIntPtr(new PinnedGCHandle<object>(objArray[i]));
                             GCHandleCountRef(pNativeOverlapped)++;
                         }
                     }
                     else
                     {
-                        GCHandleRef(pNativeOverlapped, 1) = GCHandle.Alloc(userData, GCHandleType.Pinned);
+                        GCHandleRef(pNativeOverlapped, 1) = PinnedGCHandle<object>.ToIntPtr(new PinnedGCHandle<object>(userData));
                         GCHandleCountRef(pNativeOverlapped)++;
                     }
                 }
@@ -206,8 +206,9 @@ namespace System.Threading
         {
             nuint handleCount = GCHandleCountRef(pNativeOverlapped);
 
+            // Review -- this is assuming that GCHandle<T> and PinnedGCHandle<T> are freed in the same way.
             for (nuint i = 0; i < handleCount; i++)
-                GCHandleRef(pNativeOverlapped, i).Free();
+                GCHandle<object>.FromIntPtr(GCHandleRef(pNativeOverlapped, i)).Dispose();
 
             NativeMemory.Free(pNativeOverlapped);
         }
@@ -218,15 +219,16 @@ namespace System.Threading
         private static ref nuint GCHandleCountRef(NativeOverlapped* pNativeOverlapped)
             => ref *(nuint*)(pNativeOverlapped + 1);
 
-        private static ref GCHandle GCHandleRef(NativeOverlapped* pNativeOverlapped, nuint index)
-            => ref *((GCHandle*)((nuint*)(pNativeOverlapped + 1) + 1) + index);
+        private static ref IntPtr GCHandleRef(NativeOverlapped* pNativeOverlapped, nuint index)
+            => ref *((IntPtr*)((nuint*)(pNativeOverlapped + 1) + 1) + index);
 
         internal static Overlapped GetOverlappedFromNative(NativeOverlapped* pNativeOverlapped)
         {
-            object? target = GCHandleRef(pNativeOverlapped, 0).Target;
-            Debug.Assert(target is Overlapped);
+            IntPtr handle = GCHandleRef(pNativeOverlapped, 0);
 
-            Overlapped overlapped = (Overlapped)target;
+            Debug.Assert(GCHandle<object>.FromIntPtr(handle).Target is Overlapped);
+            Overlapped overlapped = GCHandle<Overlapped>.FromIntPtr(handle).Target;
+
             Debug.Assert(overlapped._pNativeOverlapped == pNativeOverlapped);
 
             return overlapped;

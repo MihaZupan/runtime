@@ -428,7 +428,7 @@ namespace System.Diagnostics.Tracing
             for (int i = 0; i < eventTypes.dataCount + 3; i++)
                 descriptors[i] = default;
 
-            GCHandle* pins = stackalloc GCHandle[pinCount];
+            PinnedGCHandle<object?>* pins = stackalloc PinnedGCHandle<object?>[pinCount];
             for (int i = 0; i < pinCount; i++)
                 pins[i] = default;
 
@@ -606,7 +606,7 @@ namespace System.Diagnostics.Tracing
                     for (int i = 0; i < eventTypes.dataCount + 3; i++)
                         descriptors[i] = default;
 
-                    GCHandle* pins = stackalloc GCHandle[pinCount];
+                    PinnedGCHandle<object?>* pins = stackalloc PinnedGCHandle<object?>[pinCount];
                     for (int i = 0; i < pinCount; i++)
                         pins[i] = default;
 
@@ -717,7 +717,7 @@ namespace System.Diagnostics.Tracing
         }
 
         [NonEvent]
-        private static unsafe void WriteCleanup(GCHandle* pPins, int cPins)
+        private static unsafe void WriteCleanup(PinnedGCHandle<object?>* pPins, int cPins)
         {
             DataCollector.ThreadInstance.Disable();
 
@@ -725,7 +725,7 @@ namespace System.Diagnostics.Tracing
             {
                 if (pPins[i].IsAllocated)
                 {
-                    pPins[i].Free();
+                    pPins[i].Dispose();
                 }
             }
         }

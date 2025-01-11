@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -137,17 +136,17 @@ namespace System.Threading
                     for (int i = 0; i < objArray.Length; i++)
                     {
                         if (!data._pinnedData[i].IsAllocated)
-                            data._pinnedData[i] = GCHandle.Alloc(objArray[i], GCHandleType.Pinned);
+                            data._pinnedData[i] = new PinnedGCHandle<object>(objArray[i]);
                         else
                             data._pinnedData[i].Target = objArray[i];
                     }
                 }
                 else
                 {
-                    data._pinnedData ??= new GCHandle[1];
+                    data._pinnedData ??= new PinnedGCHandle<object>[1];
 
                     if (!data._pinnedData[0].IsAllocated)
-                        data._pinnedData[0] = GCHandle.Alloc(pinData, GCHandleType.Pinned);
+                        data._pinnedData[0] = new PinnedGCHandle<object>(pinData);
                     else
                         data._pinnedData[0].Target = pinData;
                 }
@@ -230,7 +229,5 @@ namespace System.Threading
             Debug.Assert(data._callback != null, "Does OnExecutionContextCallback called after Reset?");
             data._callback(errorCode, bytesWritten, ToNativeOverlapped(overlapped));
         }
-
-        internal bool IsUserObject(byte[]? buffer) => ReferenceEquals(Data._pinnedData, buffer);
     }
 }

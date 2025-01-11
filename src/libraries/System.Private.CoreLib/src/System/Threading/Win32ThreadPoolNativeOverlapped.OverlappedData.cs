@@ -10,7 +10,7 @@ namespace System.Threading
     {
         internal sealed class OverlappedData
         {
-            internal GCHandle[]? _pinnedData;
+            internal PinnedGCHandle<object>[]? _pinnedData;
             internal IOCompletionCallback? _callback;
             internal object? _state;
             internal ExecutionContext? _executionContext;
@@ -22,12 +22,12 @@ namespace System.Threading
             {
                 Debug.Assert(_boundHandle == null); //not in use
 
-                if (_pinnedData != null)
+                if (_pinnedData is PinnedGCHandle<object>[] pinnedData)
                 {
-                    for (int i = 0; i < _pinnedData.Length; i++)
+                    for (int i = 0; i < pinnedData.Length; i++)
                     {
-                        if (_pinnedData[i].IsAllocated && _pinnedData[i].Target != null)
-                            _pinnedData[i].Target = null;
+                        if (pinnedData[i].IsAllocated && pinnedData[i].Target != null)
+                            pinnedData[i].Target = null;
                     }
                 }
 
