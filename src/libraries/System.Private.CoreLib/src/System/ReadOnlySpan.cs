@@ -311,14 +311,37 @@ namespace System
         /// and destinations overlap, this method behaves as if the original values in
         /// a temporary location before the destination is overwritten.
         /// </summary>
+        /// <param name="destination">The span to copy items into.</param>
         /// <returns>If the destination span is shorter than the source span, this method
         /// return false and no data is written to the destination.</returns>
-        /// <param name="destination">The span to copy items into.</param>
         public bool TryCopyTo(Span<T> destination)
         {
             bool retVal = false;
             if ((uint)_length <= (uint)destination.Length)
             {
+                Buffer.Memmove(ref destination._reference, ref _reference, (uint)_length);
+                retVal = true;
+            }
+            return retVal;
+        }
+
+        /// <summary>
+        /// Copies the contents of this span into destination span. If the source
+        /// and destinations overlap, this method behaves as if the original values in
+        /// a temporary location before the destination is overwritten.
+        /// </summary>
+        /// <param name="destination">The span to copy items into.</param>
+        /// <param name="elementsWritten">The number of elements written to the destination span.</param>
+        /// <returns>If the destination span is shorter than the source span, this method
+        /// return false and no data is written to the destination.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryCopyTo(Span<T> destination, out int elementsWritten)
+        {
+            elementsWritten = 0;
+            bool retVal = false;
+            if ((uint)_length <= (uint)destination.Length)
+            {
+                elementsWritten = _length;
                 Buffer.Memmove(ref destination._reference, ref _reference, (uint)_length);
                 retVal = true;
             }

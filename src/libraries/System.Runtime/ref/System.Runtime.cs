@@ -5093,6 +5093,7 @@ namespace System
         public T[] ToArray() { throw null; }
         public override string ToString() { throw null; }
         public bool TryCopyTo(System.Span<T> destination) { throw null; }
+        public bool TryCopyTo(System.Span<T> destination, out int elementsWritten) { throw null; }
         public ref partial struct Enumerator
         {
             private object _dummy;
@@ -5550,6 +5551,7 @@ namespace System
         public T[] ToArray() { throw null; }
         public override string ToString() { throw null; }
         public bool TryCopyTo(System.Span<T> destination) { throw null; }
+        public bool TryCopyTo(System.Span<T> destination, out int elementsWritten) { throw null; }
         public ref partial struct Enumerator
         {
             private object _dummy;
@@ -5784,6 +5786,7 @@ namespace System
         public string TrimStart(char trimChar) { throw null; }
         public string TrimStart(params char[]? trimChars) { throw null; }
         public bool TryCopyTo(System.Span<char> destination) { throw null; }
+        public bool TryCopyTo(System.Span<char> destination, out int charsWritten) { throw null; }
     }
     public abstract partial class StringComparer : System.Collections.Generic.IComparer<string?>, System.Collections.Generic.IEqualityComparer<string?>, System.Collections.IComparer, System.Collections.IEqualityComparer
     {

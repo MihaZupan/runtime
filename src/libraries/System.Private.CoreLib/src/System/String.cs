@@ -460,6 +460,24 @@ namespace System
             return retVal;
         }
 
+        /// <summary>Copies the contents of this string into the destination span.</summary>
+        /// <param name="destination">The span into which to copy this string's contents.</param>
+        /// <param name="charsWritten">The number of characters written to the span.</param>
+        /// <returns>true if the data was copied; false if the destination was too short to fit the contents of the string.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryCopyTo(Span<char> destination, out int charsWritten)
+        {
+            charsWritten = 0;
+            bool retVal = false;
+            if ((uint)Length <= (uint)destination.Length)
+            {
+                charsWritten = Length;
+                Buffer.Memmove(ref destination._reference, ref _firstChar, (uint)Length);
+                retVal = true;
+            }
+            return retVal;
+        }
+
         // Returns the entire string as an array of characters.
         public char[] ToCharArray()
         {

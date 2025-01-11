@@ -17,7 +17,14 @@ namespace System.SpanTests
             ReadOnlySpan<int> srcSpan = new ReadOnlySpan<int>(src);
             bool success = srcSpan.TryCopyTo(dst);
             Assert.True(success);
-            Assert.Equal<int>(src, dst);
+            Assert.Equal(src, dst);
+
+            dst.AsSpan().Clear();
+
+            success = srcSpan.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(src, dst);
         }
 
         [Fact]
@@ -29,7 +36,14 @@ namespace System.SpanTests
             ReadOnlySpan<int> srcSpan = new ReadOnlySpan<int>(src);
             bool success = srcSpan.TryCopyTo(dst);
             Assert.True(success);
-            Assert.Equal<int>(src, dst);
+            Assert.Equal(src, dst);
+
+            dst.AsSpan().Clear();
+
+            success = srcSpan.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(src, dst);
         }
 
         [Fact]
@@ -43,6 +57,13 @@ namespace System.SpanTests
             bool success = srcSpan.TryCopyTo(segment);
             Assert.True(success);
             Assert.Equal(src.AsSpan(), segment);
+
+            dst.AsSpan().Clear();
+
+            success = srcSpan.TryCopyTo(segment, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(src.AsSpan(), segment);
         }
 
         [Fact]
@@ -55,7 +76,12 @@ namespace System.SpanTests
             bool success = srcSpan.TryCopyTo(dst);
             Assert.True(success);
             int[] expected = { 99, 100, 101 };
-            Assert.Equal<int>(expected, dst);
+            Assert.Equal(expected, dst);
+
+            success = srcSpan.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(expected, dst);
         }
 
         [Fact]
@@ -68,7 +94,14 @@ namespace System.SpanTests
             bool success = srcSpan.TryCopyTo(dst);
             Assert.True(success);
             int[] expected = { 1, 2, 3, 102 };
-            Assert.Equal<int>(expected, dst);
+            Assert.Equal(expected, dst);
+
+            new[] { 99, 100, 101, 102 }.CopyTo(dst);
+
+            success = srcSpan.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(expected, dst);
         }
 
         [Fact]
@@ -81,7 +114,12 @@ namespace System.SpanTests
             bool success = srcSpan.TryCopyTo(dst);
             Assert.False(success);
             int[] expected = { 99, 100 };
-            Assert.Equal<int>(expected, dst);  // TryCopyTo() checks for sufficient space before doing any copying.
+            Assert.Equal(expected, dst);  // TryCopyTo() checks for sufficient space before doing any copying.
+
+            success = srcSpan.TryCopyTo(dst, out int elementsWritten);
+            Assert.False(success);
+            Assert.Equal(0, elementsWritten);
+            Assert.Equal(expected, dst);
         }
 
         [Fact]
@@ -93,7 +131,7 @@ namespace System.SpanTests
             ReadOnlySpan<int> srcSpan = new ReadOnlySpan<int>(src);
             TestHelpers.AssertThrows<ArgumentException, int>(srcSpan, (_srcSpan) => _srcSpan.CopyTo(dst));
             int[] expected = { 99, 100 };
-            Assert.Equal<int>(expected, dst);  // CopyTo() checks for sufficient space before doing any copying.
+            Assert.Equal(expected, dst);  // CopyTo() checks for sufficient space before doing any copying.
         }
 
         [Fact]
@@ -106,7 +144,22 @@ namespace System.SpanTests
             src.CopyTo(dst);
 
             int[] expected = { 90, 91, 91, 92, 93, 94, 95, 96 };
-            Assert.Equal<int>(expected, a);
+            Assert.Equal(expected, a);
+
+            dst.Clear();
+
+            new[] { 90, 91, 92, 93, 94, 95, 96, 97 }.CopyTo(a);
+            bool success = src.TryCopyTo(dst);
+            Assert.True(success);
+            Assert.Equal(expected, a);
+
+            dst.Clear();
+
+            new[] { 90, 91, 92, 93, 94, 95, 96, 97 }.CopyTo(a);
+            success = src.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(expected, a);
         }
 
         [Fact]
@@ -119,7 +172,22 @@ namespace System.SpanTests
             src.CopyTo(dst);
 
             int[] expected = { 90, 92, 93, 94, 95, 96, 97, 97 };
-            Assert.Equal<int>(expected, a);
+            Assert.Equal(expected, a);
+
+            dst.Clear();
+
+            new[] { 90, 91, 92, 93, 94, 95, 96, 97 }.CopyTo(a);
+            bool success = src.TryCopyTo(dst);
+            Assert.True(success);
+            Assert.Equal(expected, a);
+
+            dst.Clear();
+
+            new[] { 90, 91, 92, 93, 94, 95, 96, 97 }.CopyTo(a);
+            success = src.TryCopyTo(dst, out int elementsWritten);
+            Assert.True(success);
+            Assert.Equal(src.Length, elementsWritten);
+            Assert.Equal(expected, a);
         }
 
         // This test case tests the Span.CopyTo method for large buffers of size 4GB or more. In the fast path,
@@ -203,16 +271,10 @@ namespace System.SpanTests
             // gaps in our Memmove logic.
             for (int i = 0; i <= MaxLength; i++)
             {
-                // Arrange
-
                 rng.NextBytes(inputArray);
                 outputSpan.Clear();
 
-                // Act
-
                 inputSpan.Slice(0, i).CopyTo(outputSpan);
-
-                // Assert
 
                 Assert.True(inputSpan.Slice(0, i).SequenceEqual(outputSpan.Slice(0, i))); // src successfully copied to dst
                 Assert.True(outputSpan.Slice(i).SequenceEqual(allZerosSpan.Slice(i))); // no other part of dst was overwritten
