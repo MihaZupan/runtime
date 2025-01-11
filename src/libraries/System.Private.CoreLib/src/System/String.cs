@@ -467,15 +467,15 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryCopyTo(Span<char> destination, out int charsWritten)
         {
-            charsWritten = 0;
-            bool retVal = false;
             if ((uint)Length <= (uint)destination.Length)
             {
                 charsWritten = Length;
                 Buffer.Memmove(ref destination._reference, ref _firstChar, (uint)Length);
-                retVal = true;
+                return true;
             }
-            return retVal;
+
+            charsWritten = 0;
+            return false;
         }
 
         // Returns the entire string as an array of characters.

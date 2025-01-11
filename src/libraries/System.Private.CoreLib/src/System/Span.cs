@@ -355,15 +355,15 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryCopyTo(Span<T> destination, out int elementsWritten)
         {
-            elementsWritten = 0;
-            bool retVal = false;
             if ((uint)_length <= (uint)destination.Length)
             {
                 elementsWritten = _length;
                 Buffer.Memmove(ref destination._reference, ref _reference, (uint)_length);
-                retVal = true;
+                return true;
             }
-            return retVal;
+
+            elementsWritten = 0;
+            return false;
         }
 
         /// <summary>
