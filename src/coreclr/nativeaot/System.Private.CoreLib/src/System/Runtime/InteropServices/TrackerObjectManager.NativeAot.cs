@@ -263,7 +263,7 @@ namespace System.Runtime.InteropServices
     // Callback implementation of IFindReferenceTargetsCallback
     internal static unsafe class FindReferenceTargetsCallback
     {
-        internal static GCHandle s_currentRootObjectHandle;
+        internal static WeakGCHandle<object> s_currentRootObjectHandle;
 
         [UnmanagedCallersOnly]
         private static unsafe int IFindReferenceTargetsCallback_QueryInterface(IntPtr pThis, Guid* guid, IntPtr* ppObject)
@@ -287,10 +287,11 @@ namespace System.Runtime.InteropServices
                 return HResults.E_INVALIDARG;
             }
 
-            if (TryGetObject(referenceTrackerTarget, out object? foundObject))
+            if (TryGetObject(referenceTrackerTarget, out object? foundObject) &&
+                s_currentRootObjectHandle.TryGetTarget(out object? target))
             {
                 // Notify the runtime a reference path was found.
-                return TrackerObjectManager.AddReferencePath(s_currentRootObjectHandle.Target, foundObject) ? HResults.S_OK : HResults.S_FALSE;
+                return TrackerObjectManager.AddReferencePath(target, foundObject) ? HResults.S_OK : HResults.S_FALSE;
             }
 
             return HResults.S_OK;

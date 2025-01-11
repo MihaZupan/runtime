@@ -11,6 +11,8 @@ using System.Threading;
 
 using Internal.Runtime;
 
+using static System.Runtime.InteropServices.ComWrappers;
+
 namespace System.Runtime.InteropServices
 {
     /// <summary>
@@ -493,8 +495,8 @@ namespace System.Runtime.InteropServices
             private IntPtr _externalComObject;
             private IntPtr _inner;
             private ComWrappers _comWrappers;
-            private GCHandle _proxyHandle;
-            private GCHandle _proxyHandleTrackingResurrection;
+            private WeakGCHandle<object> _proxyHandle;
+            private WeakGCHandle<object> _proxyHandleTrackingResurrection;
             private readonly bool _aggregatedManagedObjectWrapper;
             private readonly bool _uniqueInstance;
 
@@ -525,14 +527,14 @@ namespace System.Runtime.InteropServices
                 _inner = inner;
                 _comWrappers = comWrappers;
                 _uniqueInstance = flags.HasFlag(CreateObjectFlags.UniqueInstance);
-                _proxyHandle = GCHandle.Alloc(comProxy, GCHandleType.Weak);
+                _proxyHandle = new WeakGCHandle<object>(comProxy);
 
                 // We have a separate handle tracking resurrection as we want to make sure
                 // we clean up the NativeObjectWrapper only after the RCW has been finalized
                 // due to it can access the native object in the finalizer. At the same time,
                 // we want other callers which are using ProxyHandle such as the reference tracker runtime
                 // to see the object as not alive once it is eligible for finalization.
-                _proxyHandleTrackingResurrection = GCHandle.Alloc(comProxy, GCHandleType.WeakTrackResurrection);
+                _proxyHandleTrackingResurrection = new WeakGCHandle<object>(comProxy, trackResurrection: true);
 
                 // If this is an aggregation scenario and the identity object
                 // is a managed object wrapper, we need to call Release() to
@@ -548,7 +550,7 @@ namespace System.Runtime.InteropServices
 
             internal IntPtr ExternalComObject => _externalComObject;
             internal ComWrappers ComWrappers => _comWrappers;
-            internal GCHandle ProxyHandle => _proxyHandle;
+            internal WeakGCHandle<object> ProxyHandle => _proxyHandle;
             internal bool IsUniqueInstance => _uniqueInstance;
             internal bool IsAggregatedWithManagedObjectWrapper => _aggregatedManagedObjectWrapper;
 
@@ -562,12 +564,12 @@ namespace System.Runtime.InteropServices
 
                 if (_proxyHandle.IsAllocated)
                 {
-                    _proxyHandle.Free();
+                    _proxyHandle.Dispose();
                 }
 
                 if (_proxyHandleTrackingResurrection.IsAllocated)
                 {
-                    _proxyHandleTrackingResurrection.Free();
+                    _proxyHandleTrackingResurrection.Dispose();
                 }
 
                 // If the inner was supplied, we need to release our reference.
@@ -582,7 +584,7 @@ namespace System.Runtime.InteropServices
 
             ~NativeObjectWrapper()
             {
-                if (_proxyHandleTrackingResurrection.IsAllocated && _proxyHandleTrackingResurrection.Target != null)
+                if (_proxyHandleTrackingResurrection.IsAllocated && _proxyHandleTrackingResurrection.TryGetTarget(out _))
                 {
                     // The RCW object has not been fully collected, so it still
                     // can make calls on the native object in its finalizer.
@@ -601,7 +603,7 @@ namespace System.Runtime.InteropServices
             private readonly bool _releaseTrackerObject;
             private int _trackerObjectDisconnected; // Atomic boolean, so using int.
             internal readonly IntPtr _contextToken;
-            internal readonly GCHandle _nativeObjectWrapperWeakHandle;
+            internal readonly WeakGCHandle<ReferenceTrackerNativeObjectWrapper> _nativeObjectWrapperWeakHandle;
 
             public IntPtr TrackerObject => (_trackerObject == IntPtr.Zero || _trackerObjectDisconnected == 1) ? IntPtr.Zero : _trackerObject;
 
@@ -633,7 +635,7 @@ namespace System.Runtime.InteropServices
                 }
 
                 _contextToken = GetContextToken();
-                _nativeObjectWrapperWeakHandle = GCHandle.Alloc(this, GCHandleType.Weak);
+                _nativeObjectWrapperWeakHandle = new WeakGCHandle<ReferenceTrackerNativeObjectWrapper>(this);
             }
 
             public override void Release()
@@ -642,7 +644,7 @@ namespace System.Runtime.InteropServices
                 if (_nativeObjectWrapperWeakHandle.IsAllocated)
                 {
                     s_referenceTrackerNativeObjectWrapperCache.Remove(_nativeObjectWrapperWeakHandle);
-                    _nativeObjectWrapperWeakHandle.Free();
+                    _nativeObjectWrapperWeakHandle.Dispose();
                 }
 
                 DisconnectTracker();
@@ -1066,7 +1068,7 @@ namespace System.Runtime.InteropServices
             // for the same COM instance, but in that case we'll be passed the same NativeObjectWrapper instance
             // for both threads. In that case, it doesn't matter which thread adds the entry to the NativeObjectWrapper table
             // as the entry is always the same pair.
-            Debug.Assert(wrapper.ProxyHandle.Target == comProxy);
+            Debug.Assert(wrapper.ProxyHandle.TryGetTarget(out object? proxy) && proxy == comProxy);
             Debug.Assert(wrapper.IsUniqueInstance || _rcwCache.FindProxyForComInstance(wrapper.ExternalComObject) == comProxy);
 
             if (s_nativeObjectWrapperTable.TryGetValue(comProxy, out NativeObjectWrapper? registeredWrapper)
@@ -1107,7 +1109,7 @@ namespace System.Runtime.InteropServices
         private sealed class RcwCache
         {
             private readonly Lock _lock = new Lock(useTrivialWaits: true);
-            private readonly Dictionary<object, GCHandle> _cache = [];
+            private readonly Dictionary<object, WeakGCHandle<NativeObjectWrapper>> _cache = [];
 
             /// <summary>
             /// Gets the current RCW proxy object for <paramref name="comPointer"/> if it exists in the cache or inserts a new entry with <paramref name="comProxy"/>.
@@ -1120,33 +1122,32 @@ namespace System.Runtime.InteropServices
             {
                 lock (_lock)
                 {
-                    Debug.Assert(wrapper.ProxyHandle.Target == comProxy);
-                    ref GCHandle rcwEntry = ref CollectionsMarshal.GetValueRefOrAddDefault(_cache, comPointer, out bool exists);
+                    Debug.Assert(wrapper.ProxyHandle.TryGetTarget(out object? proxy) && proxy == comProxy);
+                    ref WeakGCHandle<NativeObjectWrapper> rcwEntry = ref CollectionsMarshal.GetValueRefOrAddDefault(_cache, comPointer, out bool exists);
                     if (!exists)
                     {
                         // Someone else didn't beat us to adding the entry to the cache.
                         // Add our entry here.
-                        rcwEntry = GCHandle.Alloc(wrapper, GCHandleType.Weak);
+                        rcwEntry = new WeakGCHandle<NativeObjectWrapper>(wrapper);
                     }
-                    else if (rcwEntry.Target is not (NativeObjectWrapper cachedWrapper))
+                    else if (!rcwEntry.TryGetTarget(out NativeObjectWrapper? cachedWrapper))
                     {
                         Debug.Assert(rcwEntry.IsAllocated);
                         // The target was collected, so we need to update the cache entry.
-                        rcwEntry.Target = wrapper;
+                        rcwEntry.SetTarget(wrapper);
                     }
                     else
                     {
-                        object? existingProxy = cachedWrapper.ProxyHandle.Target;
                         // The target NativeObjectWrapper was not collected, but we need to make sure
                         // that the proxy object is still alive.
-                        if (existingProxy is not null)
+                        if (cachedWrapper.ProxyHandle.TryGetTarget(out object? existingProxy))
                         {
                             // The existing proxy object is still alive, we will use that.
                             return (cachedWrapper, existingProxy);
                         }
 
                         // The proxy object was collected, so we need to update the cache entry.
-                        rcwEntry.Target = wrapper;
+                        rcwEntry.SetTarget(wrapper);
                     }
 
                     // We either added an entry to the cache or updated an existing entry that was dead.
@@ -1159,9 +1160,10 @@ namespace System.Runtime.InteropServices
             {
                 lock (_lock)
                 {
-                    if (_cache.TryGetValue(comPointer, out GCHandle existingHandle))
+                    if (_cache.TryGetValue(comPointer, out WeakGCHandle<NativeObjectWrapper> existingHandle))
                     {
-                        if (existingHandle.Target is NativeObjectWrapper { ProxyHandle.Target: object cachedProxy })
+                        if (existingHandle.TryGetTarget(out NativeObjectWrapper? wrapper) &&
+                            wrapper.ProxyHandle.TryGetTarget(out object? cachedProxy))
                         {
                             // The target exists and is still alive. Return it.
                             return cachedProxy;
@@ -1169,7 +1171,7 @@ namespace System.Runtime.InteropServices
 
                         // The target was collected, so we need to remove the entry from the cache.
                         _cache.Remove(comPointer);
-                        existingHandle.Free();
+                        existingHandle.Dispose();
                     }
 
                     return null;
@@ -1185,12 +1187,11 @@ namespace System.Runtime.InteropServices
                     // NativeObjectWrapper finalizer ran.
                     // Only remove the entry if the target of the GC handle is the NativeObjectWrapper
                     // or is null (indicating that the corresponding NativeObjectWrapper has been scheduled for finalization).
-                    if (_cache.TryGetValue(comPointer, out GCHandle cachedRef)
-                        && (wrapper == cachedRef.Target
-                            || cachedRef.Target is null))
+                    if (_cache.TryGetValue(comPointer, out WeakGCHandle<NativeObjectWrapper> cachedRef) &&
+                        (!cachedRef.TryGetTarget(out NativeObjectWrapper? cachedWrapper) || wrapper == cachedWrapper))
                     {
                         _cache.Remove(comPointer);
-                        cachedRef.Free();
+                        cachedRef.Dispose();
                     }
                 }
             }
@@ -1320,14 +1321,12 @@ namespace System.Runtime.InteropServices
             // the objects.
             using (s_referenceTrackerNativeObjectWrapperCache.ModificationLock.EnterScope())
             {
-                foreach (GCHandle weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
+                foreach (WeakGCHandle<ReferenceTrackerNativeObjectWrapper> weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
                 {
-                    ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper = Unsafe.As<ReferenceTrackerNativeObjectWrapper?>(weakNativeObjectWrapperHandle.Target);
-                    if (nativeObjectWrapper != null &&
+                    if (weakNativeObjectWrapperHandle.TryGetTarget(out ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper) &&
                         nativeObjectWrapper._contextToken == contextToken)
                     {
-                        object? target = nativeObjectWrapper.ProxyHandle.Target;
-                        if (target != null)
+                        if (nativeObjectWrapper.ProxyHandle.TryGetTarget(out object? target))
                         {
                             objects.Add(target);
                         }
@@ -1347,10 +1346,9 @@ namespace System.Runtime.InteropServices
         {
             bool walkFailed = false;
 
-            foreach (GCHandle weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
+            foreach (WeakGCHandle<ReferenceTrackerNativeObjectWrapper> weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
             {
-                ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper = Unsafe.As<ReferenceTrackerNativeObjectWrapper?>(weakNativeObjectWrapperHandle.Target);
-                if (nativeObjectWrapper != null &&
+                if (weakNativeObjectWrapperHandle.TryGetTarget(out ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper) &&
                     nativeObjectWrapper.TrackerObject != IntPtr.Zero)
                 {
                     FindReferenceTargetsCallback.s_currentRootObjectHandle = nativeObjectWrapper.ProxyHandle;
@@ -1375,12 +1373,12 @@ namespace System.Runtime.InteropServices
         // Used during GC callback
         internal static void DetachNonPromotedObjects()
         {
-            foreach (GCHandle weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
+            foreach (WeakGCHandle<ReferenceTrackerNativeObjectWrapper> weakNativeObjectWrapperHandle in s_referenceTrackerNativeObjectWrapperCache)
             {
-                ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper = Unsafe.As<ReferenceTrackerNativeObjectWrapper?>(weakNativeObjectWrapperHandle.Target);
-                if (nativeObjectWrapper != null &&
+                if (weakNativeObjectWrapperHandle.TryGetTarget(out ReferenceTrackerNativeObjectWrapper? nativeObjectWrapper) &&
                     nativeObjectWrapper.TrackerObject != IntPtr.Zero &&
-                    !RuntimeImports.RhIsPromoted(nativeObjectWrapper.ProxyHandle.Target))
+                    nativeObjectWrapper.ProxyHandle.TryGetTarget(out object? target) &&
+                    !RuntimeImports.RhIsPromoted(target))
                 {
                     // Notify the wrapper it was not promoted and is being collected.
                     TrackerObjectManager.BeforeWrapperFinalized(nativeObjectWrapper.TrackerObject);
@@ -1732,7 +1730,7 @@ namespace System.Runtime.InteropServices
     // whether you will observe the element being added / removed, but does
     // make sure the collection is in a good state and doesn't run into issues
     // while iterating.
-    internal sealed class GCHandleSet : IEnumerable<GCHandle>
+    internal sealed class GCHandleSet : IEnumerable<WeakGCHandle<ReferenceTrackerNativeObjectWrapper>>
     {
         private const int DefaultSize = 7;
 
@@ -1742,7 +1740,7 @@ namespace System.Runtime.InteropServices
 
         public Lock ModificationLock => _lock;
 
-        public void Add(GCHandle handle)
+        public void Add(WeakGCHandle<ReferenceTrackerNativeObjectWrapper> handle)
         {
             using (_lock.EnterScope())
             {
@@ -1816,7 +1814,7 @@ namespace System.Runtime.InteropServices
             _buckets = newBuckets;
         }
 
-        public void Remove(GCHandle handle)
+        public void Remove(WeakGCHandle<ReferenceTrackerNativeObjectWrapper> handle)
         {
             using (_lock.EnterScope())
             {
@@ -1845,25 +1843,25 @@ namespace System.Runtime.InteropServices
             }
         }
 
-        private static int GetBucket(GCHandle handle, int numBuckets)
+        private static int GetBucket(WeakGCHandle<ReferenceTrackerNativeObjectWrapper> handle, int numBuckets)
         {
-            int h = handle.GetHashCode();
+            int h = WeakGCHandle<ReferenceTrackerNativeObjectWrapper>.ToIntPtr(handle).GetHashCode();
             return (int)((uint)h % (uint)numBuckets);
         }
 
         public Enumerator GetEnumerator() => new Enumerator(this);
 
-        IEnumerator<GCHandle> IEnumerable<GCHandle>.GetEnumerator() => GetEnumerator();
+        IEnumerator<WeakGCHandle<ReferenceTrackerNativeObjectWrapper>> IEnumerable<WeakGCHandle<ReferenceTrackerNativeObjectWrapper>>.GetEnumerator() => GetEnumerator();
 
-        IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable<GCHandle>)this).GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable<WeakGCHandle<ReferenceTrackerNativeObjectWrapper>>)this).GetEnumerator();
 
         private sealed class Entry
         {
-            public GCHandle m_value;
+            public WeakGCHandle<ReferenceTrackerNativeObjectWrapper> m_value;
             public Entry? m_next;
         }
 
-        public struct Enumerator : IEnumerator<GCHandle>
+        public struct Enumerator : IEnumerator<WeakGCHandle<ReferenceTrackerNativeObjectWrapper>>
         {
             private readonly Entry?[] _buckets;
             private int _currentIdx;
@@ -1878,7 +1876,7 @@ namespace System.Runtime.InteropServices
                 Reset();
             }
 
-            public GCHandle Current
+            public WeakGCHandle<ReferenceTrackerNativeObjectWrapper> Current
             {
                 get
                 {

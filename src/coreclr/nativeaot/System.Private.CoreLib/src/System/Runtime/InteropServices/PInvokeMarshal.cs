@@ -100,8 +100,8 @@ namespace System.Runtime.InteropServices
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         internal unsafe struct ThunkContextData
         {
-            public GCHandle Handle;        //  A weak GCHandle to the delegate
-            public IntPtr FunctionPtr;     // Function pointer for open static delegates
+            public WeakGCHandle<Delegate> Handle;   //  A weak GCHandle to the delegate
+            public IntPtr FunctionPtr;              // Function pointer for open static delegates
         }
 
         internal sealed unsafe class PInvokeDelegateThunk
@@ -133,7 +133,7 @@ namespace System.Runtime.InteropServices
                     ThunkContextData* thunkData = (ThunkContextData*)ContextData;
 
                     // allocate a weak GChandle for the delegate
-                    thunkData->Handle = GCHandle.Alloc(del, GCHandleType.WeakTrackResurrection);
+                    thunkData->Handle = new WeakGCHandle<Delegate>(del, trackResurrection: true);
                     thunkData->FunctionPtr = openStaticFunctionPointer;
                 }
 
@@ -148,17 +148,17 @@ namespace System.Runtime.InteropServices
                 if (ContextData != IntPtr.Zero)
                 {
                     // free the GCHandle
-                    GCHandle handle = ((ThunkContextData*)ContextData)->Handle;
+                    WeakGCHandle<Delegate> handle = ((ThunkContextData*)ContextData)->Handle;
                     if (handle.IsAllocated)
                     {
                         // If the delegate is still alive, defer finalization.
-                        if (handle.Target != null)
+                        if (handle.TryGetTarget(out _))
                         {
                             GC.ReRegisterForFinalize(this);
                             return;
                         }
 
-                        handle.Free();
+                        handle.Dispose();
                     }
 
                     // Free the allocated context data memory
@@ -205,20 +205,19 @@ namespace System.Runtime.InteropServices
             IntPtr pTarget;
             if (s_thunkPoolHeap != null && RuntimeAugments.TryGetThunkData(s_thunkPoolHeap, ptr, out pContext, out pTarget))
             {
-                GCHandle handle;
+                WeakGCHandle<Delegate> handle;
                 unsafe
                 {
                     // Pull out Handle from context
                     handle = ((ThunkContextData*)pContext)->Handle;
                 }
-                Delegate target = Unsafe.As<Delegate>(handle.Target);
 
                 //
                 // The delegate might already been garbage collected
                 // User should use GC.KeepAlive or whatever ways necessary to keep the delegate alive
                 // until they are done with the native function pointer
                 //
-                if (target == null)
+                if (!handle.TryGetTarget(out Delegate? target))
                 {
                     Environment.FailFast(SR.Delegate_GarbageCollected);
                 }
@@ -280,7 +279,7 @@ namespace System.Runtime.InteropServices
 
             Debug.Assert(pContext != IntPtr.Zero);
 
-            GCHandle handle;
+            WeakGCHandle<Delegate> handle;
             unsafe
             {
                 // Pull out Handle from context
@@ -288,18 +287,16 @@ namespace System.Runtime.InteropServices
 
             }
 
-            T target = Unsafe.As<T>(handle.Target);
-
             //
             // The delegate might already been garbage collected
             // User should use GC.KeepAlive or whatever ways necessary to keep the delegate alive
             // until they are done with the native function pointer
             //
-            if (target == null)
+            if (!handle.TryGetTarget(out Delegate? target))
             {
                 Environment.FailFast(SR.Delegate_GarbageCollected);
             }
-            return target;
+            return Unsafe.As<T>(target);
         }
         #endregion
 
