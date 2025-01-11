@@ -622,7 +622,7 @@ namespace System.Net.WebSockets
         {
             if (_gcHandle.IsAllocated)
             {
-                _gcHandle.Free();
+                _gcHandle.Dispose();
             }
 
             ReleasePinnedSendBuffer();

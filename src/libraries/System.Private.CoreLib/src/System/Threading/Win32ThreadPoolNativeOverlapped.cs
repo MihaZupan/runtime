@@ -136,17 +136,17 @@ namespace System.Threading
                     for (int i = 0; i < objArray.Length; i++)
                     {
                         if (!data._pinnedData[i].IsAllocated)
-                            data._pinnedData[i] = new PinnedGCHandle<object>(objArray[i]);
+                            data._pinnedData[i] = new PinnedGCHandle<object?>(objArray[i]);
                         else
                             data._pinnedData[i].Target = objArray[i];
                     }
                 }
                 else
                 {
-                    data._pinnedData ??= new PinnedGCHandle<object>[1];
+                    data._pinnedData ??= new PinnedGCHandle<object?>[1];
 
                     if (!data._pinnedData[0].IsAllocated)
-                        data._pinnedData[0] = new PinnedGCHandle<object>(pinData);
+                        data._pinnedData[0] = new PinnedGCHandle<object?>(pinData);
                     else
                         data._pinnedData[0].Target = pinData;
                 }
