@@ -45,16 +45,8 @@ namespace System.Runtime.InteropServices
         {
             get
             {
-                IntPtr handle = _handle;
-
-                // Check if the handle was never initialized or was freed.
-                if (handle == IntPtr.Zero)
-                {
-                    ThrowHelper.ThrowInvalidOperationException_HandleIsNotInitialized();
-                }
-
                 // Skip the type check to provide lowest overhead.
-                return Unsafe.As<T>(GCHandle.InternalGet(handle));
+                return Unsafe.As<T>(GCHandle.InternalGet(_handle));
             }
             set
             {
@@ -90,7 +82,6 @@ namespace System.Runtime.InteropServices
         /// </remarks>
         public static PinnedGCHandle<T> FromIntPtr(IntPtr value)
         {
-            GCHandle.ThrowIfInvalid(value);
             return new PinnedGCHandle<T>(value);
         }
 

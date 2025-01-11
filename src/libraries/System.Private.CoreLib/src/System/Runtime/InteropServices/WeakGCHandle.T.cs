@@ -48,13 +48,9 @@ namespace System.Runtime.InteropServices
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool TryGetTarget([NotNullWhen(true)] out T? target)
         {
-            IntPtr handle = _handle;
-            GCHandle.ThrowIfInvalid(_handle);
-
             // Skip the type check to provide lowest overhead.
-            T? obj = Unsafe.As<T?>(GCHandle.InternalGet(handle));
-            target = obj;
-            return obj != null;
+            target = Unsafe.As<T>(GCHandle.InternalGet(_handle));
+            return target is not null;
         }
 
         /// <summary>Sets the object this handle represents.</summary>
@@ -77,7 +73,6 @@ namespace System.Runtime.InteropServices
         /// </remarks>
         public static WeakGCHandle<T> FromIntPtr(IntPtr value)
         {
-            GCHandle.ThrowIfInvalid(value);
             return new WeakGCHandle<T>(value);
         }
 
