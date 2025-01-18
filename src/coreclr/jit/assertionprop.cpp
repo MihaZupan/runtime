@@ -145,6 +145,11 @@ bool IntegralRange::Contains(int64_t value) const
 
     var_types rangeType = node->TypeGet();
 
+    if (node->OperIs(GT_COMMA) && node->gtGetOp1()->OperIs(GT_STORE_LCL_VAR))
+    {
+        node = node->gtGetOp1()->gtGetOp1();
+    }
+
     switch (node->OperGet())
     {
         case GT_EQ:
@@ -4116,7 +4121,7 @@ void Compiler::optAssertionProp_RangeProperties(ASSERT_VALARG_TP assertions,
 //    1) Convert DIV/MOD to UDIV/UMOD if both operands are proven to be never negative
 //    2) Marks DIV/UDIV/MOD/UMOD with GTF_DIV_MOD_NO_BY_ZERO if divisor is proven to be never zero
 //    3) Marks DIV/UDIV/MOD/UMOD with GTF_DIV_MOD_NO_OVERFLOW if both operands are proven to be never negative
-//    4) UMOD with GTF_UMOD_UINT16_OPERANDS if both operands are proven to be in uint16 range
+//    4) Marks UMOD with GTF_UMOD_UINT16_OPERANDS if both operands are proven to be in uint16 range
 //
 // Arguments:
 //    assertions - set of live assertions
@@ -4161,8 +4166,8 @@ GenTree* Compiler::optAssertionProp_ModDiv(ASSERT_VALARG_TP assertions, GenTreeO
     }
 
     if (((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0) && tree->OperIs(GT_UMOD) && op2->IsCnsIntOrI() &&
-        FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) && op1IsNotNegative &&
-        IntegralRange::ForNode(op1, this).GetUpperBound() <= SymbolicIntegerValue::UShortMax)
+        FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) &&
+        IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
     {
         JITDUMP("Both operands for UMOD are in uint16 range...\n")
         tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
