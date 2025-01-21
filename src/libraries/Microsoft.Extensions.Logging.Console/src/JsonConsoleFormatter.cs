@@ -96,7 +96,7 @@ namespace Microsoft.Extensions.Logging.Console
                     writer.Flush();
                 }
 
-                var messageBytes = output.WrittenSpan;
+                var messageBytes = output.WrittenMemory.Span;
                 var logMessageBuffer = ArrayPool<char>.Shared.Rent(Encoding.UTF8.GetMaxCharCount(messageBytes.Length));
                 try
                 {

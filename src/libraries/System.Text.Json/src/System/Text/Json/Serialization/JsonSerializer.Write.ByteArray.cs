@@ -144,7 +144,7 @@ namespace System.Text.Json
             try
             {
                 jsonTypeInfo.Serialize(writer, value);
-                return output.WrittenSpan.ToArray();
+                return output.WrittenMemory.ToArray();
             }
             finally
             {
@@ -161,7 +161,7 @@ namespace System.Text.Json
             try
             {
                 jsonTypeInfo.SerializeAsObject(writer, value);
-                return output.WrittenSpan.ToArray();
+                return output.WrittenMemory.ToArray();
             }
             finally
             {

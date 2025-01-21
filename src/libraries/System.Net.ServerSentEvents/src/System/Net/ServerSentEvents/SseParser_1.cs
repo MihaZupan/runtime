@@ -500,7 +500,13 @@ namespace System.Net.ServerSentEvents
             ShiftOrGrowLineBufferIfNecessary();
 
             int offset = _lineOffset + _lineLength;
-            int bytesRead = await _stream.ReadAsync(_lineBuffer.AsMemory(offset), cancellationToken).ConfigureAwait(false);
+            int bytesRead = await
+#if NET
+                _stream.ReadAsync(_lineBuffer.AsMemory(offset), cancellationToken)
+#else
+                new ValueTask<int>(_stream.ReadAsync(_lineBuffer, offset, _lineBuffer.Length - offset, cancellationToken))
+#endif
+                .ConfigureAwait(false);
 
             if (bytesRead > 0)
             {

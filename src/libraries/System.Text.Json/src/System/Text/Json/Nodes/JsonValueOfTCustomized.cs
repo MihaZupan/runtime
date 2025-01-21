@@ -54,7 +54,7 @@ namespace System.Text.Json.Nodes
             {
                 WriteTo(writer);
                 writer.Flush();
-                Utf8JsonReader reader = new(output.WrittenSpan);
+                Utf8JsonReader reader = new(output.WrittenMemory.Span);
                 bool success = reader.Read();
                 Debug.Assert(success);
                 return JsonReaderHelper.ToValueKind(reader.TokenType);

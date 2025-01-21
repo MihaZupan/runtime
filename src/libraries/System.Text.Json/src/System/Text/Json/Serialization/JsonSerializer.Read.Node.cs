@@ -169,7 +169,7 @@ namespace System.Text.Json
                 }
             }
 
-            return ReadFromSpan(output.WrittenSpan, jsonTypeInfo);
+            return ReadFromSpan(output.WrittenMemory.Span, jsonTypeInfo);
         }
 
         private static object? ReadFromNodeAsObject(JsonNode? node, JsonTypeInfo jsonTypeInfo)
@@ -190,7 +190,7 @@ namespace System.Text.Json
                 }
             }
 
-            return ReadFromSpanAsObject(output.WrittenSpan, jsonTypeInfo);
+            return ReadFromSpanAsObject(output.WrittenMemory.Span, jsonTypeInfo);
         }
     }
 }
