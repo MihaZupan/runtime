@@ -7955,6 +7955,13 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
 #endif
 #endif // !TARGET_64BIT
 
+            //if (tree->OperIs(GT_UMOD) && opts.OptimizationEnabled())
+            //{
+            //    JitTls::GetCompiler()->gtDispTree(tree);
+            //    bool b1 = op2->IsCnsIntOrI();
+            //    bool b2 = IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this));
+            //}
+
             if (tree->OperIs(GT_UMOD) && op2->IsIntegralConstUnsignedPow2())
             {
                 // Transformation: a % b = a & (b - 1);
@@ -7962,11 +7969,20 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
                 op1  = tree->AsOp()->gtOp1;
                 op2  = tree->AsOp()->gtOp2;
             }
+#ifdef TARGET_64BIT
+            else if (tree->OperIs(GT_UMOD) && opts.OptimizationEnabled() && op2->IsCnsIntOrI() &&
+                     FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) && op2->AsIntCon()->IconValue() != 0 &&
+                     IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
+            {
+                // Transformation: a % b = (((ulong)(dividend * (uint.MaxValue / divisor + 1)) * divisor) >> 32).
+                // For a constant divisor when both operands fit in uint16. We'll do the transformation in lowering.
+                tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
+            }
+#endif // TARGET_64BIT
 #ifdef TARGET_ARM64
             // ARM64 architecture manual suggests this transformation
-            // for the mod operator. If both operands are uint16 and the
-            // divisor is a constant, we'll lower the umod to a cheaper sequence.
-            else if ((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0)
+            // for the mod operator.
+            else
 #else
             // XARCH only applies this transformation if we know
             // that magic division will be used - which is determined

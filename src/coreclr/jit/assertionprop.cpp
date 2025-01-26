@@ -4136,7 +4136,6 @@ void Compiler::optAssertionProp_RangeProperties(ASSERT_VALARG_TP assertions,
 //    1) Convert DIV/MOD to UDIV/UMOD if both operands are proven to be never negative
 //    2) Marks DIV/UDIV/MOD/UMOD with GTF_DIV_MOD_NO_BY_ZERO if divisor is proven to be never zero
 //    3) Marks DIV/UDIV/MOD/UMOD with GTF_DIV_MOD_NO_OVERFLOW if both operands are proven to be never negative
-//    4) Marks UMOD with GTF_UMOD_UINT16_OPERANDS if both operands are proven to be in uint16 range
 //
 // Arguments:
 //    assertions - set of live assertions
@@ -4179,18 +4178,6 @@ GenTree* Compiler::optAssertionProp_ModDiv(ASSERT_VALARG_TP assertions, GenTreeO
         tree->gtFlags |= GTF_DIV_MOD_NO_OVERFLOW;
         changed = true;
     }
-
-    // We only lower UMOD with uint16 operands differently on 64-bit targets.
-#if TARGET_64BIT
-    if (!opts.MinOpts() && ((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0) && tree->OperIs(GT_UMOD) &&
-        op2->IsCnsIntOrI() && FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) && op2->AsIntCon()->IconValue() != 0 &&
-        IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
-    {
-        JITDUMP("Both operands for UMOD are in uint16 range...\n")
-        tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
-        changed = true;
-    }
-#endif
 
     return changed ? optAssertionProp_Update(tree, tree, stmt) : nullptr;
 }
