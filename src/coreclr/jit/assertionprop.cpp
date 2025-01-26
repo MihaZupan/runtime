@@ -4180,14 +4180,17 @@ GenTree* Compiler::optAssertionProp_ModDiv(ASSERT_VALARG_TP assertions, GenTreeO
         changed = true;
     }
 
-    if (((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0) && tree->OperIs(GT_UMOD) && op2->IsCnsIntOrI() &&
-        FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) &&
+    // We only lower UMOD with uint16 operands differently on 64-bit targets.
+#if TARGET_64BIT
+    if (!opts.MinOpts() && ((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0) && tree->OperIs(GT_UMOD) &&
+        op2->IsCnsIntOrI() && FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) && op2->AsIntCon()->IconValue() != 0 &&
         IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
     {
         JITDUMP("Both operands for UMOD are in uint16 range...\n")
         tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
         changed = true;
     }
+#endif
 
     return changed ? optAssertionProp_Update(tree, tree, stmt) : nullptr;
 }

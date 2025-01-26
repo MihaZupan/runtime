@@ -7103,7 +7103,7 @@ bool Lowering::LowerUnsignedDivOrMod(GenTreeOp* divMod)
     assert(varTypeIsFloating(divMod->TypeGet()));
 #endif // USE_HELPERS_FOR_INT_DIV
 #if defined(TARGET_ARM64)
-    assert(divMod->OperGet() != GT_UMOD);
+    assert(divMod->OperGet() != GT_UMOD || (divMod->gtFlags & GTF_UMOD_UINT16_OPERANDS) != 0);
 #endif // TARGET_ARM64
 
     GenTree* dividend = divMod->gtGetOp1();
@@ -7182,19 +7182,13 @@ bool Lowering::LowerUnsignedDivOrMod(GenTreeOp* divMod)
         }
     }
 
-    assert(divisorValue >= 3);
-
-    if (comp->opts.MinOpts())
-    {
-        return false;
-    }
-
 #if defined(TARGET_64BIT)
     // Replace (uint16 % uint16) with a cheaper variant of FastMod, specialized for 16-bit operands.
     if ((divMod->gtFlags & GTF_UMOD_UINT16_OPERANDS) != 0)
     {
         assert(!isDiv);
-        assert(divisorValue > 0 && divisorValue <= UINT16_MAX);
+        assert(divisorValue >= 3 && divisorValue <= UINT16_MAX);
+        assert(!comp->opts.MinOpts());
 
         // uint multiplier = uint.MaxValue / divisor + 1;
         // ulong result = ((ulong)(dividend * multiplier) * divisor) >> 32;
@@ -7234,7 +7228,7 @@ bool Lowering::LowerUnsignedDivOrMod(GenTreeOp* divMod)
 
 // TODO-ARM-CQ: Currently there's no GT_MULHI for ARM32
 #if defined(TARGET_XARCH) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
-    if (divisorValue >= 3)
+    if (!comp->opts.MinOpts() && (divisorValue >= 3))
     {
         size_t magic;
         bool   increment;

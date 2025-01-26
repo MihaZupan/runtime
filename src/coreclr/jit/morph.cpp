@@ -7964,8 +7964,9 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
             }
 #ifdef TARGET_ARM64
             // ARM64 architecture manual suggests this transformation
-            // for the mod operator.
-            else
+            // for the mod operator. If both operands are uint16 and the
+            // divisor is a constant, we'll lower the umod to a cheaper sequence.
+            else if ((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) == 0)
 #else
             // XARCH only applies this transformation if we know
             // that magic division will be used - which is determined
