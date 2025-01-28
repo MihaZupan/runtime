@@ -213,15 +213,15 @@ bool IntegralRange::Contains(int64_t value) const
             break;
         }
 
-        case GT_STORE_LCL_VAR:
-        {
-            if (node->gtGetOp1()->OperIs(GT_CAST))
-            {
-                return ForCastOutput(node->gtGetOp1()->AsCast(), compiler);
-            }
+        //case GT_STORE_LCL_VAR:
+        //{
+        //    if (node->gtGetOp1()->OperIs(GT_CAST))
+        //    {
+        //        return ForCastOutput(node->gtGetOp1()->AsCast(), compiler);
+        //    }
 
-            break;
-        }
+        //    break;
+        //}
 
         case GT_CNS_INT:
             if (node->IsIntegralConst(0) || node->IsIntegralConst(1))
@@ -237,15 +237,15 @@ bool IntegralRange::Contains(int64_t value) const
         case GT_CAST:
             return ForCastOutput(node->AsCast(), compiler);
 
-        case GT_COMMA:
-        {
-            if (varTypeIsIntegral(node->gtGetOp1()))
-            {
-                return ForNode(node->gtGetOp1(), compiler);
-            }
+        //case GT_COMMA:
+        //{
+        //    if (varTypeIsIntegral(node->gtGetOp1()))
+        //    {
+        //        return ForNode(node->gtGetOp1(), compiler);
+        //    }
 
-            break;
-        }
+        //    break;
+        //}
 
 #if defined(FEATURE_HW_INTRINSICS)
         case GT_HWINTRINSIC:
@@ -4185,6 +4185,7 @@ GenTree* Compiler::optAssertionProp_ModDiv(ASSERT_VALARG_TP assertions, GenTreeO
         FitsIn<uint16_t>(op2->AsIntCon()->IconValue()) && op2->AsIntCon()->IconValue() > 0 &&
         IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
     {
+        //JitTls::GetCompiler()->gtDispTree(tree);
         JITDUMP("Both operands for UMOD are in uint16 range...\n")
         tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
         changed = true;
