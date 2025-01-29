@@ -46,6 +46,32 @@ namespace System.Net.WebSockets
             WebSocket?.Abort();
         }
 
+        private static HttpRequestMessage PickFirstRequestVersion(Uri uri, ClientWebSocketOptions options)
+        {
+            int version = (options.HttpVersion.Major, uri.Scheme == UriScheme.Wss, options.HttpVersionPolicy) switch
+            {
+                ( >= 1, false, HttpVersionPolicy.RequestVersionOrLower) => 1,
+                ( >= 2, true, HttpVersionPolicy.RequestVersionOrLower) => 2,
+                ( <= 2, true, HttpVersionPolicy.RequestVersionOrHigher) => 2,
+                ( <= 1, false, HttpVersionPolicy.RequestVersionOrHigher) => 1,
+                (1, _, _) => 1,
+                (2, _, _) => 2,
+                _ => throw new WebSocketException(WebSocketError.UnsupportedProtocol)
+            };
+
+            return new HttpRequestMessage(version == 1 ? HttpMethod.Get : HttpMethod.Connect, uri)
+            {
+                Version = version == 1 ? HttpVersion.Version11 : HttpVersion.Version20
+            };
+        }
+
+        private static bool CanRetryWithHttp11(ClientWebSocketOptions options, Version currentRequestVersion, HttpRequestException ex)
+        {
+            return currentRequestVersion == HttpVersion.Version20 &&
+                (options.HttpVersion == HttpVersion.Version11 || options.HttpVersionPolicy == HttpVersionPolicy.RequestVersionOrLower) &&
+                (ex.HttpRequestError == HttpRequestError.ExtendedConnectNotSupported || ex.Data.Contains("HTTP2_ENABLED"));
+        }
+
         public async Task ConnectAsync(Uri uri, HttpMessageInvoker? invoker, CancellationToken cancellationToken, ClientWebSocketOptions options)
         {
             bool disposeInvoker = false;
@@ -67,36 +93,14 @@ namespace System.Net.WebSockets
             HttpResponseMessage? response = null;
             bool disposeResponse = false;
 
-            // force non-secure request to 1.1 whenever it is possible as HttpClient does
-            bool tryDowngrade = uri.Scheme == UriScheme.Ws && (options.HttpVersion == HttpVersion.Version11 || options.HttpVersionPolicy == HttpVersionPolicy.RequestVersionOrLower);
             try
             {
+                HttpRequestMessage request = PickFirstRequestVersion(uri, options);
 
                 while (true)
                 {
                     try
                     {
-                        HttpRequestMessage request;
-                        if (!tryDowngrade && options.HttpVersion >= HttpVersion.Version20
-                            || (options.HttpVersion == HttpVersion.Version11 && options.HttpVersionPolicy == HttpVersionPolicy.RequestVersionOrHigher && uri.Scheme == UriScheme.Wss))
-                        {
-                            if (options.HttpVersion > HttpVersion.Version20 && options.HttpVersionPolicy != HttpVersionPolicy.RequestVersionOrLower)
-                            {
-                                throw new WebSocketException(WebSocketError.UnsupportedProtocol);
-                            }
-                            request = new HttpRequestMessage(HttpMethod.Connect, uri) { Version = HttpVersion.Version20 };
-                            tryDowngrade = true;
-                        }
-                        else if (tryDowngrade || options.HttpVersion == HttpVersion.Version11)
-                        {
-                            request = new HttpRequestMessage(HttpMethod.Get, uri) { Version = HttpVersion.Version11 };
-                            tryDowngrade = false;
-                        }
-                        else
-                        {
-                            throw new WebSocketException(WebSocketError.UnsupportedProtocol);
-                        }
-
                         if (options._requestHeaders?.Count > 0) // use field to avoid lazily initializing the collection
                         {
                             foreach (string key in options.RequestHeaders)
@@ -134,13 +138,10 @@ namespace System.Net.WebSockets
                         ValidateResponse(response, secValue);
                         break;
                     }
-                    catch (HttpRequestException ex) when
-                        ((ex.HttpRequestError == HttpRequestError.ExtendedConnectNotSupported || ex.Data.Contains("HTTP2_ENABLED"))
-                        && tryDowngrade
-                        && (options.HttpVersion == HttpVersion.Version11 || options.HttpVersionPolicy == HttpVersionPolicy.RequestVersionOrLower))
+                    catch (HttpRequestException ex) when (CanRetryWithHttp11(options, request.Version, ex))
                     {
+                        request = new HttpRequestMessage(HttpMethod.Get, uri) { Version = HttpVersion.Version11 };
                     }
-
                 }
 
                 // The SecWebSocketProtocol header is optional.  We should only get it with a non-empty value if we requested subprotocols,
