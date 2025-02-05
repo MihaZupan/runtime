@@ -475,7 +475,7 @@ int32_t SystemNative_ShmUnlink(const char* name)
 
 static void ConvertDirent(const struct dirent* entry, DirectoryEntry* outputEntry)
 {
-    // We use Marshal.PtrToStringAnsi on the managed side, which takes a pointer to
+    // We use MemoryMarshal.CreateReadOnlySpanFromNullTerminated on the managed side, which takes a pointer to
     // the start of the unmanaged string. Give the caller back a pointer to the
     // location of the start of the string that exists in their own byte buffer.
     outputEntry->Name = entry->d_name;

@@ -41,7 +41,7 @@ internal static partial class Interop
 
                 ReadOnlySpan<byte> nameBytes = (NameLength == -1)
                     // In this case the struct was allocated via struct dirent *readdir(DIR *dirp);
-                    ? new ReadOnlySpan<byte>(Name, new ReadOnlySpan<byte>(Name, NameBufferSize).IndexOf<byte>(0))
+                    ? MemoryMarshal.CreateReadOnlySpanFromNullTerminated(Name)
                     : new ReadOnlySpan<byte>(Name, NameLength);
 
                 Debug.Assert(nameBytes.Length > 0, "we shouldn't have gotten a garbage value from the OS");
