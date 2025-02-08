@@ -39,6 +39,8 @@ namespace System.Collections.Frozen
         /// <inheritdoc />
         private protected override int CountCore => _hashTable.Count;
 
+        public int FindIndexInternal(int item) => FindItemIndex(item);
+
         /// <inheritdoc />
         private protected override int FindItemIndex(int item)
         {

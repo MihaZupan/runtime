@@ -127,6 +127,11 @@ namespace System.Collections.Frozen
                 {
                     return denseResult;
                 }
+
+                if (PerfectHashIntegralFrozenDictionary.CreateIfValid(source) is { } perfectHashResult)
+                {
+                    return perfectHashResult;
+                }
 #endif
 
                 if (source.Count <= Constants.MaxItemsInSmallValueTypeFrozenCollection)

@@ -157,7 +157,11 @@ The System.Collections.Immutable library is built-in as part of the shared frame
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
+    <Compile Include="System\Collections\Frozen\Integer\BitmapIntegralFrozenSet.cs" />
     <Compile Include="System\Collections\Frozen\Integer\DenseIntegralFrozenDictionary.cs" />
+    <Compile Include="System\Collections\Frozen\Integer\PerfectHashIntegralFrozenDictionary.cs" />
+    <Compile Include="System\Collections\Frozen\Integer\PerfectHashIntegralFrozenSet.cs" />
+    <Compile Include="$(CoreLibSharedDir)System\SearchValues\PerfectHashCharLookup.cs" Link="Common\System\SearchValues\PerfectHashCharLookup.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">

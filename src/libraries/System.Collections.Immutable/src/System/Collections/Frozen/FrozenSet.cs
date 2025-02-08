@@ -28,12 +28,27 @@ namespace System.Collections.Frozen
         /// <returns>A frozen set.</returns>
         public static FrozenSet<T> Create<T>(IEqualityComparer<T>? equalityComparer, params ReadOnlySpan<T> source)
         {
+            bool isDefaultComparer = equalityComparer is null || ReferenceEquals(equalityComparer, FrozenSet<T>.Empty.Comparer);
+
             if (source.Length == 0)
             {
-                return equalityComparer is null || ReferenceEquals(equalityComparer, FrozenSet<T>.Empty.Comparer) ?
+                return isDefaultComparer ?
                     FrozenSet<T>.Empty :
-                    new EmptyFrozenSet<T>(equalityComparer);
+                    new EmptyFrozenSet<T>(equalityComparer!);
             }
+
+#if NET
+            // Avoid allocating an intermediate HashSet when the FrozenSet can be efficiently created from a span.
+            if (isDefaultComparer && BitmapIntegralFrozenSet.CreateIfValid(source) is { } bitmapSet)
+            {
+                return bitmapSet;
+            }
+
+            if (isDefaultComparer && PerfectHashIntegralFrozenSet.CreateIfValid(source) is { } perfectHashSet)
+            {
+                return perfectHashSet;
+            }
+#endif
 
             HashSet<T> set =
 #if NET
@@ -59,7 +74,7 @@ namespace System.Collections.Frozen
             CreateFromSet(newSet!);
 
         /// <summary>Extracts from the source either an existing <see cref="FrozenSet{T}"/> instance or a <see cref="HashSet{T}"/> containing the values and the specified <paramref name="comparer"/>.</summary>
-        private static FrozenSet<T>? GetExistingFrozenOrNewSet<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer, out HashSet<T>? newSet)
+        private static unsafe FrozenSet<T>? GetExistingFrozenOrNewSet<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer, out HashSet<T>? newSet)
         {
             ThrowHelper.ThrowIfNull(source);
             comparer ??= EqualityComparer<T>.Default;
@@ -70,6 +85,32 @@ namespace System.Collections.Frozen
                 newSet = null;
                 return fs;
             }
+
+#if NET
+            if (typeof(T).IsValueType && sizeof(T) <= sizeof(int) && EqualityComparer<T>.Default.Equals(comparer))
+            {
+                // We'll replace 'source' if needed to avoid enumerating an arbitrary IEnumerable multiple times.
+                ReadOnlySpan<T> span = GetSpanFromEnumerable(ref source);
+
+                if (span.IsEmpty)
+                {
+                    newSet = null;
+                    return FrozenSet<T>.Empty;
+                }
+
+                if (BitmapIntegralFrozenSet.CreateIfValid(span) is { } bitmapSet)
+                {
+                    newSet = null;
+                    return bitmapSet;
+                }
+
+                if (PerfectHashIntegralFrozenSet.CreateIfValid(span) is { } perfectHashSet)
+                {
+                    newSet = null;
+                    return perfectHashSet;
+                }
+            }
+#endif
 
             // Ensure we have a HashSet<> using the specified comparer such that all items
             // are non-null and unique according to that comparer.
@@ -222,6 +263,37 @@ namespace System.Collections.Frozen
             // No special-cases apply. Use the default frozen set.
             return new DefaultFrozenSet<T>(source);
         }
+
+#if NET8
+        private static ReadOnlySpan<T> GetSpanFromEnumerable<T>(ref IEnumerable<T> enumerable)
+        {
+            if (typeof(T) == typeof(char) && enumerable is string s)
+            {
+                return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<char, T>(ref Unsafe.AsRef(in s.GetPinnableReference())), s.Length);
+            }
+
+            if (enumerable is T[] array)
+            {
+                return array;
+            }
+
+            if (enumerable is List<T> list)
+            {
+                return CollectionsMarshal.AsSpan(list);
+            }
+
+            // If the source is already a HashSet with the correct comparer, don't replace it.
+            // Otherwise, we might have to allocate a new set right away if the result couldn't be created from the span.
+            if (enumerable is HashSet<T> set && EqualityComparer<T>.Default.Equals(set.Comparer))
+            {
+                return (T[])[.. set];
+            }
+
+            list = [.. enumerable];
+            enumerable = list;
+            return CollectionsMarshal.AsSpan(list);
+        }
+#endif
     }
 
     /// <summary>Provides an immutable, read-only set optimized for fast lookup and enumeration.</summary>
@@ -305,13 +377,21 @@ namespace System.Collections.Frozen
         /// <param name="item">The element to locate.</param>
         /// <returns><see langword="true"/> if the set contains the specified element; otherwise, <see langword="false"/>.</returns>
         public bool Contains(T item) =>
+            ContainsCore(item);
+
+        /// <inheritdoc cref="Contains(T)"/>
+        private protected virtual bool ContainsCore(T item) =>
             FindItemIndex(item) >= 0;
 
         /// <summary>Searches the set for a given value and returns the equal value it finds, if any.</summary>
         /// <param name="equalValue">The value to search for.</param>
         /// <param name="actualValue">The value from the set that the search found, or the default value of T when the search yielded no match.</param>
         /// <returns>A value indicating whether the search was successful.</returns>
-        public bool TryGetValue(T equalValue, [MaybeNullWhen(false)] out T actualValue)
+        public bool TryGetValue(T equalValue, [MaybeNullWhen(false)] out T actualValue) =>
+            TryGetValueCore(equalValue, out actualValue);
+
+        /// <inheritdoc cref="TryGetValue(T, out T)"/>
+        private protected virtual bool TryGetValueCore(T equalValue, [MaybeNullWhen(false)] out T actualValue)
         {
             int index = FindItemIndex(equalValue);
             if (index >= 0)

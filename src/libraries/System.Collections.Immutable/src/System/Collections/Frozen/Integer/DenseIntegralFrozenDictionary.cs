@@ -1,20 +1,17 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 namespace System.Collections.Frozen
 {
     /// <summary>Provides a <see cref="FrozenDictionary{TKey, TValue}"/> for densely-packed integral keys.</summary>
-    internal sealed class DenseIntegralFrozenDictionary
+    internal static class DenseIntegralFrozenDictionary
     {
         /// <summary>
         /// Maximum allowed factor by which the spread between the min and max of keys in the dictionary may exceed the count.
@@ -24,7 +21,7 @@ namespace System.Collections.Frozen
         /// and the more memory will be consumed to store the values. The value of 10 means that up to 90% of the
         /// slots in the values array may be unused.
         /// </remarks>
-        private const int LengthToCountFactor = 10;
+        public const int LengthToCountFactor = 10;
 
         public static FrozenDictionary<TKey, TValue>? CreateIfValid<TKey, TValue>(Dictionary<TKey, TValue> source)
             where TKey : notnull
@@ -41,7 +38,7 @@ namespace System.Collections.Frozen
                 null;
         }
 
-        private static FrozenDictionary<TKey, TValue>? CreateIfValid<TKey, TKeyUnderlying, TValue>(Dictionary<TKey, TValue> source)
+        private static unsafe FrozenDictionary<TKey, TValue>? CreateIfValid<TKey, TKeyUnderlying, TValue>(Dictionary<TKey, TValue> source)
             where TKey : notnull
             where TKeyUnderlying : unmanaged, IBinaryInteger<TKeyUnderlying>
         {
@@ -70,7 +67,9 @@ namespace System.Collections.Frozen
 
                 long maxAllowedLength = Math.Min((long)count * LengthToCountFactor, Array.MaxLength);
                 long length = (long)max - min + 1;
-                if (length <= maxAllowedLength)
+
+                // Always use this implementation for byte/sbyte keys.
+                if (length <= maxAllowedLength || sizeof(TKeyUnderlying) == sizeof(byte))
                 {
                     var keys = new TKey[count];
                     var values = new TValue[keys.Length];

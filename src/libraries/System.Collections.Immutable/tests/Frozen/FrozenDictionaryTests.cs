@@ -501,44 +501,57 @@ namespace System.Collections.Frozen.Tests
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override int MaxUniqueValueCount => short.MaxValue - short.MinValue;
+        protected override int MaxUniqueValueCount => short.MaxValue - short.MinValue + 1;
 
-        protected override short Next(Random random) => (short)random.Next(short.MinValue, short.MaxValue);
+        protected override short Next(Random random) => (short)random.Next(short.MinValue, short.MaxValue + 1);
     }
 
     public class FrozenDictionary_Generic_Tests_ushort_ushort : FrozenDictionary_Generic_Tests_base_for_numbers<ushort>
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override int MaxUniqueValueCount => ushort.MaxValue;
+        protected override int MaxUniqueValueCount => ushort.MaxValue + 1;
 
-        protected override ushort Next(Random random) => (ushort)random.Next(ushort.MinValue, ushort.MaxValue);
+        protected override ushort Next(Random random) => (ushort)random.Next(ushort.MinValue, ushort.MaxValue + 1);
     }
 
     public class FrozenDictionary_Generic_Tests_byte_byte : FrozenDictionary_Generic_Tests_base_for_numbers<byte>
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override int MaxUniqueValueCount => byte.MaxValue;
+        protected override int MaxUniqueValueCount => byte.MaxValue + 1;
 
-        protected override byte Next(Random random) => (byte)random.Next(byte.MinValue, byte.MaxValue);
+        protected override byte Next(Random random) => (byte)random.Next(byte.MinValue, byte.MaxValue + 1);
     }
 
     public class FrozenDictionary_Generic_Tests_ContiguousFromZeroEnum_byte : FrozenDictionary_Generic_Tests_base_for_numbers<ContiguousFromZeroEnum>
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override ContiguousFromZeroEnum Next(Random random) => (ContiguousFromZeroEnum)random.Next();
+        protected override int MaxUniqueValueCount => (int)ContiguousFromZeroEnum.Z4 - (int)ContiguousFromZeroEnum.A1 + 1;
+
+        protected override ContiguousFromZeroEnum Next(Random random) => (ContiguousFromZeroEnum)random.Next((int)ContiguousFromZeroEnum.A1, (int)ContiguousFromZeroEnum.Z4 + 1);
     }
 
     public class FrozenDictionary_Generic_Tests_NonContiguousFromZeroEnum_byte : FrozenDictionary_Generic_Tests_base_for_numbers<NonContiguousFromZeroEnum>
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override NonContiguousFromZeroEnum Next(Random random) => (NonContiguousFromZeroEnum)random.Next();
+        protected override int MaxUniqueValueCount => (int)NonContiguousFromZeroEnum.Z4 - (int)NonContiguousFromZeroEnum.A1 + 1;
+
+        protected override NonContiguousFromZeroEnum Next(Random random) => (NonContiguousFromZeroEnum)random.Next((int)NonContiguousFromZeroEnum.A1, (int)NonContiguousFromZeroEnum.Z4 + 1);
     }
 
-    public enum ContiguousFromZeroEnum
+    public class FrozenDictionary_Generic_Tests_NonContiguousFromZeroEnum_short : FrozenDictionary_Generic_Tests_base_for_numbers<ContiguousFromZeroShortEnum>
+    {
+        protected override bool AllowVeryLargeSizes => false;
+
+        protected override int MaxUniqueValueCount => (int)ContiguousFromZeroShortEnum.Z4 - (int)ContiguousFromZeroShortEnum.A1 + 1;
+
+        protected override ContiguousFromZeroShortEnum Next(Random random) => (ContiguousFromZeroShortEnum)random.Next((int)ContiguousFromZeroShortEnum.A1, (int)ContiguousFromZeroShortEnum.Z4 + 1);
+    }
+
+    public enum ContiguousFromZeroEnum : byte
     {
         A1, B1, C1, D1, E1, F1, G1, H1, I1, J1, K1, L1, M1, N1, O1, P1, Q1, R1, S1, T1, U1, V1, W1, X1, Y1, Z1,
         A2, B2, C2, D2, E2, F2, G2, H2, I2, J2, K2, L2, M2, N2, O2, P2, Q2, R2, S2, T2, U2, V2, W2, X2, Y2, Z2,
@@ -546,7 +559,15 @@ namespace System.Collections.Frozen.Tests
         A4, B4, C4, D4, E4, F4, G4, H4, I4, J4, K4, L4, M4, N4, O4, P4, Q4, R4, S4, T4, U4, V4, W4, X4, Y4, Z4,
     }
 
-    public enum NonContiguousFromZeroEnum
+    public enum ContiguousFromZeroShortEnum : short
+    {
+        A1, B1, C1, D1, E1, F1, G1, H1, I1, J1, K1, L1, M1, N1, O1, P1, Q1, R1, S1, T1, U1, V1, W1, X1, Y1, Z1,
+        A2, B2, C2, D2, E2, F2, G2, H2, I2, J2, K2, L2, M2, N2, O2, P2, Q2, R2, S2, T2, U2, V2, W2, X2, Y2, Z2,
+        A3, B3, C3, D3, E3, F3, G3, H3, I3, J3, K3, L3, M3, N3, O3, P3, Q3, R3, S3, T3, U3, V3, W3, X3, Y3, Z3,
+        A4, B4, C4, D4, E4, F4, G4, H4, I4, J4, K4, L4, M4, N4, O4, P4, Q4, R4, S4, T4, U4, V4, W4, X4, Y4, Z4,
+    }
+
+    public enum NonContiguousFromZeroEnum : byte
     {
         A1 = 1, B1, C1, D1, E1, F1, G1, H1, I1, J1, K1, L1, M1, N1, O1, P1, Q1, S1, T1, U1, V1, W1, X1, Y1, Z1,
         A2, B2, C2, D2, E2, F2, G2, H2, I2, J2, K2, L2, M2, N2, O2, P2, Q2, R2, S2, T2, U2, V2, W2, X2, Y2, Z2,
@@ -564,9 +585,9 @@ namespace System.Collections.Frozen.Tests
     {
         protected override bool AllowVeryLargeSizes => false;
 
-        protected override int MaxUniqueValueCount => sbyte.MaxValue - sbyte.MinValue;
+        protected override int MaxUniqueValueCount => sbyte.MaxValue - sbyte.MinValue + 1;
 
-        protected override sbyte Next(Random random) => (sbyte)random.Next(sbyte.MinValue, sbyte.MaxValue);
+        protected override sbyte Next(Random random) => (sbyte)random.Next(sbyte.MinValue, sbyte.MaxValue + 1);
     }
 
     public class FrozenDictionary_Generic_Tests_SimpleClass_SimpleClass : FrozenDictionary_Generic_Tests<SimpleClass, SimpleClass>

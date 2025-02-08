@@ -22,7 +22,6 @@ namespace System.Collections.Frozen
 
         internal SmallValueTypeComparableFrozenSet(HashSet<T> source) : base(EqualityComparer<T>.Default)
         {
-            Debug.Assert(default(T) is IComparable<T>);
             Debug.Assert(default(T) is not null);
             Debug.Assert(typeof(T).IsValueType);
 

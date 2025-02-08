@@ -34,19 +34,23 @@ namespace System.Collections.Frozen.Tests
         protected override ISet<T> GenericISetFactory(int count)
         {
             var s = new HashSet<T>();
-            for (int i = 0; i < count; i++)
+            for (int i = 0; s.Count < count; i++)
             {
                 s.Add(CreateT(i));
             }
             return s.ToFrozenSet(GetIEqualityComparer());
         }
 
-        [Theory]
-        [InlineData(100_000)]
-        public void CreateVeryLargeSet_Success(int largeCount)
+        [Fact]
+        public unsafe void CreateVeryLargeSet_Success()
         {
             if (TestLargeSizes)
             {
+                int largeCount =
+                    sizeof(T) == sizeof(byte) ? 200 :
+                    sizeof(T) == sizeof(char) ? 10_000 :
+                    100_000;
+
                 GenericISetFactory(largeCount);
             }
         }
@@ -430,6 +434,67 @@ namespace System.Collections.Frozen.Tests
         protected override bool DefaultValueAllowed => true;
 
         protected override int CreateT(int seed) => new Random(seed).Next();
+    }
+
+    public class FrozenSet_Generic_Tests_byte : FrozenSet_Generic_Tests<byte>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override bool TestLargeSizes => false;
+
+        protected override int ISet_Large_Capacity => 100;
+
+        protected override byte CreateT(int seed) => (byte)new Random(seed).Next(byte.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_sbyte : FrozenSet_Generic_Tests<sbyte>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override bool TestLargeSizes => false;
+
+        protected override int ISet_Large_Capacity => 100;
+
+        protected override sbyte CreateT(int seed) => (sbyte)new Random(seed).Next(sbyte.MinValue, sbyte.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_short : FrozenSet_Generic_Tests<short>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override short CreateT(int seed) => (short)new Random(seed).Next(short.MinValue, short.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_EnumByte : FrozenSet_Generic_Tests<ContiguousFromZeroEnum>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override bool TestLargeSizes => false;
+
+        protected override int ISet_Large_Capacity => 100;
+
+        protected override ContiguousFromZeroEnum CreateT(int seed) => (ContiguousFromZeroEnum)new Random(seed).Next(byte.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_EnumShort : FrozenSet_Generic_Tests<ContiguousFromZeroShortEnum>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override ContiguousFromZeroShortEnum CreateT(int seed) => (ContiguousFromZeroShortEnum)new Random(seed).Next(short.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_ushort : FrozenSet_Generic_Tests<ushort>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override ushort CreateT(int seed) => (ushort)new Random(seed).Next(ushort.MaxValue + 1);
+    }
+
+    public class FrozenSet_Generic_Tests_char : FrozenSet_Generic_Tests<char>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override char CreateT(int seed) => (char)new Random(seed).Next(char.MaxValue + 1);
     }
 
     public class FrozenSet_Generic_Tests_SimpleClass : FrozenSet_Generic_Tests<SimpleClass>
