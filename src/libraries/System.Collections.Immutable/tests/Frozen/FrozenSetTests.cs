@@ -416,6 +416,19 @@ namespace System.Collections.Frozen.Tests
         protected override IEqualityComparer<string> GetIEqualityComparer() => NonDefaultEqualityComparer<string>.Instance;
     }
 
+    public class FrozenSet_Generic_Tests_long : FrozenSet_Generic_Tests<long>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override long CreateT(int seed)
+        {
+            Random rand = new Random(seed);
+            ulong hi = unchecked((ulong)rand.Next());
+            ulong lo = unchecked((ulong)rand.Next());
+            return (long)((hi << 32) | lo);
+        }
+    }
+
     public class FrozenSet_Generic_Tests_ulong : FrozenSet_Generic_Tests<ulong>
     {
         protected override bool DefaultValueAllowed => true;
@@ -433,7 +446,14 @@ namespace System.Collections.Frozen.Tests
     {
         protected override bool DefaultValueAllowed => true;
 
-        protected override int CreateT(int seed) => new Random(seed).Next();
+        protected override int CreateT(int seed) => new Random(seed).Next(int.MinValue, int.MaxValue);
+    }
+
+    public class FrozenSet_Generic_Tests_uint : FrozenSet_Generic_Tests<uint>
+    {
+        protected override bool DefaultValueAllowed => true;
+
+        protected override uint CreateT(int seed) => (uint)new Random(seed).Next(int.MinValue, int.MaxValue);
     }
 
     public class FrozenSet_Generic_Tests_byte : FrozenSet_Generic_Tests<byte>

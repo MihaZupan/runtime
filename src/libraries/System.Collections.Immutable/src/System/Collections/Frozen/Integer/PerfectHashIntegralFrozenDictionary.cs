@@ -21,58 +21,71 @@ namespace System.Collections.Frozen
             Debug.Assert(typeof(TKey) != typeof(byte) && typeof(TKey) != typeof(sbyte), "This source should have been handled by DenseIntegralFrozenDictionary.");
 
             return
-                typeof(TKey) == typeof(ushort) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(ushort)) ? new UInt16PerfectHashDictionary<TKey, ushort, TValue>(source) :
-                typeof(TKey) == typeof(short) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(short)) ? new UInt16PerfectHashDictionary<TKey, short, TValue>(source) :
-                typeof(TKey) == typeof(char) ? new UInt16PerfectHashDictionary<TKey, char, TValue>(source) :
+                typeof(TKey) == typeof(ushort) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(ushort)) ? CreateIfValid<TKey, ushort, TValue>(source) :
+                typeof(TKey) == typeof(short) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(short)) ? CreateIfValid<TKey, short, TValue>(source) :
+                typeof(TKey) == typeof(char) ? CreateIfValid<TKey, char, TValue>(source) :
+                typeof(TKey) == typeof(uint) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(uint)) ? CreateIfValid<TKey, uint, TValue>(source) :
+                typeof(TKey) == typeof(int) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(int)) ? CreateIfValid<TKey, int, TValue>(source) :
+                typeof(TKey) == typeof(ulong) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(ulong)) ? CreateIfValid<TKey, ulong, TValue>(source) :
+                typeof(TKey) == typeof(long) || (typeof(TKey).IsEnum && typeof(TKey).GetEnumUnderlyingType() == typeof(long)) ? CreateIfValid<TKey, long, TValue>(source) :
                 null;
+        }
+
+        private static FrozenDictionary<TKey, TValue>? CreateIfValid<TKey, TKeyUnderlying, TValue>(Dictionary<TKey, TValue> source)
+            where TKey : notnull
+            where TKeyUnderlying : unmanaged, IBinaryInteger<TKeyUnderlying>
+        {
+            char[] charKeys = ArrayPool<char>.Shared.Rent(source.Count);
+            int count = 0;
+            int maxKey = int.MinValue;
+
+            foreach ((TKey key, _) in source)
+            {
+                if (!PerfectHashIntegralFrozenSet.IsInUInt16Range<TKey, TKeyUnderlying>(key))
+                {
+                    ArrayPool<char>.Shared.Return(charKeys);
+                    return null;
+                }
+
+                char c = PerfectHashIntegralFrozenSet.ToChar<TKey, TKeyUnderlying>(key);
+                charKeys[count++] = c;
+                maxKey = Math.Max(maxKey, c);
+            }
+
+            Debug.Assert(count == source.Count);
+
+            PerfectHashCharLookup.Initialize(charKeys.AsSpan(0, count), maxKey, out uint multiplier, out char[] hashEntries);
+
+            ArrayPool<char>.Shared.Return(charKeys);
+
+            return new UInt16PerfectHashDictionary<TKey, TKeyUnderlying, TValue>(source, multiplier, hashEntries);
         }
 
         [DebuggerTypeProxy(typeof(DebuggerProxy<,,>))]
         private sealed class UInt16PerfectHashDictionary<TKey, TKeyUnderlying, TValue> : FrozenDictionary<TKey, TValue>
             where TKey : notnull
-            where TKeyUnderlying : IBinaryInteger<TKeyUnderlying>
+            where TKeyUnderlying : unmanaged, IBinaryInteger<TKeyUnderlying>
         {
             private readonly uint _multiplier;
             private readonly char[] _hashEntries;
             private readonly TValue[] _valueEntries;
             private readonly TKey[] _keys;
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private static char ToChar(TKey value)
-            {
-                if (typeof(TKeyUnderlying) == typeof(ushort)) return (char)(ushort)(object)value;
-                if (typeof(TKeyUnderlying) == typeof(short)) return (char)(ushort)(short)(object)value;
-
-                Debug.Assert(typeof(TKey) == typeof(char));
-                return (char)(object)value;
-            }
-
-            public UInt16PerfectHashDictionary(Dictionary<TKey, TValue> source) : base(EqualityComparer<TKey>.Default)
+            public UInt16PerfectHashDictionary(Dictionary<TKey, TValue> source, uint multiplier, char[] hashEntries) : base(EqualityComparer<TKey>.Default)
             {
                 Debug.Assert(ReferenceEquals(source.Comparer, EqualityComparer<TKey>.Default));
-                Debug.Assert(source.Count != 0);
+
+                _multiplier = multiplier;
+                _hashEntries = hashEntries;
 
                 _keys = new TKey[source.Count];
-
-                char[] charKeys = ArrayPool<char>.Shared.Rent(_keys.Length);
-                int index = 0;
-                int maxKey = int.MinValue;
-
-                foreach ((TKey key, _) in source)
-                {
-                    _keys[index] = key;
-                    charKeys[index++] = ToChar(key);
-                    maxKey = Math.Max(maxKey, ToChar(key));
-                }
-
-                PerfectHashCharLookup.Initialize(charKeys.AsSpan(0, _keys.Length), maxKey, out _multiplier, out _hashEntries);
-
-                ArrayPool<char>.Shared.Return(charKeys);
-
                 _valueEntries = new TValue[_hashEntries.Length];
+
+                int count = 0;
 
                 foreach ((TKey key, TValue value) in source)
                 {
+                    _keys[count++] = key;
                     Unsafe.AsRef(in GetValueRefOrNullRefCore(key)) = value;
                 }
             }
@@ -105,8 +118,15 @@ namespace System.Collections.Frozen
             private protected override int CountCore => _keys.Length;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private protected override ref readonly TValue GetValueRefOrNullRefCore(TKey key) =>
-                ref PerfectHashCharLookup.GetValueRefOrNullRef(_hashEntries, _multiplier, _valueEntries, ToChar(key));
+            private protected override ref readonly TValue GetValueRefOrNullRefCore(TKey key)
+            {
+                if (PerfectHashIntegralFrozenSet.IsInUInt16Range<TKey, TKeyUnderlying>(key))
+                {
+                    return ref PerfectHashCharLookup.GetValueRefOrNullRef(_hashEntries, _multiplier, _valueEntries, PerfectHashIntegralFrozenSet.ToChar<TKey, TKeyUnderlying>(key));
+                }
+
+                return ref Unsafe.NullRef<TValue>();
+            }
         }
 
         private sealed class DebuggerProxy<TKey, TKeyUnderlying, TValue>(IReadOnlyDictionary<TKey, TValue> dictionary) :

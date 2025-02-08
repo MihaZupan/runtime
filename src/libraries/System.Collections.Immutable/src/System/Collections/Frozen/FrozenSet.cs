@@ -87,7 +87,7 @@ namespace System.Collections.Frozen
             }
 
 #if NET
-            if (typeof(T).IsValueType && sizeof(T) <= sizeof(int) && EqualityComparer<T>.Default.Equals(comparer))
+            if (typeof(T).IsValueType && sizeof(T) <= sizeof(long) && EqualityComparer<T>.Default.Equals(comparer))
             {
                 // We'll replace 'source' if needed to avoid enumerating an arbitrary IEnumerable multiple times.
                 ReadOnlySpan<T> span = GetSpanFromEnumerable(ref source);
@@ -264,7 +264,7 @@ namespace System.Collections.Frozen
             return new DefaultFrozenSet<T>(source);
         }
 
-#if NET8
+#if NET
         private static ReadOnlySpan<T> GetSpanFromEnumerable<T>(ref IEnumerable<T> enumerable)
         {
             if (typeof(T) == typeof(char) && enumerable is string s)
