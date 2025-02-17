@@ -24,7 +24,7 @@ namespace System.Net.Http
         public static Interop.WinHttp.WINHTTP_STATUS_CALLBACK StaticCallbackDelegate =
             new Interop.WinHttp.WINHTTP_STATUS_CALLBACK(WinHttpCallback);
 
-        private static bool CertificateCachingAppContextSwitchEnabled = AppContext.TryGetSwitch("System.Net.Http.UseWinHttpCertificateCaching", out bool certificateCachingEnabled) && certificateCachingEnabled;
+        private static bool CertificateCachingAppContextSwitchEnabled = !AppContext.TryGetSwitch("System.Net.Http.UseWinHttpCertificateCaching", out _);
 
         public static void WinHttpCallback(
             IntPtr handle,
