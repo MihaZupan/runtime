@@ -1175,11 +1175,6 @@ namespace System
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool NegateIfNeeded<TNegator>(bool result)
-            where TNegator : struct, SpanHelpers.INegator<short> =>
-            typeof(TNegator) == typeof(SpanHelpers.DontNegate<short>) ? result : !result;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> NegateIfNeeded<TNegator>(Vector128<byte> result)
             where TNegator : struct, SpanHelpers.INegator<short> =>
             typeof(TNegator) == typeof(SpanHelpers.DontNegate<short>) ? result : ~result;

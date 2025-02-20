@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace System.Buffers
 {
@@ -49,5 +50,8 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<byte> span) =>
             span.LastIndexOfAnyExceptInRange(_lowInclusive, _highInclusive);
+
+        internal override int CountOfAny(ReadOnlySpan<byte> span) =>
+            SpanHelpers.CountOfAnyInRangeUnsignedNumber(ref MemoryMarshal.GetReference(span), _lowInclusive, _highInclusive, span.Length);
     }
 }

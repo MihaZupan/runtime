@@ -3841,5 +3841,80 @@ namespace System
 
             return count;
         }
+
+        public static unsafe int CountOfAnyInRangeUnsignedNumber<T>(ref T current, T lowInclusive, T rangeInclusive, int length)
+            where T : struct, IUnsignedNumber<T>, IComparisonOperators<T, T, bool>
+        {
+            int count = 0;
+            ref T end = ref Unsafe.Add(ref current, length);
+
+            if (Vector128.IsHardwareAccelerated && length >= Vector128<T>.Count)
+            {
+                if (Vector512.IsHardwareAccelerated && length >= Vector512<T>.Count)
+                {
+                    Vector512<T> lowVector = Vector512.Create(lowInclusive);
+                    Vector512<T> rangeVector = Vector512.Create(rangeInclusive);
+                    ref T oneVectorAwayFromEnd = ref Unsafe.Subtract(ref end, Vector512<T>.Count);
+                    while (Unsafe.IsAddressLessThan(ref current, ref oneVectorAwayFromEnd))
+                    {
+                        count += BitOperations.PopCount(Vector512.LessThanOrEqual(Vector512.LoadUnsafe(ref current) - lowVector, rangeVector).ExtractMostSignificantBits());
+                        current = ref Unsafe.Add(ref current, Vector512<T>.Count);
+                    }
+
+                    // Count the last vector and mask off the elements that were already counted (number of elements between oneVectorAwayFromEnd and current).
+                    ulong mask = Vector512.LessThanOrEqual(Vector512.LoadUnsafe(ref oneVectorAwayFromEnd) - lowVector, rangeVector).ExtractMostSignificantBits();
+                    mask >>= (int)((nuint)Unsafe.ByteOffset(ref oneVectorAwayFromEnd, ref current) / (uint)sizeof(T));
+                    count += BitOperations.PopCount(mask);
+                }
+                else if (Vector256.IsHardwareAccelerated && length >= Vector256<T>.Count)
+                {
+                    Vector256<T> lowVector = Vector256.Create(lowInclusive);
+                    Vector256<T> rangeVector = Vector256.Create(rangeInclusive);
+                    ref T oneVectorAwayFromEnd = ref Unsafe.Subtract(ref end, Vector256<T>.Count);
+                    while (Unsafe.IsAddressLessThan(ref current, ref oneVectorAwayFromEnd))
+                    {
+                        count += BitOperations.PopCount(Vector256.LessThanOrEqual(Vector256.LoadUnsafe(ref current) - lowVector, rangeVector).ExtractMostSignificantBits());
+                        current = ref Unsafe.Add(ref current, Vector256<T>.Count);
+                    }
+
+                    // Count the last vector and mask off the elements that were already counted (number of elements between oneVectorAwayFromEnd and current).
+                    uint mask = Vector256.LessThanOrEqual(Vector256.LoadUnsafe(ref oneVectorAwayFromEnd) - lowVector, rangeVector).ExtractMostSignificantBits();
+                    mask >>= (int)((nuint)Unsafe.ByteOffset(ref oneVectorAwayFromEnd, ref current) / (uint)sizeof(T));
+                    count += BitOperations.PopCount(mask);
+                }
+                else
+                {
+                    Vector128<T> lowVector = Vector128.Create(lowInclusive);
+                    Vector128<T> rangeVector = Vector128.Create(rangeInclusive);
+                    ref T oneVectorAwayFromEnd = ref Unsafe.Subtract(ref end, Vector128<T>.Count);
+                    while (Unsafe.IsAddressLessThan(ref current, ref oneVectorAwayFromEnd))
+                    {
+                        count += BitOperations.PopCount(Vector128.LessThanOrEqual(Vector128.LoadUnsafe(ref current) - lowVector, rangeVector).ExtractMostSignificantBits());
+                        current = ref Unsafe.Add(ref current, Vector128<T>.Count);
+                    }
+
+                    // Count the last vector and mask off the elements that were already counted (number of elements between oneVectorAwayFromEnd and current).
+                    uint mask = Vector128.LessThanOrEqual(Vector128.LoadUnsafe(ref oneVectorAwayFromEnd) - lowVector, rangeVector).ExtractMostSignificantBits();
+                    mask >>= (int)((nuint)Unsafe.ByteOffset(ref oneVectorAwayFromEnd, ref current) / (uint)sizeof(T));
+                    count += BitOperations.PopCount(mask);
+                }
+            }
+            else
+            {
+                T highInclusive = lowInclusive + rangeInclusive;
+
+                while (Unsafe.IsAddressLessThan(ref current, ref end))
+                {
+                    if ((current - lowInclusive) <= rangeInclusive)
+                    {
+                        count++;
+                    }
+
+                    current = ref Unsafe.Add(ref current, 1);
+                }
+            }
+
+            return count;
+        }
     }
 }

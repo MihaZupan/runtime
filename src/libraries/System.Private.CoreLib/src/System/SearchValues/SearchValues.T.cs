@@ -42,6 +42,21 @@ namespace System.Buffers
         internal virtual bool ContainsAny(ReadOnlySpan<T> span) => IndexOfAny(span) >= 0;
         internal virtual bool ContainsAnyExcept(ReadOnlySpan<T> span) => IndexOfAnyExcept(span) >= 0;
 
+        internal virtual int CountOfAny(ReadOnlySpan<T> span)
+        {
+            int count = 0;
+
+            foreach (T value in span)
+            {
+                if (Contains(value))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
         // This is only implemented and used by SearchValues<string>.
         internal virtual int IndexOfAnyMultiString(ReadOnlySpan<char> span) => throw new UnreachableException();
 

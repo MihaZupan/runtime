@@ -87,5 +87,13 @@ namespace System.Buffers
         internal override bool ContainsAnyExcept(ReadOnlySpan<char> span) =>
             IndexOfAnyAsciiSearcher.ContainsAny<IndexOfAnyAsciiSearcher.Negate, TOptimizations, TUniqueLowNibble>(
                 ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, ref _state);
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override int CountOfAny(ReadOnlySpan<char> span) =>
+            IndexOfAnyAsciiSearcher.CountOfAny<TOptimizations, TUniqueLowNibble>(
+                ref Unsafe.As<char, short>(ref MemoryMarshal.GetReference(span)), span.Length, ref _state);
     }
 }

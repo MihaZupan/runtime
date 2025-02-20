@@ -295,6 +295,9 @@ namespace System
         public static int Count<T>(this System.Span<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static int Count<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static int Count<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value, System.Collections.Generic.IEqualityComparer<T>? comparer = null) { throw null; }
+        public static int CountOfAny<T>(this System.ReadOnlySpan<T> span, params System.ReadOnlySpan<T> values) where T : System.IEquatable<T>? { throw null; }
+        public static int CountOfAny<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> values, System.Collections.Generic.IEqualityComparer<T>? comparer = null) { throw null; }
+        public static int CountOfAny<T>(this System.ReadOnlySpan<T> span, System.Buffers.SearchValues<T> values) where T : System.IEquatable<T>? { throw null; }
         public static bool EndsWith(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> value, System.StringComparison comparisonType) { throw null; }
         public static bool EndsWith<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value) where T : System.IEquatable<T>? { throw null; }
         public static bool EndsWith<T>(this System.ReadOnlySpan<T> span, System.ReadOnlySpan<T> value, System.Collections.Generic.IEqualityComparer<T>? comparer = null) { throw null; }

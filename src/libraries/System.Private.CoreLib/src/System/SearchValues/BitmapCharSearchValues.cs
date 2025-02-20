@@ -104,5 +104,18 @@ namespace System.Buffers
 
             return searchSpaceLength;
         }
+
+        internal override int CountOfAny(ReadOnlySpan<char> span)
+        {
+            int count = 0;
+            uint[] bitmap = _bitmap;
+
+            foreach (char c in span)
+            {
+                count += Contains(bitmap, c) ? 1 : 0;
+            }
+
+            return count;
+        }
     }
 }

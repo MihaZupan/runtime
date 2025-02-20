@@ -46,5 +46,9 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<T> span) =>
             SpanHelpers.LastIndexOfAnyExceptValueType(ref Unsafe.As<T, TImpl>(ref MemoryMarshal.GetReference(span)), _e0, span.Length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override int CountOfAny(ReadOnlySpan<T> span) =>
+            SpanHelpers.CountValueType(ref Unsafe.As<T, TImpl>(ref MemoryMarshal.GetReference(span)), _e0, span.Length);
     }
 }

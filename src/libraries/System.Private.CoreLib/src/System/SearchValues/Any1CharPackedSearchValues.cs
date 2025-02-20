@@ -38,5 +38,9 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int LastIndexOfAnyExcept(ReadOnlySpan<char> span) =>
             span.LastIndexOfAnyExcept(_e0);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override int CountOfAny(ReadOnlySpan<char> span) =>
+            span.Count(_e0);
     }
 }

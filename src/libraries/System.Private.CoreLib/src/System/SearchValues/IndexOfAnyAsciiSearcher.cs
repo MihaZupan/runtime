@@ -8,6 +8,8 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
+using static System.Buffers.IndexOfAnyAsciiSearcher;
+using static System.SpanHelpers;
 
 namespace System.Buffers
 {
@@ -544,6 +546,109 @@ namespace System.Buffers
             }
 
             return -1;
+        }
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd))]
+        [CompExactlyDependsOn(typeof(PackedSimd))]
+        public static int CountOfAny<TOptimizations, TUniqueLowNibble>(ref short searchSpace, int searchSpaceLength, ref AsciiState state)
+            where TOptimizations : struct, IOptimizations
+            where TUniqueLowNibble : struct, SearchValues.IRuntimeConst
+        {
+            int count = 0;
+            ref short searchSpaceEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength);
+
+            if (searchSpaceLength < Vector128<ushort>.Count)
+            {
+                while (!Unsafe.AreSame(ref searchSpace, ref searchSpaceEnd))
+                {
+                    char c = (char)searchSpace;
+                    count += state.Lookup.Contains256(c) ? 1 : 0;
+                    searchSpace = ref Unsafe.Add(ref searchSpace, 1);
+                }
+            }
+            else if (Avx2.IsSupported && searchSpaceLength > 2 * Vector128<short>.Count)
+            {
+                Vector256<byte> bitmap256 = state.Bitmap;
+
+                if (searchSpaceLength > 2 * Vector256<short>.Count)
+                {
+                    ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector256<short>.Count));
+
+                    do
+                    {
+                        Vector256<short> source0 = Vector256.LoadUnsafe(ref searchSpace);
+                        Vector256<short> source1 = Vector256.LoadUnsafe(ref searchSpace, (nuint)Vector256<short>.Count);
+
+                        Vector256<byte> result = IndexOfAnyLookup<DontNegate, TOptimizations, TUniqueLowNibble>(source0, source1, bitmap256);
+                        count += BitOperations.PopCount(DontNegate.ExtractMask(result));
+
+                        searchSpace = ref Unsafe.Add(ref searchSpace, 2 * Vector256<short>.Count);
+                    }
+                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref twoVectorsAwayFromEnd));
+                }
+
+                // TODO: overlapped 256
+
+                Vector256<T> targetVector = Vector256.Create(value);
+                ref T oneVectorAwayFromEnd = ref Unsafe.Subtract(ref end, Vector256<T>.Count);
+                while (Unsafe.IsAddressLessThan(ref current, ref oneVectorAwayFromEnd))
+                {
+                    count += BitOperations.PopCount(Vector256.Equals(Vector256.LoadUnsafe(ref current), targetVector).ExtractMostSignificantBits());
+                    current = ref Unsafe.Add(ref current, Vector256<T>.Count);
+                }
+
+                // Count the last vector and mask off the elements that were already counted (number of elements between oneVectorAwayFromEnd and current).
+                uint mask = Vector256.Equals(Vector256.LoadUnsafe(ref oneVectorAwayFromEnd), targetVector).ExtractMostSignificantBits();
+                mask >>= (int)((nuint)Unsafe.ByteOffset(ref oneVectorAwayFromEnd, ref current) / (uint)sizeof(T));
+                count += BitOperations.PopCount(mask);
+            }
+            else
+            {
+                Vector128<byte> bitmap = state.Bitmap._lower;
+
+                if (searchSpaceLength > 2 * Vector128<short>.Count)
+                {
+                    ref short twoVectorsAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - (2 * Vector128<short>.Count));
+
+                    do
+                    {
+                        Vector128<short> source0 = Vector128.LoadUnsafe(ref searchSpace);
+                        Vector128<short> source1 = Vector128.LoadUnsafe(ref searchSpace, (nuint)Vector128<short>.Count);
+
+                        Vector128<byte> result = IndexOfAnyLookup<DontNegate, TOptimizations, TUniqueLowNibble>(source0, source1, bitmap);
+                        count += BitOperations.PopCount(DontNegate.ExtractMask(result));
+
+                        searchSpace = ref Unsafe.Add(ref searchSpace, 2 * Vector128<short>.Count);
+                    }
+                    while (Unsafe.IsAddressLessThan(ref searchSpace, ref twoVectorsAwayFromEnd));
+                }
+
+                // We have 1-16 characters remaining. Process the first and last vector in the search space.
+                // They may overlap, but we'll handle that by masking off any matches that we've already counted.
+                Debug.Assert(searchSpaceLength >= Vector128<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
+                {
+                    ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector128<short>.Count);
+
+                    ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref searchSpace, ref oneVectorAwayFromEnd)
+                        ? ref oneVectorAwayFromEnd
+                        : ref searchSpace;
+
+                    Vector128<short> source0 = Vector128.LoadUnsafe(ref firstVector);
+                    Vector128<short> source1 = Vector128.LoadUnsafe(ref oneVectorAwayFromEnd);
+
+                    Vector128<byte> result = IndexOfAnyLookup<DontNegate, TOptimizations, TUniqueLowNibble>(source0, source1, bitmap);
+
+                    // Mask off the elements that were already counted (number of elements between oneVectorAwayFromEnd and searchSpace).
+
+                    // TODO: Make this calculatuion work for overlapped
+                    uint mask = DontNegate.ExtractMask(result);
+                    mask >>= (int)((nuint)Unsafe.ByteOffset(ref oneVectorAwayFromEnd, ref firstVector) / sizeof(short));
+                    count += BitOperations.PopCount(mask);
+                }
+            }
+
+            return count;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1308,6 +1413,20 @@ namespace System.Buffers
 
             // We matched within the second vector
             return offsetInVector - Vector256<short>.Count + (int)((nuint)Unsafe.ByteOffset(ref searchSpace, ref secondVector) / (nuint)sizeof(T));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int PopCount(Vector128<byte> result)
+        {
+            uint mask = DontNegate.ExtractMask(result);
+            return BitOperations.PopCount(mask);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int PopCount(Vector256<byte> result)
+        {
+            uint mask = DontNegate.ExtractMask(result);
+            return BitOperations.PopCount(mask);
         }
 
         internal interface INegator

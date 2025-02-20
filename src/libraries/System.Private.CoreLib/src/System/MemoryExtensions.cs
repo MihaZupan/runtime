@@ -5459,6 +5459,153 @@ namespace System
             }
         }
 
+        /// <summary>
+        /// Counts all occurrences of any of the specified values in the span.
+        /// </summary>
+        /// <typeparam name="T">The type of the values to compare.</typeparam>
+        /// <param name="span">The source span to search.</param>
+        /// <param name="values">The set of values to count occurrences of.</param>
+        /// <returns>The number of occurrences of any value in <paramref name="values"/> that appears in the span.</returns>
+        public static int CountOfAny<T>(this ReadOnlySpan<T> span, ReadOnlySpan<T> values) where T : IEquatable<T>?
+        {
+            if (values.Length == 0)
+            {
+                return 0;
+            }
+
+            if (values.Length == 1)
+            {
+                return span.Count(values[0]);
+            }
+
+            int count = 0;
+
+            for (int i = 0; i < span.Length; i++)
+            {
+                if (values.Contains(span[i]))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Counts all occurrences of any of the specified values in the span.
+        /// </summary>
+        /// <typeparam name="T">The type of the values to compare.</typeparam>
+        /// <param name="span">The source span to search.</param>
+        /// <param name="values">The set of values to count occurrences of.</param>
+        /// <param name="comparer">The <see cref="IEqualityComparer{T}"/> implementation to use when comparing elements, or <see langword="null"/> to use the default <see cref="IEqualityComparer{T}"/> for the type of an element.</param>
+        /// <returns>The number of occurrences of any value in <paramref name="values"/> that appears in the span.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int CountOfAny<T>(this ReadOnlySpan<T> span, ReadOnlySpan<T> values, IEqualityComparer<T>? comparer = null)
+        {
+            if (typeof(T).IsValueType && (comparer is null || comparer == EqualityComparer<T>.Default))
+            {
+                if (RuntimeHelpers.IsBitwiseEquatable<T>())
+                {
+                    if (sizeof(T) == sizeof(byte))
+                    {
+                        return CountOfAny(
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<byte>>(span),
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<byte>>(values));
+                    }
+                    else if (sizeof(T) == sizeof(short))
+                    {
+                        return CountOfAny(
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<short>>(span),
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<short>>(values));
+                    }
+                    else if (sizeof(T) == sizeof(int))
+                    {
+                        return CountOfAny(
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<int>>(span),
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<int>>(values));
+                    }
+                    else if (sizeof(T) == sizeof(long))
+                    {
+                        return CountOfAny(
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<long>>(span),
+                            Unsafe.BitCast<ReadOnlySpan<T>, ReadOnlySpan<long>>(values));
+                    }
+                }
+
+                return CountOfAnyDefaultComparer(span, values);
+                static int CountOfAnyDefaultComparer(ReadOnlySpan<T> span, ReadOnlySpan<T> values)
+                {
+                    if (values.Length == 0)
+                    {
+                        return 0;
+                    }
+
+                    int count = 0;
+
+                    foreach (T item in span)
+                    {
+                        for (int i = 0; i < values.Length; i++)
+                        {
+                            if (EqualityComparer<T>.Default.Equals(values[i], item))
+                            {
+                                count++;
+                                break;
+                            }
+                        }
+                    }
+
+                    return count;
+                }
+            }
+            else
+            {
+                return CountOfAnyComparer(span, values, comparer);
+                static int CountOfAnyComparer(ReadOnlySpan<T> span, ReadOnlySpan<T> values, IEqualityComparer<T>? comparer)
+                {
+                    if (values.Length == 0)
+                    {
+                        return 0;
+                    }
+
+                    comparer ??= EqualityComparer<T>.Default;
+
+                    int count = 0;
+
+                    foreach (T item in span)
+                    {
+                        for (int i = 0; i < values.Length; i++)
+                        {
+                            if (comparer.Equals(values[i], item))
+                            {
+                                count++;
+                                break;
+                            }
+                        }
+                    }
+
+                    return count;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Counts all occurrences of any of the specified values in the span.
+        /// </summary>
+        /// <typeparam name="T">The type of the values to compare.</typeparam>
+        /// <param name="span">The source span to search.</param>
+        /// <param name="values">The set of values to count occurrences of.</param>
+        /// <returns>The number of occurrences of any value in <paramref name="values"/> that appears in the span.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int CountOfAny<T>(this ReadOnlySpan<T> span, SearchValues<T> values) where T : IEquatable<T>?
+        {
+            if (values is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.values);
+            }
+
+            return values.CountOfAny(span);
+        }
+
         /// <summary>Writes the specified interpolated string to the character span.</summary>
         /// <param name="destination">The span to which the interpolated string should be formatted.</param>
         /// <param name="handler">The interpolated string.</param>
