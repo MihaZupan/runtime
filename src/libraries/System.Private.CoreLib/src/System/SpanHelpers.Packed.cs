@@ -178,7 +178,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we're only interested in whether any value matched.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector512<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -228,7 +228,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we're only interested in whether any value matched.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector256<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -286,7 +286,7 @@ namespace System
                     // We have 1-16 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we're only interested in whether any value matched.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector128<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -377,7 +377,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector512<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -428,7 +428,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector256<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -488,7 +488,7 @@ namespace System
                     // We have 1-16 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector128<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -588,7 +588,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector512<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -641,7 +641,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector256<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -702,7 +702,7 @@ namespace System
                     // We have 1-16 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector128<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -804,7 +804,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector512<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -858,7 +858,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector256<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -920,7 +920,7 @@ namespace System
                     // We have 1-16 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector128<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -1002,7 +1002,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector512<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector512<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -1054,7 +1054,7 @@ namespace System
                     // We have 1-32 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector256<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector256<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd
@@ -1115,7 +1115,7 @@ namespace System
                     // We have 1-16 characters remaining. Process the first and last vector in the search space.
                     // They may overlap, but we'll handle that in the index calculation if we do get a match.
                     {
-                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, length - Vector128<short>.Count);
+                        ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)length - (nuint)Vector128<short>.Count);
 
                         ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                             ? ref oneVectorAwayFromEnd

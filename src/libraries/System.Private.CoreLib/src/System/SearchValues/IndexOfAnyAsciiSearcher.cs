@@ -344,7 +344,7 @@ namespace System.Buffers
                 // They may overlap, but we'll handle that in the index calculation if we do get a match.
                 Debug.Assert(searchSpaceLength >= Vector256<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
                 {
-                    ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector256<short>.Count);
+                    ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)Vector256<short>.Count);
 
                     ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                         ? ref oneVectorAwayFromEnd
@@ -397,7 +397,7 @@ namespace System.Buffers
             // They may overlap, but we'll handle that in the index calculation if we do get a match.
             Debug.Assert(searchSpaceLength >= Vector128<short>.Count, "We expect that the input is long enough for us to load a whole vector.");
             {
-                ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector128<short>.Count);
+                ref short oneVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)Vector128<short>.Count);
 
                 ref short firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref oneVectorAwayFromEnd)
                     ? ref oneVectorAwayFromEnd
@@ -626,7 +626,7 @@ namespace System.Buffers
                 // They may overlap, but we'll handle that in the index calculation if we do get a match.
                 Debug.Assert(searchSpaceLength >= Vector128<byte>.Count, "We expect that the input is long enough for us to load a Vector128.");
                 {
-                    ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector128<byte>.Count);
+                    ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)Vector128<byte>.Count);
 
                     ref byte firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref halfVectorAwayFromEnd)
                         ? ref halfVectorAwayFromEnd
@@ -675,7 +675,7 @@ namespace System.Buffers
             // They may overlap, but we'll handle that in the index calculation if we do get a match.
             Debug.Assert(searchSpaceLength >= sizeof(ulong), "We expect that the input is long enough for us to load a ulong.");
             {
-                ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - sizeof(ulong));
+                ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)sizeof(ulong));
 
                 ref byte firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref halfVectorAwayFromEnd)
                     ? ref halfVectorAwayFromEnd
@@ -898,7 +898,7 @@ namespace System.Buffers
                 // They may overlap, but we'll handle that in the index calculation if we do get a match.
                 Debug.Assert(searchSpaceLength >= Vector128<byte>.Count, "We expect that the input is long enough for us to load a Vector128.");
                 {
-                    ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - Vector128<byte>.Count);
+                    ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)Vector128<byte>.Count);
 
                     ref byte firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref halfVectorAwayFromEnd)
                         ? ref halfVectorAwayFromEnd
@@ -950,7 +950,7 @@ namespace System.Buffers
             // They may overlap, but we'll handle that in the index calculation if we do get a match.
             Debug.Assert(searchSpaceLength >= sizeof(ulong), "We expect that the input is long enough for us to load a ulong.");
             {
-                ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, searchSpaceLength - sizeof(ulong));
+                ref byte halfVectorAwayFromEnd = ref Unsafe.Add(ref searchSpace, (uint)searchSpaceLength - (nuint)sizeof(ulong));
 
                 ref byte firstVector = ref Unsafe.IsAddressGreaterThan(ref currentSearchSpace, ref halfVectorAwayFromEnd)
                     ? ref halfVectorAwayFromEnd

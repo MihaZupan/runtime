@@ -200,7 +200,7 @@ namespace System.Buffers
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationVector128);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
@@ -252,7 +252,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN2);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationAvx2);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
@@ -304,7 +304,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN2);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx512);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationAvx512);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN2);
 
@@ -359,7 +359,7 @@ namespace System.Buffers
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationVector128);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationVector128);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
@@ -429,7 +429,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN3);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx2);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationAvx2);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
@@ -484,7 +484,7 @@ namespace System.Buffers
             Debug.Assert(span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN3);
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
-            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, span.Length - CharsPerIterationAvx512);
+            ref char lastSearchSpaceStart = ref Unsafe.Add(ref searchSpace, (uint)span.Length - (nuint)CharsPerIterationAvx512);
 
             searchSpace = ref Unsafe.Add(ref searchSpace, MatchStartOffsetN3);
 
