@@ -280,9 +280,9 @@ namespace System.Buffers
                     }
                     else
                     {
-                        Vector128<ushort> result = Vector128.Equals(Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower(), state.Value256.GetLower());
-                        result &= Vector128.Equals(Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper(), state.Value256.GetUpper());
-                        return result == Vector128<ushort>.AllBitsSet;
+                        Vector128<ushort> result = (Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower()) ^ state.Value256.GetLower();
+                        result |= (Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper()) ^ state.Value256.GetUpper();
+                        return result == Vector128<ushort>.Zero;
                     }
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength4To8))
@@ -367,9 +367,9 @@ namespace System.Buffers
                     }
                     else
                     {
-                        Vector128<ushort> result = Vector128.Equals(Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower(), state.Value256.GetLower());
-                        result &= Vector128.Equals(Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper(), state.Value256.GetUpper());
-                        return result == Vector128<ushort>.AllBitsSet;
+                        Vector128<ushort> result = (Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower()) ^ state.Value256.GetLower();
+                        result |= (Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper()) ^ state.Value256.GetUpper();
+                        return result == Vector128<ushort>.Zero;
                     }
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength4To8))
