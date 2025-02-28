@@ -209,11 +209,20 @@ namespace System.Buffers
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength9To16))
                 {
-                    Vector256<ushort> input = Vector256.Create(
-                        Vector128.LoadUnsafe(ref matchStart),
-                        Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
+                    if (Vector256.IsHardwareAccelerated)
+                    {
+                        Vector256<ushort> input = Vector256.Create(
+                            Vector128.LoadUnsafe(ref matchStart),
+                            Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
 
-                    return input == state.Value256;
+                        return input == state.Value256;
+                    }
+                    else
+                    {
+                        return
+                            Vector128.LoadUnsafe(ref matchStart) == state.Value256.GetLower() &&
+                            Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) == state.Value256.GetUpper();
+                    }
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength4To8))
                 {
@@ -261,11 +270,20 @@ namespace System.Buffers
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength9To16))
                 {
-                    Vector256<ushort> input = Vector256.Create(
-                        Vector128.LoadUnsafe(ref matchStart),
-                        Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
+                    if (Vector256.IsHardwareAccelerated)
+                    {
+                        Vector256<ushort> input = Vector256.Create(
+                            Vector128.LoadUnsafe(ref matchStart),
+                            Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
 
-                    return (input & state.ToUpperMask256) == state.Value256;
+                        return (input & state.ToUpperMask256) == state.Value256;
+                    }
+                    else
+                    {
+                        return
+                            (Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower()) == state.Value256.GetLower() &&
+                            (Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper()) == state.Value256.GetUpper();
+                    }
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength4To8))
                 {
@@ -339,11 +357,20 @@ namespace System.Buffers
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength9To16))
                 {
-                    Vector256<ushort> input = Vector256.Create(
-                        Vector128.LoadUnsafe(ref matchStart),
-                        Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
+                    if (Vector256.IsHardwareAccelerated)
+                    {
+                        Vector256<ushort> input = Vector256.Create(
+                            Vector128.LoadUnsafe(ref matchStart),
+                            Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)));
 
-                    return (input & state.ToUpperMask256) == state.Value256;
+                        return (input & state.ToUpperMask256) == state.Value256;
+                    }
+                    else
+                    {
+                        return
+                            (Vector128.LoadUnsafe(ref matchStart) & state.ToUpperMask256.GetLower()) == state.Value256.GetLower() &&
+                            (Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref matchStart, state.SecondReadByteOffset)) & state.ToUpperMask256.GetUpper()) == state.Value256.GetUpper();
+                    }
                 }
                 else if (typeof(TValueLength) == typeof(ValueLength4To8))
                 {
