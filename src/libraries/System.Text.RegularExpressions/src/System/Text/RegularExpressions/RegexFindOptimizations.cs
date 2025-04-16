@@ -15,15 +15,15 @@ namespace System.Text.RegularExpressions
         /// <summary>Lookup table used for optimizing ASCII when doing set queries.</summary>
         private readonly uint[]?[]? _asciiLookups;
 
-        public static RegexFindOptimizations Create(RegexNode root, RegexOptions options)
+        public static RegexFindOptimizations Create(RegexNode root, RegexOptions options, string[]? alternationDictionary)
         {
-            RegexFindOptimizations opts = new(root, options, isLeadingPartial: false);
+            RegexFindOptimizations opts = new(root, options, alternationDictionary, isLeadingPartial: false);
 
             if ((options & RegexOptions.RightToLeft) == 0 &&
                 !opts.IsUseful &&
                 RegexPrefixAnalyzer.FindLeadingPositiveLookahead(root) is RegexNode positiveLookahead)
             {
-                RegexFindOptimizations positiveLookaheadOpts = new(positiveLookahead.Child(0), options, isLeadingPartial: true);
+                RegexFindOptimizations positiveLookaheadOpts = new(positiveLookahead.Child(0), options, alternationDictionary: null, isLeadingPartial: true);
 
                 // Fixups to incorporate relevant information from the original optimizations.
                 // - If the original has a larger minimum length than the lookahead, use it. Lookaheads don't currently factor into
@@ -42,13 +42,24 @@ namespace System.Text.RegularExpressions
         /// <summary>Creates optimization information for searching with the pattern represented by <paramref name="root"/>.</summary>
         /// <param name="root">The root of the pattern node tree.</param>
         /// <param name="options">Options used when creating the regex.</param>
+        /// <param name="alternationDictionary">TODO.</param>
         /// <param name="isLeadingPartial">true if <paramref name="root"/> may not represent the whole pattern, only a leading node in it.</param>
-        private RegexFindOptimizations(RegexNode root, RegexOptions options, bool isLeadingPartial)
+        private RegexFindOptimizations(RegexNode root, RegexOptions options, string[]? alternationDictionary, bool isLeadingPartial)
         {
             bool rightToLeft = (options & RegexOptions.RightToLeft) != 0;
             Debug.Assert(!isLeadingPartial || !rightToLeft, "RightToLeft unexpected when isLeadingPartial");
 
             MinRequiredLength = root.ComputeMinLength();
+
+            if (alternationDictionary is not null)
+            {
+                Debug.Assert(!rightToLeft);
+                LeadingPrefixes = alternationDictionary;
+                FindMode = (options & RegexOptions.IgnoreCase) == 0
+                    ? FindNextStartingPositionMode.LeadingStrings_LeftToRight
+                    : FindNextStartingPositionMode.LeadingStrings_OrdinalIgnoreCase_LeftToRight;
+                return;
+            }
 
             // Compute any anchor starting the expression.  If there is one, we won't need to search for anything,
             // as we can just match at that single location.

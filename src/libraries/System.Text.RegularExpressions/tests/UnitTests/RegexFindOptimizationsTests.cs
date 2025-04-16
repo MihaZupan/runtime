@@ -188,7 +188,7 @@ namespace System.Text.RegularExpressions.Tests
         private static RegexFindOptimizations ComputeOptimizations(string pattern, RegexOptions options)
         {
             RegexTree tree = RegexParser.Parse(pattern, options, CultureInfo.InvariantCulture);
-            return RegexFindOptimizations.Create(tree.Root, options);
+            return RegexFindOptimizations.Create(tree.Root, options, alternationDictionary: null);
         }
     }
 }

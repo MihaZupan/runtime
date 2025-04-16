@@ -130,7 +130,9 @@ namespace System.Text.RegularExpressions
                 }
             }
 
-            return new RegexTree(root, captureCount, parser._capnamelist?.ToArray(), parser._capnames!, sparseMapping, options, parser._hasIgnoreCaseBackreferenceNodes ? culture : null);
+            string[]? dictionary = parser.TryScanLargeDictionaryAlternation();
+
+            return new RegexTree(root, captureCount, parser._capnamelist?.ToArray(), parser._capnames!, sparseMapping, options, parser._hasIgnoreCaseBackreferenceNodes ? culture : null, dictionary);
         }
 
         /// <summary>This static call constructs a flat concatenation node given a replacement pattern.</summary>
@@ -513,6 +515,59 @@ namespace System.Text.RegularExpressions
             AddGroup();
 
             return _unit!.FinalOptimize();
+        }
+
+        private string[]? TryScanLargeDictionaryAlternation()
+        {
+            const RegexOptions Disallowed = RegexOptions.RightToLeft | RegexOptions.NonBacktracking | RegexOptions.IgnorePatternWhitespace;
+
+            if ((_options & (RegexOptions.Compiled | Disallowed)) != RegexOptions.Compiled ||
+                _pattern.Length < 1_000 ||
+                _capcount != 1)
+            {
+                return null;
+            }
+
+            Debug.Assert(_pos != 0);
+            _pos = 0;
+
+            ValueListBuilder<(int Start, int Length)> alternations = default;
+            string[]? dictionary = null;
+
+            while (_pos < _pattern.Length)
+            {
+                ScanBlank();
+
+                int start = _pos;
+
+                char ch;
+                while (_pos < _pattern.Length && (!IsSpecial(ch = _pattern[_pos]) || (ch == '{' && !IsTrueQuantifier())))
+                    _pos++;
+
+                if (_pos != _pattern.Length && _pattern[_pos] != '|')
+                {
+                    goto ResetAndReturn;
+                }
+
+                alternations.Append((start, _pos - start));
+                _pos++;
+            }
+
+            if (alternations.Length >= 100)
+            {
+                dictionary = new string[alternations.Length];
+
+                for (int i = 0; i < dictionary.Length; i++)
+                {
+                    (int start, int length) = alternations[i];
+                    dictionary[i] = _pattern.Substring(start, length);
+                }
+            }
+
+        ResetAndReturn:
+            alternations.Dispose();
+            _pos = 0;
+            return dictionary;
         }
 
         /// <summary>Simple parsing for replacement patterns</summary>

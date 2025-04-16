@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions.Generator;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.VisualStudio.TestPlatform.TestHost;
 using Xunit;
 
 namespace System.Text.RegularExpressions.Tests
@@ -23,6 +25,24 @@ namespace System.Text.RegularExpressions.Tests
         // This exists to ensure we're aware of any egregious breaks to formatting / readability.
         // Any updates that impact the generated code in these baselines will need to be updated
         // as changes are made to the code emitted by the generator.
+
+        [Fact]
+        public async Task Test()
+        {
+            string[] values = File.ReadAllLines(@"C:\Users\mihaz\Downloads\length-15.txt");
+
+            string result = await RegexGeneratorHelper.GenerateSourceText(
+                $$"""
+                using System.Text.RegularExpressions;
+                partial class C
+                {
+                    [GeneratedRegex(@"{{SymbolDisplay.FormatLiteral(string.Join('|', values), false)}}")]
+                    public static partial Regex Test();
+                }
+                """, allowUnsafe: true, checkOverflow: false);
+
+            Console.WriteLine(result);
+        }
 
         [Theory]
         [MemberData(nameof(ValidateExpectedOutput_MemberData))]

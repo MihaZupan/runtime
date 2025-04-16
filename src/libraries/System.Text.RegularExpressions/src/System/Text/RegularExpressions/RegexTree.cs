@@ -40,7 +40,7 @@ namespace System.Text.RegularExpressions
         /// </remarks>
         public readonly Hashtable? CaptureNumberSparseMapping;
 
-        internal RegexTree(RegexNode root, int captureCount, string[]? captureNames, Hashtable? captureNameToNumberMapping, Hashtable? captureNumberSparseMapping, RegexOptions options, CultureInfo? culture)
+        internal RegexTree(RegexNode root, int captureCount, string[]? captureNames, Hashtable? captureNameToNumberMapping, Hashtable? captureNumberSparseMapping, RegexOptions options, CultureInfo? culture, string[]? alternationDictionary)
         {
 #if DEBUG
             // Asserts to both demonstrate and validate the relationships between the various capture data structures.
@@ -49,6 +49,7 @@ namespace System.Text.RegularExpressions
             Debug.Assert(captureNames is null || captureCount == captureNames.Length);
             Debug.Assert(captureNumberSparseMapping is null || captureCount == captureNumberSparseMapping.Count);
             Debug.Assert(captureNameToNumberMapping is null || captureCount == captureNameToNumberMapping.Count);
+
             if (captureNames is not null)
             {
                 Debug.Assert(captureNameToNumberMapping is not null);
@@ -77,7 +78,7 @@ namespace System.Text.RegularExpressions
             CaptureNameToNumberMapping = captureNameToNumberMapping;
             CaptureNames = captureNames;
             Options = options;
-            FindOptimizations = RegexFindOptimizations.Create(root, options);
+            FindOptimizations = RegexFindOptimizations.Create(root, options, alternationDictionary);
         }
     }
 }
