@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 #if SYSTEM_PRIVATE_CORELIB
@@ -463,5 +464,14 @@ namespace System
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // 239
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF  // 255
         ];
+
+        private static readonly SearchValues<char> s_hexLowerChars = SearchValues.Create("0123456789abcdef");
+
+        public static bool IsHexLower(ReadOnlySpan<char> chars)
+        {
+            Debug.Assert(chars.Length % 2 == 0);
+
+            return !chars.ContainsAnyExcept(s_hexLowerChars);
+        }
     }
 }

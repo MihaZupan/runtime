@@ -127,6 +127,10 @@ System.Diagnostics.DiagnosticSource</PackageDescription>
     <Compile Include="$(CoreLibSharedDir)System\Diagnostics\CodeAnalysis\RequiresUnreferencedCodeAttribute.cs" />
     <Compile Include="$(CoreLibSharedDir)System\Diagnostics\CodeAnalysis\UnconditionalSuppressMessageAttribute.cs" />
     <Compile Include="$(CoreLibSharedDir)System\Runtime\CompilerServices\IsExternalInit.cs" />
+
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Buffers\SearchValuesPolyfills.cs" Link="Common\System\Buffers\SearchValuesPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Text\AsciiPolyfills.cs" Link="Common\System\Text\AsciiPolyfills.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp' or $([MSBuild]::VersionLessThan('$(TargetFrameworkVersion)', '9.0'))">

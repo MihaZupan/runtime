@@ -2026,6 +2026,7 @@ namespace System.Diagnostics
             for (int i = 0; i < outBytes.Length; i++)
                 outBytes[i] = HexByteFromChars(charData[i * 2], charData[i * 2 + 1]);
         }
+
         internal static byte HexByteFromChars(char char1, char char2)
         {
             int hi = HexConverter.FromLowerChar(char1);
@@ -2041,23 +2042,7 @@ namespace System.Diagnostics
         internal static bool IsLowerCaseHexAndNotAllZeros(ReadOnlySpan<char> idData)
         {
             // Verify lower-case hex and not all zeros https://w3c.github.io/trace-context/#field-value
-            bool isNonZero = false;
-            int i = 0;
-            for (; i < idData.Length; i++)
-            {
-                char c = idData[i];
-                if (!HexConverter.IsHexLowerChar(c))
-                {
-                    return false;
-                }
-
-                if (c != '0')
-                {
-                    isNonZero = true;
-                }
-            }
-
-            return isNonZero;
+            return HexConverter.IsHexLower(idData) && idData.ContainsAnyExcept('0');
         }
     }
 
