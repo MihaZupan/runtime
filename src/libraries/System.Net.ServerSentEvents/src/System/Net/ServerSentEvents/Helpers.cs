@@ -53,6 +53,6 @@ namespace System.Net.ServerSentEvents
         }
 
         public static bool ContainsLineBreaks(this ReadOnlySpan<char> text) =>
-            text.IndexOfAny('\r', '\n') >= 0;
+            text.ContainsAny('\r', '\n');
     }
 }

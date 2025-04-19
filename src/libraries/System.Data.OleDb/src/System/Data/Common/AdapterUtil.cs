@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
@@ -1005,22 +1006,27 @@ namespace System.Data.Common
             return resultString.ToString();
         }
 
+        // note special characters list is from character escapes
+        // in the MSDN regular expression language elements documentation
+        // added ] since escaping it seems necessary
+        private static readonly SearchValues<char> s_specialChars = SearchValues.Create(".$^{[(|)*+?\\]");
+
         internal static void EscapeSpecialCharacters(string unescapedString, StringBuilder escapedString)
         {
-            // note special characters list is from character escapes
-            // in the MSDN regular expression language elements documentation
-            // added ] since escaping it seems necessary
-            const string specialCharacters = ".$^{[(|)*+?\\]";
+            if (!unescapedString.ContainsAny(s_specialChars))
+            {
+                escapedString.Append(unescapedString);
+                return;
+            }
 
             foreach (char currentChar in unescapedString)
             {
-                if (specialCharacters.IndexOf(currentChar) >= 0)
+                if (s_specialChars.Contains(currentChar))
                 {
                     escapedString.Append('\\');
                 }
                 escapedString.Append(currentChar);
             }
-            return;
         }
 
         internal static string GetFullPath(string filename)

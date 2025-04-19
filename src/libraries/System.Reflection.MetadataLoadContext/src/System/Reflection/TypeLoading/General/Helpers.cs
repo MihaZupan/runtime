@@ -116,7 +116,7 @@ namespace System.Reflection.TypeLoading
 
         public static bool TypeNameContainsTypeParserMetacharacters(this string identifier)
         {
-            return identifier.AsSpan().IndexOfAny(s_charsToEscape) >= 0;
+            return identifier.ContainsAny(s_charsToEscape);
         }
 
         public static bool NeedsEscapingInTypeName(this char c)

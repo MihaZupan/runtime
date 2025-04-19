@@ -21,6 +21,10 @@
     <Compile Include="$(CoreLibSharedDir)System\Collections\Generic\ValueListBuilder.Pop.cs" Link="Production\ValueListBuilder.Pop.cs" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp'">
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+  </ItemGroup>
+
   <!-- Don't reference System.Text.Json from the LKG, as shared sources are compiled into this project. -->
   <ItemGroup Condition="'$(TargetFramework)' == '$(NetCoreAppToolCurrent)'">
     <DefaultReferenceExclusion Include="System.Text.Json" />

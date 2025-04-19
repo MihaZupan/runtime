@@ -220,7 +220,7 @@ namespace System.Data.Common
                 if (useOdbcRules)
                 {
                     if ((0 < keyValue.Length) &&
-                        (('{' == keyValue[0]) || (0 <= keyValue.IndexOf(';')) || (string.Equals(DbConnectionStringKeywords.Driver, keyName, StringComparison.OrdinalIgnoreCase))) &&
+                        (('{' == keyValue[0]) || (keyValue.Contains(';')) || (string.Equals(DbConnectionStringKeywords.Driver, keyName, StringComparison.OrdinalIgnoreCase))) &&
                         !ConnectionStringQuoteOdbcValueRegex.IsMatch(keyValue))
                     {
                         // always quote Driver value (required for ODBC Version 2.65 and earlier)
@@ -237,7 +237,7 @@ namespace System.Data.Common
                     // <value> -> <value>
                     builder.Append(keyValue);
                 }
-                else if ((-1 != keyValue.IndexOf('\"')) && (-1 == keyValue.IndexOf('\'')))
+                else if (keyValue.Contains('"') && !keyValue.Contains('\''))
                 {
                     // <val"ue> -> <'val"ue'>
                     builder.Append('\'');
@@ -758,11 +758,7 @@ namespace System.Data.Common
 
         private static bool IsValueValidInternal(string? keyvalue)
         {
-            if (null != keyvalue)
-            {
-                return (-1 == keyvalue.IndexOf('\u0000'));
-            }
-            return true;
+            return keyvalue is null || !keyvalue.Contains('\0');
         }
 
         private static bool IsKeyNameValid([NotNullWhen(true)] string? keyname)
@@ -771,9 +767,9 @@ namespace System.Data.Common
             {
 #if DEBUG
                 bool compValue = ConnectionStringValidKeyRegex.IsMatch(keyname);
-                Debug.Assert(((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && (-1 == keyname.IndexOf('\u0000'))) == compValue, "IsValueValid mismatch with regex");
+                Debug.Assert(((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && !keyname.Contains('\0')) == compValue, "IsValueValid mismatch with regex");
 #endif
-                return ((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && (-1 == keyname.IndexOf('\u0000')));
+                return ((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && !keyname.Contains('\0'));
             }
             return false;
         }

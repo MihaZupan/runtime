@@ -159,7 +159,7 @@ namespace System.Text.Json
                     {
                         childMap[nextIndex] = false;
 
-                        if (childMap.AsSpan().IndexOf(true) == -1)
+                        if (!childMap.AsSpan().Contains(true))
                         {
                             // nextIndex was the last child removed from i, add to queue.
                             childlessQueue.Enqueue(i);

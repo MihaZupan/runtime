@@ -139,4 +139,14 @@
     <Compile Include="$(CommonPath)System\CSharpHelpers.cs" />
     <Compile Include="StringExtensions.cs" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp'">
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Buffers\SearchValuesPolyfills.cs" Link="Common\System\Buffers\SearchValuesPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Text\AsciiPolyfills.cs" Link="Common\System\Text\AsciiPolyfills.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp'">
+    <PackageReference Include="System.Memory" Version="$(SystemMemoryVersion)" />
+  </ItemGroup>
 </Project>

@@ -409,7 +409,7 @@ namespace System.Text.Json
                 return JsonReaderHelper.TryGetUnescapedBase64Bytes(segment, out value);
             }
 
-            Debug.Assert(segment.IndexOf(JsonConstants.BackSlash) == -1);
+            Debug.Assert(!segment.Contains(JsonConstants.BackSlash));
             return JsonReaderHelper.TryDecodeBase64(segment, out value);
         }
 
@@ -678,7 +678,7 @@ namespace System.Text.Json
                 return JsonReaderHelper.TryGetEscapedDateTime(segment, out value);
             }
 
-            Debug.Assert(segment.IndexOf(JsonConstants.BackSlash) == -1);
+            Debug.Assert(!segment.Contains(JsonConstants.BackSlash));
 
             if (JsonHelpers.TryParseAsISO(segment, out DateTime tmp))
             {
@@ -713,7 +713,7 @@ namespace System.Text.Json
                 return JsonReaderHelper.TryGetEscapedDateTimeOffset(segment, out value);
             }
 
-            Debug.Assert(segment.IndexOf(JsonConstants.BackSlash) == -1);
+            Debug.Assert(!segment.Contains(JsonConstants.BackSlash));
 
             if (JsonHelpers.TryParseAsISO(segment, out DateTimeOffset tmp))
             {
@@ -748,7 +748,7 @@ namespace System.Text.Json
                 return JsonReaderHelper.TryGetEscapedGuid(segment, out value);
             }
 
-            Debug.Assert(segment.IndexOf(JsonConstants.BackSlash) == -1);
+            Debug.Assert(!segment.Contains(JsonConstants.BackSlash));
 
             if (segment.Length == JsonConstants.MaximumFormatGuidLength
                 && Utf8Parser.TryParse(segment, out Guid tmp, out _, 'D'))

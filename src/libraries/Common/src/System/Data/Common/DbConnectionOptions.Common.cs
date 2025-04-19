@@ -351,7 +351,7 @@ namespace System.Data.Common
                 }
                 buffer.Append(currentChar);
             }
-            ParserExit:
+        ParserExit:
             switch (parserState)
             {
                 case ParserState.Key:
@@ -403,14 +403,9 @@ namespace System.Data.Common
             return currentPosition;
         }
 
-#pragma warning disable CA2249 // Consider using 'string.Contains' instead of 'string.IndexOf'. This file is built into libraries that don't have string.Contains(char).
         private static bool IsValueValidInternal(string? keyvalue)
         {
-            if (null != keyvalue)
-            {
-                return (-1 == keyvalue.IndexOf('\u0000')); // string.Contains(char) is .NetCore2.1+ specific
-            }
-            return true;
+            return keyvalue is null || !keyvalue.Contains('\0');
         }
 
         private static bool IsKeyNameValid([NotNullWhen(true)] string? keyname)
@@ -419,14 +414,12 @@ namespace System.Data.Common
             {
 #if DEBUG
                 bool compValue = s_connectionStringValidKeyRegex.IsMatch(keyname);
-                Debug.Assert(((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && (-1 == keyname.IndexOf('\u0000'))) == compValue, "IsValueValid mismatch with regex");
+                Debug.Assert(((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && !keyname.Contains('\0')) == compValue, "IsValueValid mismatch with regex");
 #endif
-                // string.Contains(char) is .NetCore2.1+ specific
-                return ((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && (-1 == keyname.IndexOf('\u0000')));
+                return ((0 < keyname.Length) && (';' != keyname[0]) && !char.IsWhiteSpace(keyname[0]) && !keyname.Contains('\0'));
             }
             return false;
         }
-#pragma warning restore CA2249 // Consider using 'string.Contains' instead of 'string.IndexOf'
 
 #if DEBUG
         private static Dictionary<string, string> SplitConnectionString(string connectionString, Dictionary<string, string>? synonyms, bool firstKey)

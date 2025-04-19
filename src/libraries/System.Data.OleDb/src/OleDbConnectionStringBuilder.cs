@@ -616,17 +616,15 @@ namespace System.Data.OleDb
 
             public override object? ConvertFrom(ITypeDescriptorContext? context, System.Globalization.CultureInfo? culture, object value)
             {
-                string? svalue = (value as string);
-                if (null != svalue)
+                if (value is string svalue)
                 {
-                    int services;
-                    if (int.TryParse(svalue, out services))
+                    if (int.TryParse(svalue, out int services))
                     {
                         return services;
                     }
                     else
                     {
-                        if (svalue.IndexOf(',') != -1)
+                        if (svalue.Contains(','))
                         {
                             int convertedValue = 0;
                             string[] values = svalue.Split(OleDbConnectionInternal.s_comma);

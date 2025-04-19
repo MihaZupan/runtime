@@ -14,4 +14,8 @@
     <Compile Include="JsonSourceGenerator.Roslyn3.11.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+  </ItemGroup>
+
 </Project>

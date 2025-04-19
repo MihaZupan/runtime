@@ -8,6 +8,9 @@ namespace System
         public static bool Contains<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T> =>
             span.IndexOf(value) >= 0;
 
+        public static bool ContainsAny<T>(this ReadOnlySpan<T> span, T value0, T value1) where T : IEquatable<T> =>
+            span.IndexOfAny(value0, value1) >= 0;
+
         public static bool ContainsAnyExcept(this ReadOnlySpan<char> span, char value)
         {
             foreach (char c in span)
