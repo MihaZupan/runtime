@@ -389,6 +389,10 @@ The System.Text.Json library is built-in as part of the shared framework in .NET
     <Compile Include="$(CoreLibSharedDir)System\Diagnostics\CodeAnalysis\StringSyntaxAttribute.cs" />
     <Compile Include="$(CoreLibSharedDir)System\Diagnostics\CodeAnalysis\RequiresDynamicCodeAttribute.cs" />
     <Compile Include="System\Text\Json\Reader\JsonReaderHelper.netstandard.cs" />
+
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Buffers\SearchValuesPolyfills.cs" Link="Common\System\Buffers\SearchValuesPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Text\AsciiPolyfills.cs" Link="Common\System\Text\AsciiPolyfills.cs" />
   </ItemGroup>
 
   <!-- Polyfills for working with Unicode -->
