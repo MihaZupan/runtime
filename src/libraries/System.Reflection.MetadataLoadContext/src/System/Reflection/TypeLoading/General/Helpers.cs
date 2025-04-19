@@ -126,11 +126,7 @@ namespace System.Reflection.TypeLoading
 
         public static string UnescapeTypeNameIdentifier(this string identifier)
         {
-#if NET
             if (identifier.Contains('\\'))
-#else
-            if (identifier.IndexOf('\\') != -1)
-#endif
             {
                 StringBuilder sbUnescapedName = new StringBuilder(identifier.Length);
                 for (int i = 0; i < identifier.Length; i++)
@@ -358,22 +354,7 @@ namespace System.Reflection.TypeLoading
 
         public static byte[] ToUtf8(this string s) => Encoding.UTF8.GetBytes(s);
 
-#if NET
         public static string ToUtf16(this ReadOnlySpan<byte> utf8) => Encoding.UTF8.GetString(utf8);
-#else
-        public static unsafe string ToUtf16(this ReadOnlySpan<byte> utf8)
-        {
-            if (utf8.IsEmpty)
-            {
-                return string.Empty;
-            }
-
-            fixed (byte* ptr = utf8)
-            {
-                return Encoding.UTF8.GetString(ptr, utf8.Length);
-            }
-        }
-#endif
 
         // Guards ToString() implementations. Sample usage:
         //

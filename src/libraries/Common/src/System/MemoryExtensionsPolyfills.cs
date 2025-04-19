@@ -5,6 +5,9 @@ namespace System
 {
     internal static class MemoryExtensionsPolyfills
     {
+        public static bool Contains<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T> =>
+            span.IndexOf(value) >= 0;
+
         public static bool ContainsAnyExcept(this ReadOnlySpan<char> span, char value)
         {
             foreach (char c in span)

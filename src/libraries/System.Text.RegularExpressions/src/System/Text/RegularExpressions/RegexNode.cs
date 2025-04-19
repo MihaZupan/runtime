@@ -2547,7 +2547,7 @@ namespace System.Text.RegularExpressions
                 {
                     // As with RegexNodeKind.One, the string needs to be composed solely of ASCII characters that
                     // don't participate in case conversion.
-                    if (!RegexCharClass.IsAscii(child.Str.AsSpan()) ||
+                    if (!Ascii.IsValid(child.Str.AsSpan()) ||
                         RegexCharClass.ParticipatesInCaseConversion(child.Str.AsSpan()))
                     {
                         break;

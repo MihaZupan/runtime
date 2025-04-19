@@ -264,20 +264,7 @@ namespace System.Text.Json
 #else
             try
             {
-#if NET
                 s_utf8Encoding.GetCharCount(bytes);
-#else
-                if (!bytes.IsEmpty)
-                {
-                    unsafe
-                    {
-                        fixed (byte* ptr = bytes)
-                        {
-                            s_utf8Encoding.GetCharCount(ptr, bytes.Length);
-                        }
-                    }
-                }
-#endif
                 return true;
             }
             catch (DecoderFallbackException)
@@ -300,14 +287,7 @@ namespace System.Text.Json
             {
                 if (!source.IsEmpty)
                 {
-                    unsafe
-                    {
-                        fixed (char* charPtr = source)
-                        fixed (byte* destPtr = destination)
-                        {
-                            written = s_utf8Encoding.GetBytes(charPtr, source.Length, destPtr, destination.Length);
-                        }
-                    }
+                    written = s_utf8Encoding.GetBytes(source, destination);
                 }
 
                 return OperationStatus.Done;

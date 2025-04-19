@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Buffers.Text;
 using System.Collections;
@@ -2042,8 +2043,10 @@ namespace System.Diagnostics
         internal static bool IsLowerCaseHexAndNotAllZeros(ReadOnlySpan<char> idData)
         {
             // Verify lower-case hex and not all zeros https://w3c.github.io/trace-context/#field-value
-            return HexConverter.IsHexLower(idData) && idData.ContainsAnyExcept('0');
+            return !idData.ContainsAnyExcept(s_hexLowerChars) && idData.ContainsAnyExcept('0');
         }
+
+        private static readonly SearchValues<char> s_hexLowerChars = SearchValues.Create("0123456789abcdef");
     }
 
     /// <summary>

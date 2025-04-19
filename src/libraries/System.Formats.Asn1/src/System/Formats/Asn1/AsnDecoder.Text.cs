@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -392,32 +390,7 @@ namespace System.Formats.Asn1
         {
             try
             {
-#if NET8_0_OR_GREATER
                 return encoding.TryGetChars(source, destination, out charsWritten);
-#else
-                if (source.Length == 0)
-                {
-                    charsWritten = 0;
-                    return true;
-                }
-
-                fixed (byte* bytePtr = &MemoryMarshal.GetReference(source))
-                fixed (char* charPtr = &MemoryMarshal.GetReference(destination))
-                {
-                    int charCount = encoding.GetCharCount(bytePtr, source.Length);
-
-                    if (charCount > destination.Length)
-                    {
-                        charsWritten = 0;
-                        return false;
-                    }
-
-                    charsWritten = encoding.GetChars(bytePtr, source.Length, charPtr, destination.Length);
-                    Debug.Assert(charCount == charsWritten);
-
-                    return true;
-                }
-#endif
             }
             catch (DecoderFallbackException e)
             {
@@ -452,19 +425,13 @@ namespace System.Formats.Asn1
             }
             else
             {
-                unsafe
+                try
                 {
-                    fixed (byte* bytePtr = &MemoryMarshal.GetReference(contents))
-                    {
-                        try
-                        {
-                            str = encoding.GetString(bytePtr, contents.Length);
-                        }
-                        catch (DecoderFallbackException e)
-                        {
-                            throw new AsnContentException(SR.ContentException_DefaultMessage, e);
-                        }
-                    }
+                    str = encoding.GetString(contents);
+                }
+                catch (DecoderFallbackException e)
+                {
+                    throw new AsnContentException(SR.ContentException_DefaultMessage, e);
                 }
             }
 
