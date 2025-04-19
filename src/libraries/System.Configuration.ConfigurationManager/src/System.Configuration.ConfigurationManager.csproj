@@ -278,6 +278,12 @@
     <Compile Include="System\Diagnostics\TraceUtils.cs" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' != '.NETCoreApp'">
+    <Compile Include="$(CommonPath)System\MemoryExtensionsPolyfills.cs" Link="Common\System\MemoryExtensionsPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Buffers\SearchValuesPolyfills.cs" Link="Common\System\Buffers\SearchValuesPolyfills.cs" />
+    <Compile Include="$(CommonPath)System\Text\AsciiPolyfills.cs" Link="Common\System\Text\AsciiPolyfills.cs" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
     <ProjectReference Include="$(LibrariesProjectRoot)System.Diagnostics.EventLog\src\System.Diagnostics.EventLog.csproj" />
   </ItemGroup>
