@@ -1665,6 +1665,9 @@ namespace System.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector128<byte> ExtractAsciiVector(Vector128<ushort> vectorFirst, Vector128<ushort> vectorSecond)
         {
+            Debug.Assert((vectorFirst & Vector128.Create((ushort)0xFF00)) == Vector128<ushort>.Zero);
+            Debug.Assert((vectorSecond & Vector128.Create((ushort)0xFF00)) == Vector128<ushort>.Zero);
+
             // Narrows two vectors of words [ w7 w6 w5 w4 w3 w2 w1 w0 ] and [ w7' w6' w5' w4' w3' w2' w1' w0' ]
             // to a vector of bytes [ b7 ... b0 b7' ... b0'].
 
@@ -1690,17 +1693,24 @@ namespace System.Text
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector256<byte> ExtractAsciiVector(Vector256<ushort> vectorFirst, Vector256<ushort> vectorSecond)
         {
-            return Avx2.IsSupported
-                ? PackedSpanHelpers.FixUpPackedVector256Result(Avx2.PackUnsignedSaturate(vectorFirst.AsInt16(), vectorSecond.AsInt16()))
-                : Vector256.Narrow(vectorFirst, vectorSecond);
+            Debug.Assert((vectorFirst & Vector256.Create((ushort)0xFF00)) == Vector256<ushort>.Zero);
+            Debug.Assert((vectorSecond & Vector256.Create((ushort)0xFF00)) == Vector256<ushort>.Zero);
+
+            return
+                Avx512Vbmi.VL.IsSupported ? Avx512Vbmi.VL.PermuteVar32x8x2(vectorFirst.AsByte(), Vector256.CreateSequence<byte>(0, 2), vectorSecond.AsByte()) :
+                Avx2.IsSupported ? PackedSpanHelpers.FixUpPackedVector256Result(Avx2.PackUnsignedSaturate(vectorFirst.AsInt16(), vectorSecond.AsInt16())) :
+                Vector256.Narrow(vectorFirst.AsUInt16(), vectorSecond.AsUInt16());
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector512<byte> ExtractAsciiVector(Vector512<ushort> vectorFirst, Vector512<ushort> vectorSecond)
         {
-            return Avx512BW.IsSupported
-                ? PackedSpanHelpers.FixUpPackedVector512Result(Avx512BW.PackUnsignedSaturate(vectorFirst.AsInt16(), vectorSecond.AsInt16()))
-                : Vector512.Narrow(vectorFirst, vectorSecond);
+            Debug.Assert((vectorFirst & Vector512.Create((ushort)0xFF00)) == Vector512<ushort>.Zero);
+            Debug.Assert((vectorSecond & Vector512.Create((ushort)0xFF00)) == Vector512<ushort>.Zero);
+
+            return Avx512Vbmi.IsSupported
+                ? Avx512Vbmi.PermuteVar64x8x2(vectorFirst.AsByte(), Vector512.CreateSequence<byte>(0, 2), vectorSecond.AsByte())
+                : Vector512.Narrow(vectorFirst.AsUInt16(), vectorSecond.AsUInt16());
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
