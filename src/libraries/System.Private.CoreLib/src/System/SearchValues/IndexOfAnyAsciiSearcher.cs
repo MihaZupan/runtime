@@ -339,7 +339,7 @@ namespace System.Buffers
             where TUniqueLowNibble : struct, SearchValues.IRuntimeConst =>
             IndexOfAnyCore<int, TNegator, TOptimizations, TUniqueLowNibble, IndexOfAnyResultMapper<short>>(ref searchSpace, searchSpaceLength, ref state);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -478,7 +478,7 @@ namespace System.Buffers
             return TResultMapper.NotFound;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -623,7 +623,7 @@ namespace System.Buffers
             where TOptimizations : struct, IOptimizations =>
             IndexOfAnyCore<int, TNegator, TOptimizations, IndexOfAnyResultMapper<short>>(ref searchSpace, searchSpaceLength, ref state);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
         private static TResult IndexOfAnyCore<TResult, TNegator, TOptimizations, TResultMapper>(ref short searchSpace, int searchSpaceLength, ref UniqueLow6BitsState state)
             where TResult : struct
@@ -778,7 +778,7 @@ namespace System.Buffers
             return TResultMapper.NotFound;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
         public static int LastIndexOfAny<TNegator, TOptimizations>(ref short searchSpace, int searchSpaceLength, ref UniqueLow6BitsState state)
             where TNegator : struct, INegator
@@ -948,7 +948,7 @@ namespace System.Buffers
             where TUniqueLowNibble : struct, SearchValues.IRuntimeConst =>
             IndexOfAnyCore<int, TNegator, TUniqueLowNibble, IndexOfAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref state);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -1080,7 +1080,7 @@ namespace System.Buffers
             return TResultMapper.NotFound;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -1218,7 +1218,7 @@ namespace System.Buffers
             where TNegator : struct, INegator =>
             IndexOfAnyCore<int, TNegator, IndexOfAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref state);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
         private static TResult IndexOfAnyCore<TResult, TNegator, TResultMapper>(ref byte searchSpace, int searchSpaceLength, ref UniqueLow6BitsState state)
             where TResult : struct
@@ -1370,7 +1370,7 @@ namespace System.Buffers
             return TResultMapper.NotFound;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
         public static int LastIndexOfAny<TNegator>(ref byte searchSpace, int searchSpaceLength, ref UniqueLow6BitsState state)
             where TNegator : struct, INegator
@@ -1535,7 +1535,7 @@ namespace System.Buffers
             where TNegator : struct, INegator =>
             IndexOfAnyCore<int, TNegator, IndexOfAnyResultMapper<byte>>(ref searchSpace, searchSpaceLength, ref state);
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
@@ -1670,7 +1670,7 @@ namespace System.Buffers
             return TResultMapper.NotFound;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd))]
         [CompExactlyDependsOn(typeof(PackedSimd))]
