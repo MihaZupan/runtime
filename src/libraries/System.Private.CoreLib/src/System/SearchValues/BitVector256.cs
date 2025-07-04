@@ -32,6 +32,10 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool Contains128(char c) =>
+            c < 128 && ContainsUnchecked(c);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool Contains256(char c) =>
             c < 256 && ContainsUnchecked(c);
 

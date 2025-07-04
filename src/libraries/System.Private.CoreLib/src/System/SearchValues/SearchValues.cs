@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -25,6 +26,7 @@ namespace System.Buffers
         /// </summary>
         /// <param name="values">The set of values.</param>
         /// <returns>The optimized representation of <paramref name="values"/> used for efficient searching.</returns>
+        [BypassReadyToRun] // We may return a different instance if Avx512 is supported, which wouldn't be visible from the R2R compilation.
         public static SearchValues<byte> Create(params ReadOnlySpan<byte> values)
         {
             if (values.IsEmpty)
@@ -48,6 +50,11 @@ namespace System.Buffers
             if (values.Length >= 4 && IndexOfAnyAsciiSearcher.CanUseUniqueLowNibbleSearch(values, maxInclusive))
             {
                 return new AsciiByteSearchValues<TrueConst>(values);
+            }
+
+            if (values.Length >= 4 && IndexOfAnyAsciiSearcher.CanUseUniqueLow6BitsSearch(values, maxInclusive))
+            {
+                return new AsciiUniqueLow6BitsByteSearchValues(values);
             }
 
             if (values.Length <= 5)
@@ -75,6 +82,7 @@ namespace System.Buffers
         /// </summary>
         /// <param name="values">The set of values.</param>
         /// <returns>The optimized representation of <paramref name="values"/> used for efficient searching.</returns>
+        [BypassReadyToRun] // We may return a different instance if Avx512 is supported, which wouldn't be visible from the R2R compilation.
         public static SearchValues<char> Create(params ReadOnlySpan<char> values)
         {
             if (values.IsEmpty)
@@ -161,6 +169,13 @@ namespace System.Buffers
             // IndexOfAnyAsciiSearcher for chars is slower than Any3CharSearchValues, but faster than Any4SearchValues
             if (IndexOfAnyAsciiSearcher.IsVectorizationSupported && maxInclusive < 128)
             {
+                if (Vector512.IsHardwareAccelerated && Avx512Vbmi.IsSupported && IndexOfAnyAsciiSearcher.CanUseUniqueLow6BitsSearch(values, maxInclusive))
+                {
+                    return minInclusive == 0
+                        ? new AsciiUniqueLow6BitsCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle>(values)
+                        : new AsciiUniqueLow6BitsCharSearchValues<IndexOfAnyAsciiSearcher.Default>(values);
+                }
+
                 return (Ssse3.IsSupported || PackedSimd.IsSupported) && minInclusive == 0
                     ? new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Ssse3AndWasmHandleZeroInNeedle, FalseConst>(values)
                     : new AsciiCharSearchValues<IndexOfAnyAsciiSearcher.Default, FalseConst>(values);
