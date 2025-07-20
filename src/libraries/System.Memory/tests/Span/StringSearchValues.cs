@@ -407,6 +407,16 @@ namespace System.Memory.Tests.Span
             valuesArray[offset] = $"{original[0]}\u00F6{original.AsSpan(1)}";
             TestCore(valuesArray);
 
+            // Test non-ASCII values over 0xFF
+            valuesArray[offset] = $"{original}\u2049";
+            TestCore(valuesArray);
+
+            valuesArray[offset] = $"\u2049{original}";
+            TestCore(valuesArray);
+
+            valuesArray[offset] = $"{original[0]}\u2049{original.AsSpan(1)}";
+            TestCore(valuesArray);
+
             // Test null chars in values
             valuesArray[offset] = $"{original[0]}\0{original.AsSpan(1)}";
             TestCore(valuesArray);
