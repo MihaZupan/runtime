@@ -398,7 +398,7 @@ namespace System.Buffers
 
             return Sse2.IsSupported
                 ? Sse2.PackUnsignedSaturate(input0.AsInt16(), input1.AsInt16())
-                : AdvSimd.Arm64.UnzipEven(input0.AsByte(), input1.AsByte());
+                : AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(input0), input1);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

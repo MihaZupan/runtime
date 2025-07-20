@@ -274,27 +274,13 @@ namespace System.Buffers
 
                     ref byte matchByteStart = ref Unsafe.As<char, byte>(ref matchStart);
 
-                    if (Sse2.IsSupported)
-                    {
-                        // When running on X86, this path is not used when confirming vectorized anchor matches.
-                        // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
-                        // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
-                        // We only have to to check whether the last 2 characters also match.
-                        Debug.Assert(matchStart == state.Value[0], "This should only be called after the first character has been checked");
+                    // When running on X86, this path is not used when confirming vectorized anchor matches.
+                    // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
+                    // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
+                    // We only have to to check whether the last 2 characters also match.
+                    Debug.Assert(matchStart == state.Value[0], "This should only be called after the first character has been checked");
 
-                        return Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) == state.Value32_1;
-                    }
-                    else
-                    {
-                        // See comments on SingleStringSearchValuesPackedThreeChars.CanSkipAnchorMatchVerification.
-                        // When running on Arm64, this helper is also used to confirm vectorized anchor matches.
-                        // We do so because we're using UnzipEven when packing inputs, which may produce false positive anchor matches.
-                        Debug.Assert((matchStart & 0xFF) == state.Value[0]);
-
-                        uint differentBits = Unsafe.ReadUnaligned<uint>(ref matchByteStart) - state.Value32_0;
-                        differentBits |= Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) - state.Value32_1;
-                        return differentBits == 0;
-                    }
+                    return Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) == state.Value32_1;
                 }
             }
         }
@@ -342,27 +328,13 @@ namespace System.Buffers
                     const uint CaseMask = ~0x200020u;
                     ref byte matchByteStart = ref Unsafe.As<char, byte>(ref matchStart);
 
-                    if (Sse2.IsSupported)
-                    {
-                        // When running on X86, this path is not used when confirming vectorized anchor matches.
-                        // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
-                        // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
-                        // We only have to to check whether the last 2 characters also match.
-                        Debug.Assert(matchStart == state.Value[0], "This should only be called after the first character has been checked");
+                    // When running on X86, this path is not used when confirming vectorized anchor matches.
+                    // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
+                    // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
+                    // We only have to to check whether the last 2 characters also match.
+                    Debug.Assert(matchStart == state.Value[0], "This should only be called after the first character has been checked");
 
-                        return (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) == state.Value32_1;
-                    }
-                    else
-                    {
-                        // See comments on SingleStringSearchValuesPackedThreeChars.CanSkipAnchorMatchVerification.
-                        // When running on Arm64, this helper is also used to confirm vectorized anchor matches.
-                        // We do so because we're using UnzipEven when packing inputs, which may produce false positive anchor matches.
-                        Debug.Assert((matchStart & 0xFF) == state.Value[0]);
-
-                        uint differentBits = (Unsafe.ReadUnaligned<uint>(ref matchByteStart) & CaseMask) - state.Value32_0;
-                        differentBits |= (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) - state.Value32_1;
-                        return differentBits == 0;
-                    }
+                    return (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) == state.Value32_1;
                 }
             }
         }
