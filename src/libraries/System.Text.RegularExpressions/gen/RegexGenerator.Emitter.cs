@@ -493,6 +493,28 @@ namespace System.Text.RegularExpressions.Generator
             {
                 string setLiteral = Literal(new string(chars));
 
+                if (fieldName == "s_whitespace")
+                {
+                    char[] whitespaceChars =
+                    [
+                        '\u0009', '\u000A', '\u000B', '\u000C', '\u000D',
+                         '\u0020', '\u0085', '\u00A0', '\u1680', '\u2000',
+                         '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
+                         '\u2006', '\u2007', '\u2008', '\u2009', '\u200A',
+                         '\u2028', '\u2029', '\u202F', '\u205F', '\u3000'
+                     ];
+
+                    if (!chars.AsSpan().SequenceEqual(whitespaceChars))
+                    {
+                        throw new Exception("chars: " + string.Join(", ", chars.Select(c => (int)c)));
+                    }
+
+                    if (GetSHA256FieldName("", setLiteral) != "04EAC9BD6F7121F5B1C10F8676FF52A2B3B3D998D20352531A046ADC99D17026")
+                    {
+                        throw new Exception("setLiteral: " + string.Join(", ", setLiteral.Select(c => (int)c)));
+                    }
+                }
+
                 requiredHelpers.Add(fieldName,
                 [
                     $"/// <summary>Supports searching for characters in or not in {EscapeXmlComment(setLiteral)}.</summary>",

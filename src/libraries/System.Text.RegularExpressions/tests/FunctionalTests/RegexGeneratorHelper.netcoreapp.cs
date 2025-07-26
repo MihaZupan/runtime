@@ -121,6 +121,40 @@ namespace System.Text.RegularExpressions.Tests
             (Compilation comp, GeneratorDriverRunResult generatorResults) = await RunGeneratorCore(code, langVersion, additionalRefs, allowUnsafe, checkOverflow, cancellationToken);
             string generatedSource = string.Concat(generatorResults.GeneratedTrees.Select(t => t.ToString()));
 
+            if (generatedSource.Contains("internal static readonly SearchValues<char> s_whitespace =", StringComparison.Ordinal))
+            {
+                string line = generatedSource.Substring(generatedSource.IndexOf("internal static readonly SearchValues<char> s_whitespace =", StringComparison.Ordinal));
+                line = line.ReplaceLineEndings("\n").Split('\n', 2)[0];
+                line = line.Substring(line.IndexOf("Create", StringComparison.Ordinal));
+                line = line.Substring("Create".Length).Trim(';', '(', ')');
+
+                string numbers = string.Join(", ", line.Select(c => (int)c));
+
+                if (numbers != "34, 92, 116, 92, 110, 92, 118, 92, 102, 92, 114, 32, 92, 117, 48, 48, 56, 53, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 92, 117, 50, 48, 50, 56, 92, 117, 50, 48, 50, 57, 8239, 8287, 12288, 34")
+                {
+                    foreach (var tree in generatorResults.GeneratedTrees)
+                    {
+                        string slice = string.Join(", ", tree.ToString().Select(c => (int)c));
+
+                        if (slice.Length > 500)
+                        {
+                            slice = slice.Substring(slice.Length - 500);
+                        }
+
+                        Console.WriteLine($"Slice: {slice}");
+                    }
+
+                    string trees = string.Join(", ", generatorResults.GeneratedTrees.Select(t => string.Join(", ", t.ToString().Select(c => (int)c))));
+
+                    if (trees.Length > 500)
+                    {
+                        trees = trees.Substring(trees.Length - 500);
+                    }
+
+                    throw new Exception($"WS: {numbers}.\nTrees: {trees}");
+                }
+            }
+
             if (generatorResults.Diagnostics.Length != 0)
             {
                 throw new ArgumentException(string.Join(Environment.NewLine, generatorResults.Diagnostics) + Environment.NewLine + generatedSource);
