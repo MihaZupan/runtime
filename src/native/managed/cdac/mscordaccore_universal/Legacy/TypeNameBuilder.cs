@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
@@ -603,7 +603,7 @@ internal struct TypeNameBuilder
 
     private static bool IsTypeNameReservedChar(char c)
     {
-        return TypeNameReservedChars().IndexOf(c) != -1;
+        return TypeNameReservedChars().Contains(c);
     }
 
     private void EscapeName(string name)

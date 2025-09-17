@@ -153,22 +153,9 @@ namespace Microsoft.Extensions.FileProviders.Physical
                 LazyInitializer.EnsureInitialized(ref _timer, ref _timerInitialized, ref _timerLock, _timerFactory);
             }
 
-            IChangeToken changeToken;
-#if NET
-            bool isWildCard = pattern.Contains('*');
-#else
-            bool isWildCard = pattern.IndexOf('*') != -1;
-#endif
-            if (isWildCard || IsDirectoryPath(pattern))
-            {
-                changeToken = GetOrAddWildcardChangeToken(pattern);
-            }
-            else
-            {
-                changeToken = GetOrAddFilePathChangeToken(pattern);
-            }
-
-            return changeToken;
+            return pattern.Contains('*') || IsDirectoryPath(pattern)
+                ? GetOrAddWildcardChangeToken(pattern)
+                : GetOrAddFilePathChangeToken(pattern);
         }
 
         internal IChangeToken GetOrAddFilePathChangeToken(string filePath)
