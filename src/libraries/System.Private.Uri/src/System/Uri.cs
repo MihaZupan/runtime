@@ -1008,6 +1008,8 @@ namespace System
         {
             EnsureParseRemaining();
 
+            ref Offset offsets = ref _info.Offset;
+
             //Other cases will get a Unix-style path
             if (IsUncOrDosPath)
             {
@@ -1019,14 +1021,14 @@ namespace System
                 // Do we have a valid local path right in _string?
                 if (NotAny(Flags.HostNotCanonical | Flags.PathNotCanonical | Flags.ShouldBeCompressed))
                 {
-                    start = IsUncPath ? _info.Offset.Host - 2 : _info.Offset.Path;
+                    start = IsUncPath ? offsets.Host - 2 : offsets.Path;
 
-                    string str = (IsImplicitFile && _info.Offset.Host == (IsDosPath ? 0 : 2) &&
-                        _info.Offset.Query == _info.Offset.End)
+                    string str = (IsImplicitFile && offsets.Host == (IsDosPath ? 0 : 2) &&
+                        offsets.Query == offsets.End)
                             ? _string
                             : (IsDosPath && (_string[start] == '/' || _string[start] == '\\'))
-                                ? _string.Substring(start + 1, _info.Offset.Query - start - 1)
-                                : _string.Substring(start, _info.Offset.Query - start);
+                                ? _string.Substring(start + 1, offsets.Query - start - 1)
+                                : _string.Substring(start, offsets.Query - start);
 
                     // Should be a rare case, convert c|\ into c:\
                     if (IsDosPath && str[1] == '|')
@@ -1044,10 +1046,10 @@ namespace System
 
                 char[] result;
                 int count = 0;
-                start = _info.Offset.Path;
+                start = offsets.Path;
 
                 string host = _info.Host;
-                result = new char[host.Length + 3 + _info.Offset.Fragment - _info.Offset.Path];
+                result = new char[host.Length + 3 + offsets.Fragment - offsets.Path];
 
                 if (IsUncPath)
                 {
@@ -1073,7 +1075,7 @@ namespace System
 
                 UnescapeMode mode = (InFact(Flags.PathNotCanonical) && !IsImplicitFile)
                     ? (UnescapeMode.Unescape | UnescapeMode.UnescapeAll) : UnescapeMode.CopyOnly;
-                UriHelper.UnescapeString(_string, start, _info.Offset.Query, result, ref count, c_DummyChar,
+                UriHelper.UnescapeString(_string, start, offsets.Query, result, ref count, c_DummyChar,
                     c_DummyChar, c_DummyChar, mode, _syntax, true);
 
                 // Possibly convert c|\ into c:\
@@ -3061,6 +3063,8 @@ namespace System
         //
         private string? GetUriPartsFromUserString(UriComponents uriParts)
         {
+            ref Offset offset = ref _info.Offset;
+
             int delimiterAwareIdx;
 
             switch (uriParts & ~UriComponents.KeepDelimiter)
@@ -3068,11 +3072,11 @@ namespace System
                 // For FindServicePoint perf
                 case UriComponents.Scheme | UriComponents.Host | UriComponents.Port:
                     if (!InFact(Flags.HasUserInfo))
-                        return _string.Substring(_info.Offset.Scheme, _info.Offset.Path - _info.Offset.Scheme);
+                        return _string.Substring(offset.Scheme, offset.Path - offset.Scheme);
 
                     return string.Concat(
-                        _string.AsSpan(_info.Offset.Scheme, _info.Offset.User - _info.Offset.Scheme),
-                        _string.AsSpan(_info.Offset.Host, _info.Offset.Path - _info.Offset.Host));
+                        _string.AsSpan(offset.Scheme, offset.User - offset.Scheme),
+                        _string.AsSpan(offset.Host, offset.Path - offset.Host));
 
                 // For HttpWebRequest.ConnectHostAndPort perf
                 case UriComponents.HostAndPort:  //Host|StrongPort
@@ -3081,129 +3085,129 @@ namespace System
                         goto case UriComponents.StrongAuthority;
 
                     if (InFact(Flags.NotDefaultPort) || _syntax.DefaultPort == UriParser.NoDefaultPort)
-                        return _string.Substring(_info.Offset.Host, _info.Offset.Path - _info.Offset.Host);
+                        return _string.Substring(offset.Host, offset.Path - offset.Host);
 
-                    return string.Concat(_string.AsSpan(_info.Offset.Host, _info.Offset.Path - _info.Offset.Host),
-                        ":", _info.Offset.PortValue.ToString(CultureInfo.InvariantCulture));
+                    return string.Concat(_string.AsSpan(offset.Host, offset.Path - offset.Host),
+                        ":", offset.PortValue.ToString(CultureInfo.InvariantCulture));
 
                 // For an obvious common case perf
                 case UriComponents.AbsoluteUri:     //Scheme|UserInfo|Host|Port|Path|Query|Fragment,
-                    if (_info.Offset.Scheme == 0 && _info.Offset.End == _string.Length)
+                    if (offset.Scheme == 0 && offset.End == _string.Length)
                         return _string;
 
-                    return _string.Substring(_info.Offset.Scheme, _info.Offset.End - _info.Offset.Scheme);
+                    return _string.Substring(offset.Scheme, offset.End - offset.Scheme);
 
                 // For Uri.Equals() and HttpWebRequest through a proxy perf
                 case UriComponents.HttpRequestUrl:   //Scheme|Host|Port|Path|Query,
                     if (InFact(Flags.HasUserInfo))
                     {
                         return string.Concat(
-                            _string.AsSpan(_info.Offset.Scheme, _info.Offset.User - _info.Offset.Scheme),
-                            _string.AsSpan(_info.Offset.Host, _info.Offset.Fragment - _info.Offset.Host));
+                            _string.AsSpan(offset.Scheme, offset.User - offset.Scheme),
+                            _string.AsSpan(offset.Host, offset.Fragment - offset.Host));
                     }
-                    if (_info.Offset.Scheme == 0 && _info.Offset.Fragment == _string.Length)
+                    if (offset.Scheme == 0 && offset.Fragment == _string.Length)
                         return _string;
 
-                    return _string.Substring(_info.Offset.Scheme, _info.Offset.Fragment - _info.Offset.Scheme);
+                    return _string.Substring(offset.Scheme, offset.Fragment - offset.Scheme);
 
                 // For CombineUri() perf
                 case UriComponents.SchemeAndServer | UriComponents.UserInfo:
-                    return _string.Substring(_info.Offset.Scheme, _info.Offset.Path - _info.Offset.Scheme);
+                    return _string.Substring(offset.Scheme, offset.Path - offset.Scheme);
 
                 // For Cache perf
                 case (UriComponents.AbsoluteUri & ~UriComponents.Fragment):
-                    if (_info.Offset.Scheme == 0 && _info.Offset.Fragment == _string.Length)
+                    if (offset.Scheme == 0 && offset.Fragment == _string.Length)
                         return _string;
 
-                    return _string.Substring(_info.Offset.Scheme, _info.Offset.Fragment - _info.Offset.Scheme);
+                    return _string.Substring(offset.Scheme, offset.Fragment - offset.Scheme);
 
 
                 // Strip scheme delimiter if was not requested
                 case UriComponents.Scheme:
                     if (uriParts != UriComponents.Scheme)
-                        return _string.Substring(_info.Offset.Scheme, _info.Offset.User - _info.Offset.Scheme);
+                        return _string.Substring(offset.Scheme, offset.User - offset.Scheme);
 
                     return _syntax.SchemeName;
 
                 // KeepDelimiter makes no sense for this component
                 case UriComponents.Host:
-                    int idx = _info.Offset.Path;
+                    int idx = offset.Path;
                     if (InFact(Flags.NotDefaultPort | Flags.PortNotCanonical))
                     {
                         //Means we do have ':' after the host
                         while (_string[--idx] != ':')
                             ;
                     }
-                    return (idx - _info.Offset.Host == 0) ? string.Empty : _string.Substring(_info.Offset.Host,
-                        idx - _info.Offset.Host);
+                    return (idx - offset.Host == 0) ? string.Empty : _string.Substring(offset.Host,
+                        idx - offset.Host);
 
                 case UriComponents.Path:
 
                     // Strip the leading '/' for a hierarchical URI if no delimiter was requested
                     if (uriParts == UriComponents.Path && InFact(Flags.AuthorityFound) &&
-                        _info.Offset.End > _info.Offset.Path && _string[_info.Offset.Path] == '/')
-                        delimiterAwareIdx = _info.Offset.Path + 1;
+                        offset.End > offset.Path && _string[offset.Path] == '/')
+                        delimiterAwareIdx = offset.Path + 1;
                     else
-                        delimiterAwareIdx = _info.Offset.Path;
+                        delimiterAwareIdx = offset.Path;
 
-                    if (delimiterAwareIdx >= _info.Offset.Query)
+                    if (delimiterAwareIdx >= offset.Query)
                         return string.Empty;
 
 
-                    return _string.Substring(delimiterAwareIdx, _info.Offset.Query - delimiterAwareIdx);
+                    return _string.Substring(delimiterAwareIdx, offset.Query - delimiterAwareIdx);
 
                 case UriComponents.Query:
                     // Strip the '?' if no delimiter was requested
                     if (uriParts == UriComponents.Query)
-                        delimiterAwareIdx = _info.Offset.Query + 1;
+                        delimiterAwareIdx = offset.Query + 1;
                     else
-                        delimiterAwareIdx = _info.Offset.Query;
+                        delimiterAwareIdx = offset.Query;
 
-                    if (delimiterAwareIdx >= _info.Offset.Fragment)
+                    if (delimiterAwareIdx >= offset.Fragment)
                         return string.Empty;
 
-                    return _string.Substring(delimiterAwareIdx, _info.Offset.Fragment - delimiterAwareIdx);
+                    return _string.Substring(delimiterAwareIdx, offset.Fragment - delimiterAwareIdx);
 
                 case UriComponents.Fragment:
                     // Strip the '#' if no delimiter was requested
                     if (uriParts == UriComponents.Fragment)
-                        delimiterAwareIdx = _info.Offset.Fragment + 1;
+                        delimiterAwareIdx = offset.Fragment + 1;
                     else
-                        delimiterAwareIdx = _info.Offset.Fragment;
+                        delimiterAwareIdx = offset.Fragment;
 
-                    if (delimiterAwareIdx >= _info.Offset.End)
+                    if (delimiterAwareIdx >= offset.End)
                         return string.Empty;
 
-                    return _string.Substring(delimiterAwareIdx, _info.Offset.End - delimiterAwareIdx);
+                    return _string.Substring(delimiterAwareIdx, offset.End - delimiterAwareIdx);
 
                 case UriComponents.UserInfo | UriComponents.Host | UriComponents.Port:
-                    return (_info.Offset.Path - _info.Offset.User == 0) ? string.Empty :
-                        _string.Substring(_info.Offset.User, _info.Offset.Path - _info.Offset.User);
+                    return (offset.Path - offset.User == 0) ? string.Empty :
+                        _string.Substring(offset.User, offset.Path - offset.User);
 
                 case UriComponents.StrongAuthority:  //UserInfo|Host|StrongPort
                     if (InFact(Flags.NotDefaultPort) || _syntax.DefaultPort == UriParser.NoDefaultPort)
                         goto case UriComponents.UserInfo | UriComponents.Host | UriComponents.Port;
 
-                    return string.Concat(_string.AsSpan(_info.Offset.User, _info.Offset.Path - _info.Offset.User),
-                        ":", _info.Offset.PortValue.ToString(CultureInfo.InvariantCulture));
+                    return string.Concat(_string.AsSpan(offset.User, offset.Path - offset.User),
+                        ":", offset.PortValue.ToString(CultureInfo.InvariantCulture));
 
                 case UriComponents.PathAndQuery:        //Path|Query,
-                    return _string.Substring(_info.Offset.Path, _info.Offset.Fragment - _info.Offset.Path);
+                    return _string.Substring(offset.Path, offset.Fragment - offset.Path);
 
                 case UriComponents.HttpRequestUrl | UriComponents.Fragment: //Scheme|Host|Port|Path|Query|Fragment,
                     if (InFact(Flags.HasUserInfo))
                     {
                         return string.Concat(
-                            _string.AsSpan(_info.Offset.Scheme, _info.Offset.User - _info.Offset.Scheme),
-                            _string.AsSpan(_info.Offset.Host, _info.Offset.End - _info.Offset.Host));
+                            _string.AsSpan(offset.Scheme, offset.User - offset.Scheme),
+                            _string.AsSpan(offset.Host, offset.End - offset.Host));
                     }
-                    if (_info.Offset.Scheme == 0 && _info.Offset.End == _string.Length)
+                    if (offset.Scheme == 0 && offset.End == _string.Length)
                         return _string;
 
-                    return _string.Substring(_info.Offset.Scheme, _info.Offset.End - _info.Offset.Scheme);
+                    return _string.Substring(offset.Scheme, offset.End - offset.Scheme);
 
                 case UriComponents.PathAndQuery | UriComponents.Fragment:  //LocalUrl|Fragment
-                    return _string.Substring(_info.Offset.Path, _info.Offset.End - _info.Offset.Path);
+                    return _string.Substring(offset.Path, offset.End - offset.Path);
 
                 case UriComponents.UserInfo:
                     // Strip the '@' if no delimiter was requested
@@ -3212,14 +3216,14 @@ namespace System
                         return string.Empty;
 
                     if (uriParts == UriComponents.UserInfo)
-                        delimiterAwareIdx = _info.Offset.Host - 1;
+                        delimiterAwareIdx = offset.Host - 1;
                     else
-                        delimiterAwareIdx = _info.Offset.Host;
+                        delimiterAwareIdx = offset.Host;
 
-                    if (_info.Offset.User >= delimiterAwareIdx)
+                    if (offset.User >= delimiterAwareIdx)
                         return string.Empty;
 
-                    return _string.Substring(_info.Offset.User, delimiterAwareIdx - _info.Offset.User);
+                    return _string.Substring(offset.User, delimiterAwareIdx - offset.User);
 
                 default:
                     return null;
@@ -3254,16 +3258,18 @@ namespace System
             if (UserDrivenParsing)
                 goto Done;
 
+            ref Offset offsets = ref _info.Offset;
+
             // Do we have to continue building Iri'zed string from original string
             bool buildIriStringFromPath = InFact(Flags.HasUnicode);
 
             int origIdx; // stores index to switched original string
-            int idx = _info.Offset.Scheme;
+            int idx = offsets.Scheme;
             int length = _string.Length;
             Check result = Check.None;
             UriSyntaxFlags syntaxFlags = _syntax.Flags;
 
-            // _info.Offset values may be parsed twice but we lock only on _flags update.
+            // offsets values may be parsed twice but we lock only on _flags update.
 
             fixed (char* str = _string)
             {
@@ -3295,8 +3301,8 @@ namespace System
                 //Check the form of the user info
                 if ((_flags & Flags.HasUserInfo) != 0)
                 {
-                    idx = _info.Offset.User;
-                    result = CheckCanonical(str, ref idx, _info.Offset.Host, '@');
+                    idx = offsets.User;
+                    result = CheckCanonical(str, ref idx, offsets.Host, '@');
                     if ((result & Check.DisplayCanonical) == 0)
                     {
                         cF |= Flags.UserNotCanonical;
@@ -3328,10 +3334,10 @@ namespace System
             //
 
             // For iri parsing if we found unicode the idx has offset into _originalUnicodeString..
-            // so restart parsing from there and make _info.Offset.Path as _string.Length
+            // so restart parsing from there and make offsets.Path as _string.Length
 
-            idx = _info.Offset.Path;
-            origIdx = _info.Offset.Path;
+            idx = offsets.Path;
+            origIdx = offsets.Path;
 
             if (buildIriStringFromPath)
             {
@@ -3349,13 +3355,13 @@ namespace System
                         _string = _syntax.SchemeName + SchemeDelimiter;
                     }
 
-                    _info.Offset.Scheme = 0;
-                    _info.Offset.User = _string.Length;
-                    _info.Offset.Host = _string.Length;
+                    offsets.Scheme = 0;
+                    offsets.User = _string.Length;
+                    offsets.Host = _string.Length;
                 }
 
-                _info.Offset.Path = _string.Length;
-                idx = _info.Offset.Path;
+                offsets.Path = _string.Length;
+                idx = offsets.Path;
             }
 
             // If the user explicitly disabled canonicalization, only figure out the offsets
@@ -3382,9 +3388,9 @@ namespace System
                     }
                 }
 
-                _info.Offset.Query = idx;
-                _info.Offset.Fragment = str.Length; // There is no fragment in DisablePathAndQueryCanonicalization mode
-                _info.Offset.End = str.Length;
+                offsets.Query = idx;
+                offsets.Fragment = str.Length; // There is no fragment in DisablePathAndQueryCanonicalization mode
+                offsets.End = str.Length;
 
                 goto Done;
             }
@@ -3457,7 +3463,7 @@ namespace System
                 // We use special syntax flag to check if the path is rooted, i.e. has a first slash
                 //
                 if (((_flags & Flags.AuthorityFound) != 0) && ((syntaxFlags & UriSyntaxFlags.PathIsRooted) != 0)
-                    && (_info.Offset.Path == length || (str[_info.Offset.Path] != '/' && str[_info.Offset.Path] != '\\')))
+                    && (offsets.Path == length || (str[offsets.Path] != '/' && str[offsets.Path] != '\\')))
                 {
                     cF |= Flags.FirstSlashAbsent;
                 }
@@ -3565,7 +3571,7 @@ namespace System
                 }
             }
 
-            _info.Offset.Query = idx;
+            offsets.Query = idx;
 
             fixed (char* str = _string)
             {
@@ -3613,7 +3619,7 @@ namespace System
                 }
             }
 
-            _info.Offset.Fragment = idx;
+            offsets.Fragment = idx;
 
             fixed (char* str = _string)
             {
@@ -3640,7 +3646,7 @@ namespace System
                     }
                 }
             }
-            _info.Offset.End = idx;
+            offsets.End = idx;
 
         Done:
             cF |= Flags.AllUriInfoSet;

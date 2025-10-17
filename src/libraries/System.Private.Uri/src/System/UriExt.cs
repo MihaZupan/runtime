@@ -498,16 +498,18 @@ namespace System
                     return false;
                 }
 
+                ref Offset offsets = ref _info.Offset;
+
                 // checking on scheme:\\ or file:////
                 if (InFact(Flags.AuthorityFound))
                 {
-                    idx = _info.Offset.Scheme + _syntax.SchemeName.Length + 2;
-                    if (idx >= _info.Offset.User || _string[idx - 1] == '\\' || _string[idx] == '\\')
+                    idx = offsets.Scheme + _syntax.SchemeName.Length + 2;
+                    if (idx >= offsets.User || _string[idx - 1] == '\\' || _string[idx] == '\\')
                         return false;
 
                     if (InFact(Flags.UncPath | Flags.DosPath))
                     {
-                        while (++idx < _info.Offset.User && (_string[idx] == '/' || _string[idx] == '\\'))
+                        while (++idx < offsets.User && (_string[idx] == '/' || _string[idx] == '\\'))
                             return false;
                     }
                 }
@@ -517,7 +519,7 @@ namespace System
                 // Note that for this check to be more general we assert that if Path is non empty and if it requires a first slash
                 // (which looks absent) then the method has to fail.
                 // Today it's only possible for a Dos like path, i.e. file://c:/bla would fail below check.
-                if (InFact(Flags.FirstSlashAbsent) && _info.Offset.Query > _info.Offset.Path)
+                if (InFact(Flags.FirstSlashAbsent) && offsets.Query > offsets.Path)
                     return false;
 
                 // (4) or contains unescaped backslashes even if they will be treated
@@ -527,7 +529,7 @@ namespace System
                     return false;
 
                 // Capturing a rare case like file:///c|/dir
-                if (IsDosPath && _string[_info.Offset.Path + SecuredPathIndex - 1] == '|')
+                if (IsDosPath && _string[offsets.Path + SecuredPathIndex - 1] == '|')
                     return false;
 
                 //
@@ -539,8 +541,8 @@ namespace System
                 // IPv6 hosts cannot be properly validated by CheckCanonical
                 if ((_flags & Flags.CanonicalDnsHost) == 0 && HostType != Flags.IPv6HostType)
                 {
-                    idx = _info.Offset.User;
-                    Check result = CheckCanonical(str, ref idx, _info.Offset.Path, '/');
+                    idx = offsets.User;
+                    Check result = CheckCanonical(str, ref idx, offsets.Path, '/');
                     if (((result & (Check.ReservedFound | Check.BackslashInPath | Check.EscapedCanonical))
                         != Check.EscapedCanonical)
                         && (!IriParsing || (result & (Check.DisplayCanonical | Check.FoundNonAscii | Check.NotIriCanonical))
