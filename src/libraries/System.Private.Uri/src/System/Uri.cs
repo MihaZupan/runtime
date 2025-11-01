@@ -4134,7 +4134,7 @@ namespace System
         // Used by ParseRemaining as well by InternalIsWellFormedOriginalString
         private Check CheckCanonical(ReadOnlySpan<char> span, char delim, out int end)
         {
-            Debug.Assert(delim is '@' or '?' or '#' or c_DummyChar or c_EOL);
+            Debug.Assert(delim is '@' or '/' or '?' or '#' or c_DummyChar or c_EOL);
 
             Check res = Check.None;
             bool needsEscaping = false;
