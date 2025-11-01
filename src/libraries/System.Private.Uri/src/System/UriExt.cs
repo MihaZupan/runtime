@@ -491,13 +491,16 @@ namespace System
             // checking on scheme:\\ or file:////
             if (InFact(Flags.AuthorityFound))
             {
-                int idx = _info.Offset.Scheme + _syntax.SchemeName.Length + 2;
-                if (idx >= _info.Offset.User || str[idx - 1] == '\\' || str[idx] == '\\')
+                if (InFact(Flags.SchemeNotCanonical_NoTrailingSlashes))
+                {
                     return false;
+                }
 
                 if (InFact(Flags.UncPath | Flags.DosPath))
                 {
-                    if (++idx < _info.Offset.User && str[idx] is '/' or '\\')
+                    int idx = _info.Offset.Scheme + _syntax.SchemeName.Length + 3;
+
+                    if (idx < _info.Offset.User && str[idx] is '/' or '\\')
                     {
                         return false;
                     }
@@ -533,17 +536,6 @@ namespace System
                 {
                     return false;
                 }
-            }
-
-            // Want to ensure there are slashes after the scheme
-            if ((_flags & (Flags.SchemeNotCanonical | Flags.AuthorityFound))
-                == (Flags.SchemeNotCanonical | Flags.AuthorityFound))
-            {
-                int idx = _info.Offset.Scheme + _syntax.SchemeName.Length;
-                Debug.Assert(str[idx] == ':');
-
-                if ((uint)(idx + 1) >= (uint)str.Length || str[idx] != '/' || str[idx + 1] != '/')
-                    return false;
             }
 
             // The scheme, host, port or path may need some canonicalization, but the uri string is found to be a "well formed" one.

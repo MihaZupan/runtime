@@ -132,7 +132,12 @@ namespace System
             /// <summary>
             /// Used for asserting that certain methods are only called from the constructor to validate thread-safety assumptions
             /// </summary>
-            Debug_LeftConstructor = 1UL << 57
+            Debug_LeftConstructor = 1UL << 57,
+
+            /// <summary>
+            /// Indicates that there is an authority, but the scheme does not use "//" to delimit it (e.g. "http:\\host").
+            /// </summary>
+            SchemeNotCanonical_NoTrailingSlashes = 1UL << 58,
         }
 
         [Conditional("DEBUG")]
@@ -3249,7 +3254,7 @@ namespace System
                 // (for compatibility with: http:\\host)
                 if ((_flags & Flags.AuthorityFound) != 0 && !str.Slice(schemeLength).StartsWith("://", StringComparison.Ordinal))
                 {
-                    cF |= Flags.SchemeNotCanonical;
+                    cF |= Flags.SchemeNotCanonical | Flags.SchemeNotCanonical_NoTrailingSlashes;
                 }
             }
 
