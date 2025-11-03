@@ -443,14 +443,15 @@ namespace System.PrivateUri.Tests
             new object[] { "http://www.contoso.com/path?a# a ", false },
             new object[] { "http://www.contoso.com/path?\u00E4# \u00E4 ", false },
 
-
             new object[] { "http://www.contoso.com/path?a#a?a", true },
             new object[] { "http://www.contoso.com/\u00E4?\u00E4#u00E4?\u00E4", true },
 
-            // Sample in "private unsafe Check CheckCanonical(char* str, ref ushort idx, ushort end, char delim)" code comments
             new object[] { "http://www.contoso.com/\u00E4/ path2/ param=val", false },
             new object[] { "http://www.contoso.com/\u00E4? param=val", false },
             new object[] { "http://www.contoso.com/\u00E4?param=val# fragment", false },
+
+            // Surrogate pairs
+            new object[] { "http://www.contoso.com/path/\uD83C\uDF49?query\uD83C\uDF49=\uD83C\uDF49#\uD83C\uDF49", true },
         };
 
         [Theory]

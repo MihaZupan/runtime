@@ -3241,6 +3241,7 @@ namespace System
                 int schemeLength = _syntax.SchemeName.Length;
 
                 // Check that the scheme casing matches the canonical one (lowercase).
+                // Using a manual loop instead of ContainsAnyInRange because the expected length is small.
                 foreach (char c in str.Slice(0, schemeLength))
                 {
                     if (char.IsAsciiLetterUpper(c))
