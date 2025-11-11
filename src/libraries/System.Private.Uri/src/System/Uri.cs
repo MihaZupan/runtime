@@ -272,31 +272,37 @@ namespace System
 
         private bool IsImplicitFile
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.ImplicitFile) != 0; }
         }
 
         private bool IsUncOrDosPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & (Flags.UncPath | Flags.DosPath)) != 0; }
         }
 
         private bool IsDosPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.DosPath) != 0; }
         }
 
         private bool IsUncPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.UncPath) != 0; }
         }
 
         private bool IsUnixPath
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (_flags & Flags.UnixPath) != 0; }
         }
 
         private Flags HostType
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return _flags & Flags.HostTypeMask; }
         }
 
@@ -316,17 +322,27 @@ namespace System
         //
         // Checks if Iri parsing is allowed by the syntax & by config
         //
-        private bool IriParsing => IriParsingStatic(_syntax);
+        private bool IriParsing
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => IriParsingStatic(_syntax);
+        }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IriParsingStatic(UriParser? syntax)
         {
             return syntax is null || syntax.InFact(UriSyntaxFlags.AllowIriParsing);
         }
 
-        internal bool DisablePathAndQueryCanonicalization => (_flags & Flags.DisablePathAndQueryCanonicalization) != 0;
+        internal bool DisablePathAndQueryCanonicalization
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (_flags & Flags.DisablePathAndQueryCanonicalization) != 0;
+        }
 
         internal bool UserDrivenParsing
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 return (_flags & Flags.UserDrivenParsing) != 0;
@@ -348,21 +364,25 @@ namespace System
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool NotAny(Flags flags)
         {
             return (_flags & flags) == 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool InFact(Flags flags)
         {
             return (_flags & flags) != 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool StaticNotAny(Flags allFlags, Flags checkFlags)
         {
             return (allFlags & checkFlags) == 0;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool StaticInFact(Flags allFlags, Flags checkFlags)
         {
             return (allFlags & checkFlags) != 0;
