@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Buffers;
@@ -3186,15 +3186,6 @@ namespace System
             }
         }
 
-        // Cut trailing spaces
-        private static void GetLengthWithoutTrailingSpaces(string str, ref int length, int idx)
-        {
-            // to avoid dereferencing ref length parameter for every update
-            int local = length;
-            while (local > idx && UriHelper.IsLWS(str[local - 1])) --local;
-            length = local;
-        }
-
         //
         //This method does:
         //  - Creates _info member
@@ -3209,40 +3200,29 @@ namespace System
             // ensure we parsed up to the path
             EnsureUriInfo();
 
-            Flags cF = Flags.Zero;
+            Flags cF = _flags | Flags.AllUriInfoSet;
 
-            if (UserDrivenParsing)
+            if ((cF & Flags.UserDrivenParsing) != 0)
                 goto Done;
-
-            // Do we have to continue building Iri'zed string from original string
-            bool buildIriStringFromPath = InFact(Flags.HasUnicode);
-
-            int origIdx; // stores index to switched original string
-            int idx = _info.Offset.Scheme;
-            int length = _string.Length;
-            Check result;
-            UriSyntaxFlags syntaxFlags = _syntax.Flags;
 
             // _info.Offset values may be parsed twice but we lock only on _flags update.
 
-            GetLengthWithoutTrailingSpaces(_string, ref length, idx);
-
-            if (IsImplicitFile)
+            if ((cF & Flags.ImplicitFile) != 0)
             {
                 cF |= Flags.SchemeNotCanonical;
             }
             else
             {
-                ReadOnlySpan<char> str = _string.AsSpan(idx);
+                ReadOnlySpan<char> scheme = _string.AsSpan(_info.Offset.Scheme);
 
-                Debug.Assert(str.StartsWith(_syntax.SchemeName, StringComparison.OrdinalIgnoreCase));
-                Debug.Assert(str[_syntax.SchemeName.Length] == ':');
+                Debug.Assert(scheme.StartsWith(_syntax.SchemeName, StringComparison.OrdinalIgnoreCase));
+                Debug.Assert(scheme[_syntax.SchemeName.Length] == ':');
 
                 int schemeLength = _syntax.SchemeName.Length;
 
                 // Check that the scheme casing matches the canonical one (lowercase).
                 // Using a manual loop instead of ContainsAnyInRange because the expected length is small.
-                foreach (char c in str.Slice(0, schemeLength))
+                foreach (char c in scheme.Slice(0, schemeLength))
                 {
                     if (char.IsAsciiLetterUpper(c))
                     {
@@ -3253,17 +3233,19 @@ namespace System
 
                 // For an authority Uri only // after the scheme would be canonical
                 // (for compatibility with: http:\\host)
-                if ((_flags & Flags.AuthorityFound) != 0 && !str.Slice(schemeLength).StartsWith("://", StringComparison.Ordinal))
+                if ((cF & Flags.AuthorityFound) != 0 && !scheme.Slice(schemeLength).StartsWith("://", StringComparison.Ordinal))
                 {
                     cF |= Flags.SchemeNotCanonical | Flags.SchemeNotCanonical_NoTrailingSlashes;
                 }
             }
 
+            UriSyntaxFlags syntaxFlags = _syntax.Flags;
+
             // Check the form of the user info
-            if ((_flags & Flags.HasUserInfo) != 0)
+            if ((cF & Flags.HasUserInfo) != 0)
             {
-                idx = _info.Offset.User;
-                result = CheckCanonical(_string.AsSpan(idx, _info.Offset.Host - idx), '@', out _);
+                int userStart = _info.Offset.User;
+                Check result = CheckCanonical(_string.AsSpan(userStart, _info.Offset.Host - userStart), '@', out _);
 
                 if ((result & Check.DisplayCanonical) == 0)
                 {
@@ -3273,12 +3255,25 @@ namespace System
                 {
                     cF |= Flags.E_UserNotCanonical;
                 }
-                if (IriParsing && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
+                if ((syntaxFlags & UriSyntaxFlags.AllowIriParsing) != 0 && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
                                                 | Check.FoundNonAscii | Check.NotIriCanonical))
                                                 == (Check.DisplayCanonical | Check.FoundNonAscii)))
                 {
                     cF |= Flags.UserIriCanonical;
                 }
+            }
+
+            if ((cF & Flags.HasUnicode) != 0)
+            {
+                ParseRemaining_RecreateNormalizedString();
+            }
+
+            string inputStr = _string;
+            int length = inputStr.Length;
+
+            while ((uint)(length - 1) < (uint)inputStr.Length && UriHelper.IsLWS(inputStr[length - 1]))
+            {
+                length--;
             }
 
             // Delay canonical Host checking to avoid creation of a host string.
@@ -3288,244 +3283,138 @@ namespace System
             // Parsing the Path if any.
             // For iri parsing if we found unicode the idx has offset into _originalUnicodeString,
             // so restart parsing from there and make _info.Offset.Path as _string.Length
-            idx = _info.Offset.Path;
-            origIdx = _info.Offset.Path;
-
-            if (buildIriStringFromPath)
-            {
-                DebugAssertInCtor();
-
-                // Dos/Unix paths have no host.  Other schemes cleared/set _string with host information in PrivateParseMinimal.
-                if (IsFile && !IsUncPath)
-                {
-                    if (IsImplicitFile)
-                    {
-                        _string = string.Empty;
-                    }
-                    else
-                    {
-                        _string = _syntax.SchemeName + SchemeDelimiter;
-                    }
-
-                    _info.Offset.Scheme = 0;
-                    _info.Offset.User = _string.Length;
-                    _info.Offset.Host = _string.Length;
-                }
-
-                _info.Offset.Path = _string.Length;
-                idx = _info.Offset.Path;
-            }
 
             // If the user explicitly disabled canonicalization, only figure out the offsets
-            if (DisablePathAndQueryCanonicalization)
+            if ((cF & Flags.DisablePathAndQueryCanonicalization) != 0)
             {
-                if (buildIriStringFromPath)
+                int queryStart;
+                if ((cF & Flags.ImplicitFile) != 0 || (syntaxFlags & UriSyntaxFlags.MayHaveQuery) == 0)
                 {
-                    DebugAssertInCtor();
-                    _string = string.Concat(_string, _originalUnicodeString.AsSpan(origIdx));
-                }
-
-                string str = _string;
-
-                if (IsImplicitFile || (syntaxFlags & UriSyntaxFlags.MayHaveQuery) == 0)
-                {
-                    idx = str.Length;
+                    queryStart = inputStr.Length;
                 }
                 else
                 {
-                    idx = str.IndexOf('?');
-                    if (idx == -1)
+                    queryStart = inputStr.IndexOf('?');
+                    if (queryStart < 0)
                     {
-                        idx = str.Length;
+                        queryStart = inputStr.Length;
                     }
                 }
 
-                _info.Offset.Query = idx;
-                _info.Offset.Fragment = str.Length; // There is no fragment in DisablePathAndQueryCanonicalization mode
-                _info.Offset.End = str.Length;
+                _info.Offset.Query = queryStart;
+                _info.Offset.Fragment = inputStr.Length; // There is no fragment in DisablePathAndQueryCanonicalization mode
+                _info.Offset.End = inputStr.Length;
 
                 goto Done;
             }
 
+            int idx = _info.Offset.Path;
+
             //Some uris do not have a query
             //    When '?' is passed as delimiter, then it's special case
             //    so both '?' and '#' will work as delimiters
-            if (buildIriStringFromPath)
-            {
-                DebugAssertInCtor();
-
-                int offset = origIdx;
-                if (IsImplicitFile || ((syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) == 0))
-                {
-                    origIdx = _originalUnicodeString.Length;
-                }
-                else
-                {
-                    ReadOnlySpan<char> span = _originalUnicodeString.AsSpan(origIdx);
-                    int index;
-                    if (_syntax.InFact(UriSyntaxFlags.MayHaveQuery))
-                    {
-                        if (_syntax.InFact(UriSyntaxFlags.MayHaveFragment))
-                        {
-                            index = span.IndexOfAny('?', '#');
-                        }
-                        else
-                        {
-                            index = span.IndexOf('?');
-                        }
-                    }
-                    else
-                    {
-                        Debug.Assert(_syntax.InFact(UriSyntaxFlags.MayHaveFragment));
-                        index = span.IndexOf('#');
-                    }
-                    origIdx = index == -1 ? _originalUnicodeString.Length : (index + origIdx);
-                }
-
-                _string += EscapeUnescapeIri(_originalUnicodeString, offset, origIdx, isQuery: false);
-
-                length = _string.Length;
-                // We need to be sure that there isn't a '?' separated from the path by spaces.
-                if (_string == _originalUnicodeString)
-                {
-                    GetLengthWithoutTrailingSpaces(_string, ref length, idx);
-                }
-            }
-
             {
                 char delim =
-                    IsImplicitFile || (syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) == 0 ? c_DummyChar :
+                    (cF & Flags.ImplicitFile) != 0 || (syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) == 0 ? c_DummyChar :
                     ((syntaxFlags & UriSyntaxFlags.MayHaveQuery) != 0) ? '?' : '#';
 
-                result = CheckCanonical(_string.AsSpan(idx, length - idx), delim, out int checkedChars);
+                Check result = CheckCanonical(inputStr.AsSpan(idx, length - idx), delim, out int checkedChars);
                 idx += checkedChars;
-            }
 
-            // ATTN:
-            // This may render problems for unknown schemes, but in general for an authority based Uri
-            // (that has slashes) a path should start with "/"
-            // This becomes more interesting knowing how a file uri is used in "file://c:/path"
-            // It will be converted to file:///c:/path
-            //
-            // However, even more interesting is that vsmacros://c:\path will not add the third slash in the _canoical_ case
-            //
-            // We use special syntax flag to check if the path is rooted, i.e. has a first slash
-            //
-            if (((_flags & Flags.AuthorityFound) != 0) && ((syntaxFlags & UriSyntaxFlags.PathIsRooted) != 0)
-                && (_info.Offset.Path == length || _string[_info.Offset.Path] is not ('/' or '\\')))
-            {
-                cF |= Flags.FirstSlashAbsent;
-            }
-
-            // Check the need for compression or backslashes conversion
-            // we included IsDosPath since it may come with other than FILE uri, for ex. scheme://C:\path
-            // (This is very unfortunate that the original design has included that feature)
-            bool nonCanonical = false;
-            if (IsDosPath || (((_flags & Flags.AuthorityFound) != 0) &&
-                (((syntaxFlags & (UriSyntaxFlags.CompressPath | UriSyntaxFlags.ConvertPathSlashes)) != 0) ||
-                _syntax.InFact(UriSyntaxFlags.UnEscapeDotsAndSlashes))))
-            {
-                if (((result & Check.DotSlashEscaped) != 0) && _syntax.InFact(UriSyntaxFlags.UnEscapeDotsAndSlashes))
+                // ATTN:
+                // This may render problems for unknown schemes, but in general for an authority based Uri
+                // (that has slashes) a path should start with "/"
+                // This becomes more interesting knowing how a file uri is used in "file://c:/path"
+                // It will be converted to file:///c:/path
+                //
+                // However, even more interesting is that vsmacros://c:\path will not add the third slash in the _canoical_ case
+                //
+                // We use special syntax flag to check if the path is rooted, i.e. has a first slash
+                //
+                if (((cF & Flags.AuthorityFound) != 0) && ((syntaxFlags & UriSyntaxFlags.PathIsRooted) != 0)
+                    && (_info.Offset.Path == length || inputStr[_info.Offset.Path] is not ('/' or '\\')))
                 {
-                    cF |= (Flags.E_PathNotCanonical | Flags.PathNotCanonical);
+                    cF |= Flags.FirstSlashAbsent;
+                }
+
+                // Check the need for compression or backslashes conversion
+                // we included IsDosPath since it may come with other than FILE uri, for ex. scheme://C:\path
+                // (This is very unfortunate that the original design has included that feature)
+                bool nonCanonical = false;
+                if ((cF & Flags.DosPath) != 0 || (((cF & Flags.AuthorityFound) != 0) &&
+                    (((syntaxFlags & (UriSyntaxFlags.CompressPath | UriSyntaxFlags.ConvertPathSlashes)) != 0) ||
+                    (syntaxFlags & UriSyntaxFlags.UnEscapeDotsAndSlashes) != 0)))
+                {
+                    if (((result & Check.DotSlashEscaped) != 0) && (syntaxFlags & UriSyntaxFlags.UnEscapeDotsAndSlashes) != 0)
+                    {
+                        cF |= (Flags.E_PathNotCanonical | Flags.PathNotCanonical);
+                        nonCanonical = true;
+                    }
+
+                    if (((syntaxFlags & (UriSyntaxFlags.ConvertPathSlashes)) != 0) && (result & Check.BackslashInPath) != 0)
+                    {
+                        cF |= (Flags.E_PathNotCanonical | Flags.PathNotCanonical);
+                        nonCanonical = true;
+                    }
+
+                    if (((syntaxFlags & (UriSyntaxFlags.CompressPath)) != 0) && ((cF & Flags.E_PathNotCanonical) != 0 ||
+                        (result & Check.DotSlashAttn) != 0))
+                    {
+                        cF |= Flags.ShouldBeCompressed;
+                    }
+
+                    if ((result & Check.BackslashInPath) != 0)
+                        cF |= Flags.BackslashInPath;
+                }
+                else if ((result & Check.BackslashInPath) != 0)
+                {
+                    // for a "generic" path '\' should be escaped
+                    cF |= Flags.E_PathNotCanonical;
                     nonCanonical = true;
                 }
 
-                if (((syntaxFlags & (UriSyntaxFlags.ConvertPathSlashes)) != 0) && (result & Check.BackslashInPath) != 0)
+                if ((result & Check.DisplayCanonical) == 0)
                 {
-                    cF |= (Flags.E_PathNotCanonical | Flags.PathNotCanonical);
-                    nonCanonical = true;
-                }
-
-                if (((syntaxFlags & (UriSyntaxFlags.CompressPath)) != 0) && ((cF & Flags.E_PathNotCanonical) != 0 ||
-                    (result & Check.DotSlashAttn) != 0))
-                {
-                    cF |= Flags.ShouldBeCompressed;
-                }
-
-                if ((result & Check.BackslashInPath) != 0)
-                    cF |= Flags.BackslashInPath;
-            }
-            else if ((result & Check.BackslashInPath) != 0)
-            {
-                // for a "generic" path '\' should be escaped
-                cF |= Flags.E_PathNotCanonical;
-                nonCanonical = true;
-            }
-
-            if ((result & Check.DisplayCanonical) == 0)
-            {
-                // For implicit file the user string is usually in perfect display format,
-                // Hence, ignoring complains from CheckCanonical()
-                // V1 compat. In fact we should simply ignore dontEscape parameter for Implicit file.
-                // Currently we don't.
-                if (((_flags & Flags.ImplicitFile) == 0) || ((_flags & Flags.UserEscaped) != 0) ||
-                    (result & Check.ReservedFound) != 0)
-                {
-                    //means it's found as escaped or has unescaped Reserved Characters
-                    cF |= Flags.PathNotCanonical;
-                    nonCanonical = true;
-                }
-            }
-
-            if (((_flags & Flags.ImplicitFile) != 0) && (result & (Check.ReservedFound | Check.EscapedCanonical)) != 0)
-            {
-                // need to escape reserved chars or re-escape '%' if an "escaped sequence" was found
-                result &= ~Check.EscapedCanonical;
-            }
-
-            if ((result & Check.EscapedCanonical) == 0)
-            {
-                //means it's found as not completely escaped
-                cF |= Flags.E_PathNotCanonical;
-            }
-
-            if (IriParsing && !nonCanonical && ((result & (Check.DisplayCanonical | Check.EscapedCanonical
-                            | Check.FoundNonAscii | Check.NotIriCanonical))
-                            == (Check.DisplayCanonical | Check.FoundNonAscii)))
-            {
-                cF |= Flags.PathIriCanonical;
-            }
-
-            //
-            //Now we've got to parse the Query if any. Note that Query requires the presence of '?'
-            //
-            if (buildIriStringFromPath)
-            {
-                DebugAssertInCtor();
-
-                int offset = origIdx;
-
-                if (origIdx < _originalUnicodeString.Length && _originalUnicodeString[origIdx] == '?')
-                {
-                    if ((syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0)
+                    // For implicit file the user string is usually in perfect display format,
+                    // Hence, ignoring complains from CheckCanonical()
+                    // V1 compat. In fact we should simply ignore dontEscape parameter for Implicit file.
+                    // Currently we don't.
+                    if (((cF & Flags.ImplicitFile) == 0) || ((cF & Flags.UserEscaped) != 0) ||
+                        (result & Check.ReservedFound) != 0)
                     {
-                        ++origIdx; // This is to exclude first '?' character from checking
-                        int index = _originalUnicodeString.AsSpan(origIdx).IndexOf('#');
-                        origIdx = index == -1 ? _originalUnicodeString.Length : (index + origIdx);
-                    }
-                    else
-                    {
-                        origIdx = _originalUnicodeString.Length;
-                    }
-
-                    _string += EscapeUnescapeIri(_originalUnicodeString, offset, origIdx, isQuery: true);
-
-                    length = _string.Length;
-                    // We need to be sure that there isn't a '#' separated from the query by spaces.
-                    if (_string == _originalUnicodeString)
-                    {
-                        GetLengthWithoutTrailingSpaces(_string, ref length, idx);
+                        //means it's found as escaped or has unescaped Reserved Characters
+                        cF |= Flags.PathNotCanonical;
+                        nonCanonical = true;
                     }
                 }
+
+                if (((cF & Flags.ImplicitFile) != 0) && (result & (Check.ReservedFound | Check.EscapedCanonical)) != 0)
+                {
+                    // need to escape reserved chars or re-escape '%' if an "escaped sequence" was found
+                    result &= ~Check.EscapedCanonical;
+                }
+
+                if ((result & Check.EscapedCanonical) == 0)
+                {
+                    //means it's found as not completely escaped
+                    cF |= Flags.E_PathNotCanonical;
+                }
+
+                if ((syntaxFlags & UriSyntaxFlags.AllowIriParsing) != 0 && !nonCanonical && ((result & (Check.DisplayCanonical | Check.EscapedCanonical
+                                | Check.FoundNonAscii | Check.NotIriCanonical))
+                                == (Check.DisplayCanonical | Check.FoundNonAscii)))
+                {
+                    cF |= Flags.PathIriCanonical;
+                }
             }
 
+            // Now we've got to parse the Query if any. Note that Query requires the presence of '?'
             _info.Offset.Query = idx;
 
-            if (idx < length && _string[idx] == '?')
+            if ((uint)idx < (uint)inputStr.Length && inputStr[idx] == '?')
             {
                 idx++; // This is to exclude first '?' character from checking
-                result = CheckCanonical(_string.AsSpan(idx, length - idx), (syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0 ? '#' : c_EOL, out int charsChecked);
+                Check result = CheckCanonical(inputStr.AsSpan(idx, length - idx), (syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0 ? '#' : c_EOL, out int charsChecked);
                 idx += charsChecked;
 
                 if ((result & Check.DisplayCanonical) == 0)
@@ -3538,7 +3427,7 @@ namespace System
                     cF |= Flags.E_QueryNotCanonical;
                 }
 
-                if (IriParsing && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
+                if ((syntaxFlags & UriSyntaxFlags.AllowIriParsing) != 0 && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
                             | Check.FoundNonAscii | Check.NotIriCanonical))
                             == (Check.DisplayCanonical | Check.FoundNonAscii)))
                 {
@@ -3546,34 +3435,14 @@ namespace System
                 }
             }
 
-            //
-            //Now we've got to parse the Fragment if any. Note that Fragment requires the presence of '#'
-            //
-            if (buildIriStringFromPath)
-            {
-                DebugAssertInCtor();
-
-                int offset = origIdx;
-
-                if (origIdx < _originalUnicodeString.Length && _originalUnicodeString[origIdx] == '#')
-                {
-                    origIdx = _originalUnicodeString.Length;
-
-                    _string += EscapeUnescapeIri(_originalUnicodeString, offset, origIdx, isQuery: false);
-
-                    length = _string.Length;
-                    // we don't need to check _originalUnicodeString == _string because # is last part
-                    GetLengthWithoutTrailingSpaces(_string, ref length, idx);
-                }
-            }
-
+            // Now we've got to parse the Fragment if any. Note that Fragment requires the presence of '#'
             _info.Offset.Fragment = idx;
 
-            if (idx < length && _string[idx] == '#')
+            if ((uint)idx < (uint)inputStr.Length && inputStr[idx] == '#')
             {
                 idx++; // This is to exclude first '#' character from checking
                 // We don't using c_DummyChar since want to allow '?' and '#' as unescaped
-                result = CheckCanonical(_string.AsSpan(idx, length - idx), c_EOL, out int checkedChars);
+                Check result = CheckCanonical(inputStr.AsSpan(idx, length - idx), c_EOL, out int checkedChars);
                 idx += checkedChars;
 
                 if ((result & Check.DisplayCanonical) == 0)
@@ -3586,18 +3455,125 @@ namespace System
                     cF |= Flags.E_FragmentNotCanonical;
                 }
 
-                if (IriParsing && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
+                if ((syntaxFlags & UriSyntaxFlags.AllowIriParsing) != 0 && ((result & (Check.DisplayCanonical | Check.EscapedCanonical | Check.BackslashInPath
                             | Check.FoundNonAscii | Check.NotIriCanonical))
                             == (Check.DisplayCanonical | Check.FoundNonAscii)))
                 {
                     cF |= Flags.FragmentIriCanonical;
                 }
             }
+
             _info.Offset.End = idx;
 
         Done:
-            cF |= Flags.AllUriInfoSet;
             InterlockedSetFlags(cF);
+        }
+
+        private void ParseRemaining_RecreateNormalizedString()
+        {
+            DebugAssertInCtor();
+            Debug.Assert(InFact(Flags.HasUnicode));
+            Debug.Assert(InFact(Flags.MinimalUriInfoSet));
+            Debug.Assert(!InFact(Flags.UserDrivenParsing));
+
+            ValueStringBuilder vsb = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
+            vsb.Append(_string);
+
+            Flags flags = _flags;
+            UriSyntaxFlags syntaxFlags = _syntax.Flags;
+            ReadOnlySpan<char> original = _originalUnicodeString.AsSpan(_info.Offset.Path);
+
+            // Dos/Unix paths have no host.  Other schemes cleared/set _string with host information in PrivateParseMinimal.
+            if (IsFile && (flags & Flags.UncPath) == 0)
+            {
+                vsb.Length = 0;
+
+                if ((flags & Flags.ImplicitFile) == 0)
+                {
+                    vsb.Append(_syntax.SchemeName);
+                    vsb.Append(SchemeDelimiter);
+                }
+
+                _info.Offset.Scheme = 0;
+                _info.Offset.User = vsb.Length;
+                _info.Offset.Host = vsb.Length;
+            }
+
+            _info.Offset.Path = vsb.Length;
+
+            // If the user explicitly disabled canonicalization, only figure out the offsets
+            if ((flags & Flags.DisablePathAndQueryCanonicalization) != 0)
+            {
+                _string = string.Concat(vsb.AsSpan(), original);
+                vsb.Dispose();
+                return;
+            }
+
+            // Trim trailing whitespace
+            while (!original.IsEmpty && UriHelper.IsLWS(original[^1]))
+            {
+                original = original.Slice(0, original.Length - 1);
+            }
+
+            ReadOnlySpan<char> path = original;
+
+            if ((flags & Flags.ImplicitFile) == 0 && (syntaxFlags & (UriSyntaxFlags.MayHaveQuery | UriSyntaxFlags.MayHaveFragment)) != 0)
+            {
+                int index;
+                if ((syntaxFlags & UriSyntaxFlags.MayHaveQuery) != 0)
+                {
+                    if ((syntaxFlags & UriSyntaxFlags.MayHaveFragment) != 0)
+                    {
+                        index = path.IndexOfAny('?', '#');
+                    }
+                    else
+                    {
+                        index = path.IndexOf('?');
+                    }
+                }
+                else
+                {
+                    Debug.Assert((syntaxFlags & UriSyntaxFlags.MayHaveFragment) != 0);
+                    index = path.IndexOf('#');
+                }
+
+                if (index >= 0)
+                {
+                    path = path.Slice(0, index);
+                }
+            }
+
+            original = original.Slice(path.Length);
+
+            IriHelper.EscapeUnescapeIri(ref vsb, path, isQuery: false);
+
+            // Now we've got to parse the Query if any. Note that Query requires the presence of '?'
+            if (original.StartsWith('?'))
+            {
+                ReadOnlySpan<char> query = original;
+
+                if ((syntaxFlags & (UriSyntaxFlags.MayHaveFragment)) != 0)
+                {
+                    int queryLength = query.IndexOf('#');
+                    if (queryLength >= 0)
+                    {
+                        query = query.Slice(0, queryLength);
+                    }
+                }
+
+                original = original.Slice(query.Length);
+
+                IriHelper.EscapeUnescapeIri(ref vsb, query, isQuery: true);
+            }
+
+            // Now we've got to parse the Fragment if any. Note that Fragment requires the presence of '#'
+            if (!original.IsEmpty)
+            {
+                Debug.Assert(original.StartsWith('#'));
+                IriHelper.EscapeUnescapeIri(ref vsb, original, isQuery: false);
+            }
+
+            _string = vsb.ToString();
         }
 
         // verifies the syntax of the scheme part
@@ -3829,7 +3805,10 @@ namespace System
                         if (hasUnicode)
                         {
                             // Normalize user info
-                            newHost += IriHelper.EscapeUnescapeIri(pString, startInput, start + 1, isQuery: false);
+                            var vsb = new ValueStringBuilder(stackalloc char[StackallocThreshold]);
+                            IriHelper.EscapeUnescapeIri(ref vsb, new ReadOnlySpan<char>(pString + startInput, start - startInput + 1), isQuery: false);
+                            newHost = string.Concat(newHost, vsb.AsSpan());
+                            vsb.Dispose();
                         }
                         ++start;
                         ch = pString[start];
@@ -4072,6 +4051,7 @@ namespace System
                     }
                 }
             }
+
             return end;
         }
 
@@ -4133,6 +4113,7 @@ namespace System
         }
 
         // Used by ParseRemaining as well by InternalIsWellFormedOriginalString
+        //[MethodImpl(MethodImplOptions.NoInlining)]
         private Check CheckCanonical(ReadOnlySpan<char> span, char delim, out int end)
         {
             Debug.Assert(delim is '@' or '/' or '?' or '#' or c_DummyChar or c_EOL);
