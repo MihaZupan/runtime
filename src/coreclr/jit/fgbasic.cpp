@@ -9,7 +9,7 @@
 // Flowgraph Construction and Maintenance
 
 //------------------------------------------------------------------------------
-// fgCanonicalizeFirstBB: Canonicalize the method entry to be dominate all
+// fgCanonicalizeFirstBB: Canonicalize the methods entry to be dominate all
 // blocks in the BB and to be executed exactly once.
 //
 // Returns:
