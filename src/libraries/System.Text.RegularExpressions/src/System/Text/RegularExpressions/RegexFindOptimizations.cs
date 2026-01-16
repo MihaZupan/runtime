@@ -186,15 +186,17 @@ namespace System.Text.RegularExpressions
                 // TODO: While some benchmarks benefit from this significantly, others regressed a bit (in particular those with few
                 //       matches). Before enabling this, we need to investigate the performance impact on real-world scenarios,
                 //       and see if there are ways to reduce the impact.
-                //if (RegexPrefixAnalyzer.FindPrefixes(root, ignoreCase: false) is { Length: > 1 } caseSensitivePrefixes)
-                //{
-                //    LeadingPrefixes = caseSensitivePrefixes;
-                //    FindMode = FindNextStartingPositionMode.LeadingStrings_LeftToRight;
+                //       For now we only enable this when there are exactly two prefixes that start with a different character.
+                if (RegexPrefixAnalyzer.FindPrefixes(root, ignoreCase: false) is { Length: > 1 } caseSensitivePrefixes &&
+                    caseSensitivePrefixes.Length == 2 && caseSensitivePrefixes[0][0] != caseSensitivePrefixes[1][0])
+                {
+                    LeadingPrefixes = caseSensitivePrefixes;
+                    FindMode = FindNextStartingPositionMode.LeadingStrings_LeftToRight;
 #if SYSTEM_TEXT_REGULAREXPRESSIONS
-                //    LeadingStrings = SearchValues.Create(LeadingPrefixes, StringComparison.Ordinal);
+                    LeadingStrings = SearchValues.Create(LeadingPrefixes, StringComparison.Ordinal);
 #endif
-                //    return;
-                //}
+                    return;
+                }
             }
 
             // Build up a list of all of the sets that are a fixed distance from the start of the expression.

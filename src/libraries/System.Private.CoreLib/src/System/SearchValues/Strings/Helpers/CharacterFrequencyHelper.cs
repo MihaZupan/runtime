@@ -123,5 +123,49 @@ namespace System.Buffers
 
             return minIndex;
         }
+
+        public static int GetSharedSecondCharacterOffset(string value0, string value1, bool ignoreCase)
+        {
+            Debug.Assert(value0.Length > 1 && value1.Length >= value0.Length);
+
+            float minCombinedFrequency = float.MaxValue;
+            // Default to the last valid offset within range (same as single-string case when no ASCII chars found).
+            // This provides better filtering by using a character further from position 0.
+            int bestOffset = value0.Length - 1;
+
+            // Search for the offset with lowest combined frequency across both values
+            for (int i = 1; i < value0.Length; i++)
+            {
+                char c0 = value0[i];
+                char c1 = value1[i];
+
+                // We need both characters at this offset to be ASCII for frequency comparison
+                if (!char.IsAscii(c0) || !char.IsAscii(c1))
+                {
+                    continue;
+                }
+
+                float freq = AsciiFrequency[c0] + AsciiFrequency[c1];
+
+                if (ignoreCase)
+                {
+                    freq += AsciiFrequency[c0 ^ 0x20] + AsciiFrequency[c1 ^ 0x20];
+                }
+
+                // Penalize early positions (same as single-value logic)
+                if (i <= 2)
+                {
+                    freq *= 1.5f;
+                }
+
+                if (freq < minCombinedFrequency)
+                {
+                    minCombinedFrequency = freq;
+                    bestOffset = i;
+                }
+            }
+
+            return bestOffset;
+        }
     }
 }

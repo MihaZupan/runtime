@@ -127,6 +127,13 @@ namespace System.Buffers
                 return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
             }
 
+            if ((Sse2.IsSupported || AdvSimd.Arm64.IsSupported) &&
+                values.Length == 2 &&
+                TryCreateForTwoValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly) is { } twoValuesSearchValues)
+            {
+                return twoValuesSearchValues;
+            }
+
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
                 TryGetTeddyAcceleratedValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } searchValues)
             {
@@ -417,30 +424,30 @@ namespace System.Buffers
         {
             if (!ignoreCase)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseSensitive>(value, uniqueValues);
+                return CreateSingleValueThreeChars<TValueLength, CaseSensitive>(value, uniqueValues);
             }
 
             if (asciiLettersOnly)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAsciiLetters>(value, uniqueValues);
+                return CreateSingleValueThreeChars<TValueLength, CaseInsensitiveAsciiLetters>(value, uniqueValues);
             }
 
             if (allAscii)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAscii>(value, uniqueValues);
+                return CreateSingleValueThreeChars<TValueLength, CaseInsensitiveAscii>(value, uniqueValues);
             }
 
             // SingleStringSearchValuesThreeChars doesn't have logic to handle non-ASCII case conversion, so we require that anchor characters are ASCII.
             // Right now we're always selecting the first character as one of the anchors, and we need at least two.
             if (char.IsAscii(value[0]) && value.AsSpan(1).ContainsAnyInRange((char)0, (char)127))
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+                return CreateSingleValueThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
             }
 
             return null;
         }
 
-        private static SearchValues<string> CreateSingleValuesThreeChars<TValueLength, TCaseSensitivity>(
+        private static SearchValues<string> CreateSingleValueThreeChars<TValueLength, TCaseSensitivity>(
             string value,
             HashSet<string>? uniqueValues)
             where TValueLength : struct, IValueLength
@@ -454,13 +461,109 @@ namespace System.Buffers
             }
 
             return new SingleStringSearchValuesThreeChars<TValueLength, TCaseSensitivity>(uniqueValues, value, ch2Offset, ch3Offset);
-
-            // Unlike with PackedSpanHelpers (Sse2 only), we are also using this approach on ARM64.
-            // We use PackUnsignedSaturate on X86 and UnzipEven on ARM, so the set of allowed characters differs slightly (we can't use it for \0 and \xFF on X86).
-            static bool CanUsePackedImpl(char c) =>
-                PackedSpanHelpers.PackedIndexOfIsSupported ? PackedSpanHelpers.CanUsePackedIndexOf(c) :
-                (AdvSimd.Arm64.IsSupported && c <= byte.MaxValue);
         }
+
+        private static SearchValues<string>? TryCreateForTwoValues(
+            ReadOnlySpan<string> values,
+            HashSet<string> uniqueValues,
+            bool ignoreCase,
+            bool allAscii,
+            bool asciiLettersOnly)
+        {
+            Debug.Assert(values.Length == 2);
+
+            string value0 = values[0];
+            string value1 = values[1];
+
+            Debug.Assert(value0.Length <= value1.Length);
+
+            // Both values must have at least 2 characters.
+            // We also want match verifications to be cheap, so we limit the max length to what SingleValueState can handle with an inlined check.
+            // TODO: Drop the second check?
+            if (value0.Length < 2 || value1.Length > SingleValueState.MaxLength)
+            {
+                return null;
+            }
+
+            // We always use the first character as one of the anchors.
+            if (!CanUsePackedImpl(value0[0]) || !CanUsePackedImpl(value1[0]))
+            {
+                return null;
+            }
+
+            // Get the shared second character offset with lowest combined frequency across both values.
+            int ch2Offset = CharacterFrequencyHelper.GetSharedSecondCharacterOffset(value0, value1, ignoreCase);
+
+            // Packed implementation requires all anchor characters to be packable (fit in a byte with certain constraints)
+            if (!CanUsePackedImpl(value0[ch2Offset]) || !CanUsePackedImpl(value1[ch2Offset]))
+            {
+                return null;
+            }
+
+            if (!ignoreCase)
+            {
+                return CreateTwoValuesPackedTwoChars<CaseSensitive>(uniqueValues, value0, value1, ch2Offset);
+            }
+
+            if (asciiLettersOnly)
+            {
+                return CreateTwoValuesPackedTwoChars<CaseInsensitiveAsciiLetters>(uniqueValues, value0, value1, ch2Offset);
+            }
+
+            if (allAscii)
+            {
+                return CreateTwoValuesPackedTwoChars<CaseInsensitiveAscii>(uniqueValues, value0, value1, ch2Offset);
+            }
+
+            // SingleStringSearchValuesPackedTwoChars doesn't have logic to handle non-ASCII case conversion, so we require that anchor characters are ASCII.
+            if (!char.IsAscii(value0[0]) || !char.IsAscii(value1[0]) ||
+                !char.IsAscii(value0[ch2Offset]) || !char.IsAscii(value1[ch2Offset]))
+            {
+                return null;
+            }
+
+            return CreateTwoValuesPackedTwoChars<CaseInsensitiveUnicode>(uniqueValues, value0, value1, ch2Offset);
+
+            static SearchValues<string> CreateTwoValuesPackedTwoChars<TCaseSensitivity>(
+                HashSet<string> uniqueValues,
+                string value0,
+                string value1,
+                int ch2Offset)
+                where TCaseSensitivity : struct, ICaseSensitivity
+            {
+                Debug.Assert(value0.Length <= SingleValueState.MaxLength);
+                Debug.Assert(value1.Length <= SingleValueState.MaxLength);
+
+                return value0.Length switch
+                {
+                    < 4 => CreateTwoValuesPackedTwoCharsWithLength0<ValueLengthLessThan4, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                    <= 8 => CreateTwoValuesPackedTwoCharsWithLength0<ValueLength4To8, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                    _ => CreateTwoValuesPackedTwoCharsWithLength0<ValueLength9To16, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                };
+            }
+
+            static SearchValues<string> CreateTwoValuesPackedTwoCharsWithLength0<TValue0Length, TCaseSensitivity>(
+                HashSet<string> uniqueValues,
+                string value0,
+                string value1,
+                int ch2Offset)
+                where TCaseSensitivity : struct, ICaseSensitivity
+                where TValue0Length : struct, IValueLength
+            {
+                return value1.Length switch
+                {
+                    < 4 => new TwoStringSearchValuesPackedTwoChars<TValue0Length, ValueLengthLessThan4, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                    <= 8 => new TwoStringSearchValuesPackedTwoChars<TValue0Length, ValueLength4To8, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                    _ => new TwoStringSearchValuesPackedTwoChars<TValue0Length, ValueLength9To16, TCaseSensitivity>(uniqueValues, value0, value1, ch2Offset),
+                };
+            }
+        }
+
+        // Unlike with PackedSpanHelpers (Sse2 only), we are also using this approach on ARM64.
+        // We use PackUnsignedSaturate on X86 and UnzipEven on ARM, so the set of allowed characters differs slightly (we can't use it for \0 and \xFF on X86).
+        private static bool CanUsePackedImpl(char c) =>
+            PackedSpanHelpers.PackedIndexOfIsSupported ? PackedSpanHelpers.CanUsePackedIndexOf(c) :
+            (AdvSimd.Arm64.IsSupported && c <= byte.MaxValue);
 
         private static void AnalyzeValues(
             ReadOnlySpan<string> values,

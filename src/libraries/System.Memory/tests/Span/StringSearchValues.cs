@@ -354,6 +354,12 @@ namespace System.Memory.Tests.Span
         [InlineData("123456789abcdefgh")]
         // Multiple values, but they all share the same prefix
         [InlineData("abc", "ab", "abcd")]
+        // Two values with suitable anchors for the packed implementation
+        [InlineData("ab", "bc")]
+        [InlineData("abc", "bc")]
+        [InlineData("abcd", "bc")]
+        [InlineData("123", "bc")]
+        [InlineData("abcde", "abcdf")]
         // These should hit the Aho-Corasick implementation
         [InlineData("a", "b")]
         [InlineData("ab", "c")]
@@ -371,12 +377,12 @@ namespace System.Memory.Tests.Span
         [InlineData("123", "456", "789")]
         [InlineData("123", "456a", "789b")]
         // We'll expand these values to all case permutations
-        [InlineData("ab", "bc")]
         [InlineData("ab", "c!")]
         [InlineData("ab", "c!", "!%")]
+        [InlineData("ab", "?!", "!%")]
+        [InlineData("ab", "bc123456789123456789")]
         // These won't be expanded as they would produce more than 8 permutations
         [InlineData("ab", "bc", "c!")]
-        [InlineData("abc", "bc")]
         // Rabin-Karp where one of the values is longer than what the implementation can match (17)
         [InlineData("abc", "a012345678012345678")]
         // Rabin-Karp where all of the values are longer than what the implementation can match (17)
@@ -541,7 +547,7 @@ namespace System.Memory.Tests.Span
 
         [Fact]
         [SkipOnPlatform(TestPlatforms.LinuxBionic, "Remote executor has problems with exit codes")]
-        [ActiveIssue("Manual execution only. Worth running any time SearchValues<string> logic is modified.")]
+        //[ActiveIssue("Manual execution only. Worth running any time SearchValues<string> logic is modified.")]
         public static void TestIndexOfAny_RandomInputs_Stress()
         {
             RunStress();

@@ -236,9 +236,8 @@ namespace System.Buffers
             {
                 ref char cur = ref Unsafe.Add(ref searchSpace, i);
 
-                // CaseInsensitiveUnicode doesn't support single-character transformations, so we skip checking the first character first.
-                if ((typeof(TCaseSensitivity) == typeof(CaseInsensitiveUnicode) || TCaseSensitivity.TransformInput(cur) == valueHead) &&
-                    TCaseSensitivity.Equals<TValueLength>(ref cur, in _valueState))
+                if (TCaseSensitivity.TransformInput(cur) == valueHead &&
+                    TCaseSensitivity.Equals<TValueLength>(ref cur, in _valueState, checkedFirstChar: true))
                 {
                     return (int)i;
                 }
@@ -326,6 +325,8 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private bool TryMatch(ref char searchSpaceStart, int searchSpaceLength, ref char searchSpace, uint mask, out int offsetFromStart)
         {
             // 'mask' encodes the input positions where at least 3 characters likely matched.
@@ -338,7 +339,10 @@ namespace System.Buffers
 
                 ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref matchRef, _valueState.Value.Length);
 
-                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState))
+                // See comments on CanSkipAnchorMatchVerification.
+                // When running on Arm64 we're using UnzipEven when packing inputs, which may produce false positive anchor matches.
+                // Therefore we always need to verify the full value there, which is reflected in the 'checkedFirstChar: Sse2.IsSupported' argument below.
+                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState, checkedFirstChar: Sse2.IsSupported))
                 {
                     offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / sizeof(char));
                     return true;
@@ -365,7 +369,7 @@ namespace System.Buffers
 
                 ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref matchRef, _valueState.Value.Length);
 
-                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState))
+                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState, checkedFirstChar: true))
                 {
                     offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / sizeof(char));
                     return true;
@@ -386,32 +390,5 @@ namespace System.Buffers
         internal override string[] GetValues() => HasUniqueValues
             ? base.GetValues()
             : [_valueState.Value];
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Sse2))]
-        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        private static Vector128<byte> LoadPacked128(ref char searchSpace, nuint byteOffset)
-        {
-            Vector128<ushort> input0 = Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset));
-            Vector128<ushort> input1 = Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector128<byte>.Count));
-
-            return Sse2.IsSupported
-                ? Sse2.PackUnsignedSaturate(input0.AsInt16(), input1.AsInt16())
-                : AdvSimd.Arm64.UnzipEven(input0.AsByte(), input1.AsByte());
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx2))]
-        private static Vector256<byte> LoadPacked256(ref char searchSpace, nuint byteOffset) =>
-            Avx2.PackUnsignedSaturate(
-                Vector256.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset)).AsInt16(),
-                Vector256.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector256<byte>.Count)).AsInt16());
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [CompExactlyDependsOn(typeof(Avx512BW))]
-        private static Vector512<byte> LoadPacked512(ref char searchSpace, nuint byteOffset) =>
-            Avx512BW.PackUnsignedSaturate(
-                Vector512.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset)).AsInt16(),
-                Vector512.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector512<byte>.Count)).AsInt16());
     }
 }

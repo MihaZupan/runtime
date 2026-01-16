@@ -7,6 +7,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using static System.Buffers.StringSearchValuesHelper;
 
 namespace System.Buffers
@@ -237,9 +238,8 @@ namespace System.Buffers
             {
                 ref char cur = ref Unsafe.Add(ref searchSpace, i);
 
-                // CaseInsensitiveUnicode doesn't support single-character transformations, so we skip checking the first character first.
-                if ((typeof(TCaseSensitivity) == typeof(CaseInsensitiveUnicode) || TCaseSensitivity.TransformInput(cur) == valueHead) &&
-                    TCaseSensitivity.Equals<TValueLength>(ref cur, in _valueState))
+                if (TCaseSensitivity.TransformInput(cur) == valueHead &&
+                    TCaseSensitivity.Equals<TValueLength>(ref cur, in _valueState, checkedFirstChar: true))
                 {
                     return (int)i;
                 }
@@ -336,7 +336,7 @@ namespace System.Buffers
 
                 ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref matchRef, _valueState.Value.Length);
 
-                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState))
+                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState, checkedFirstChar: true))
                 {
                     offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / sizeof(char));
                     return true;
@@ -364,7 +364,7 @@ namespace System.Buffers
 
                 ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref matchRef, _valueState.Value.Length);
 
-                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState))
+                if (CanSkipAnchorMatchVerification || TCaseSensitivity.Equals<TValueLength>(ref matchRef, in _valueState, checkedFirstChar: true))
                 {
                     offsetFromStart = (int)((nuint)Unsafe.ByteOffset(ref searchSpaceStart, ref matchRef) / 2);
                     return true;

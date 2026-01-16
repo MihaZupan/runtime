@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 
 namespace System.Buffers
@@ -88,6 +89,33 @@ namespace System.Buffers
             return Ordinal.EqualsIgnoreCase(ref matchStart, ref candidate.GetRawStringData(), candidate.Length);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Sse2))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
+        public static Vector128<byte> LoadPacked128(ref char searchSpace, nuint byteOffset)
+        {
+            Vector128<ushort> input0 = Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset));
+            Vector128<ushort> input1 = Vector128.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector128<byte>.Count));
+
+            return Sse2.IsSupported
+                ? Sse2.PackUnsignedSaturate(input0.AsInt16(), input1.AsInt16())
+                : AdvSimd.Arm64.UnzipEven(input0.AsByte(), input1.AsByte());
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx2))]
+        public static Vector256<byte> LoadPacked256(ref char searchSpace, nuint byteOffset) =>
+            Avx2.PackUnsignedSaturate(
+                Vector256.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset)).AsInt16(),
+                Vector256.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector256<byte>.Count)).AsInt16());
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CompExactlyDependsOn(typeof(Avx512BW))]
+        public static Vector512<byte> LoadPacked512(ref char searchSpace, nuint byteOffset) =>
+            Avx512BW.PackUnsignedSaturate(
+                Vector512.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset)).AsInt16(),
+                Vector512.LoadUnsafe(ref Unsafe.AddByteOffset(ref searchSpace, byteOffset + (uint)Vector512<byte>.Count)).AsInt16());
+
         public interface IValueLength { }
 
         public readonly struct ValueLengthLessThan4 : IValueLength { }
@@ -101,6 +129,8 @@ namespace System.Buffers
 
         public readonly struct SingleValueState
         {
+            public const int MaxLength = 16;
+
             public readonly string Value;
             public readonly nint SecondReadByteOffset;
             public readonly Vector256<ushort> Value256;
@@ -140,6 +170,8 @@ namespace System.Buffers
 
                 // The two vectors may overlap completely for Length == 2 or Length == 4, and that's fine.
                 // The second comparison during validation is redundant in such cases, but the alternative is to introduce more IValueLength specializations.
+
+                Debug.Assert(MaxLength == 16);
 
                 if (value.Length <= 16)
                 {
@@ -231,7 +263,7 @@ namespace System.Buffers
             static abstract Vector128<byte> TransformInput(Vector128<byte> input);
             static abstract Vector256<byte> TransformInput(Vector256<byte> input);
             static abstract Vector512<byte> TransformInput(Vector512<byte> input);
-            static abstract bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state) where TValueLength : struct, IValueLength;
+            static abstract bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state, bool checkedFirstChar) where TValueLength : struct, IValueLength;
         }
 
         // Performs no case transformations.
@@ -250,7 +282,7 @@ namespace System.Buffers
             public static Vector512<byte> TransformInput(Vector512<byte> input) => input;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state)
+            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state, bool checkedFirstChar)
                 where TValueLength : struct, IValueLength
             {
                 if (typeof(TValueLength) == typeof(ValueLengthLongOrUnknown))
@@ -274,27 +306,17 @@ namespace System.Buffers
 
                     ref byte matchByteStart = ref Unsafe.As<char, byte>(ref matchStart);
 
-                    if (AdvSimd.IsSupported)
+                    if (checkedFirstChar)
                     {
-                        // See comments on SingleStringSearchValuesPackedThreeChars.CanSkipAnchorMatchVerification.
-                        // When running on Arm64, this helper is also used to confirm vectorized anchor matches.
-                        // We do so because we're using UnzipEven when packing inputs, which may produce false positive anchor matches.
-                        // When called from SingleStringSearchValuesThreeChars (non-packed), we could skip to the else branch instead.
-                        Debug.Assert(matchStart == state.Value[0] || (matchStart & 0xFF) == state.Value[0]);
-
-                        uint differentBits = Unsafe.ReadUnaligned<uint>(ref matchByteStart) - state.Value32_0;
-                        differentBits |= Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) - state.Value32_1;
-                        return differentBits == 0;
-                    }
-                    else
-                    {
-                        // Otherwise, this path is not used when confirming vectorized anchor matches.
-                        // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
-                        // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
-                        // We only have to to check whether the last 2 characters also match.
                         Debug.Assert(matchStart == state.Value[0], "This should only be called after the first character has been checked");
 
                         return Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) == state.Value32_1;
+                    }
+                    else
+                    {
+                        uint differentBits = Unsafe.ReadUnaligned<uint>(ref matchByteStart) - state.Value32_0;
+                        differentBits |= Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) - state.Value32_1;
+                        return differentBits == 0;
                     }
                 }
             }
@@ -317,7 +339,7 @@ namespace System.Buffers
             public static Vector512<byte> TransformInput(Vector512<byte> input) => input & Vector512.Create(unchecked((byte)~0x20));
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state)
+            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state, bool checkedFirstChar)
                 where TValueLength : struct, IValueLength
             {
                 if (typeof(TValueLength) == typeof(ValueLengthLongOrUnknown))
@@ -343,27 +365,17 @@ namespace System.Buffers
                     const uint CaseMask = ~0x200020u;
                     ref byte matchByteStart = ref Unsafe.As<char, byte>(ref matchStart);
 
-                    if (AdvSimd.IsSupported)
+                    if (checkedFirstChar)
                     {
-                        // See comments on SingleStringSearchValuesPackedThreeChars.CanSkipAnchorMatchVerification.
-                        // When running on Arm64, this helper is also used to confirm vectorized anchor matches.
-                        // We do so because we're using UnzipEven when packing inputs, which may produce false positive anchor matches.
-                        // When called from SingleStringSearchValuesThreeChars (non-packed), we could skip to the else branch instead.
-                        Debug.Assert(TransformInput((char)(matchStart & 0xFF)) == state.Value[0]);
-
-                        uint differentBits = (Unsafe.ReadUnaligned<uint>(ref matchByteStart) & CaseMask) - state.Value32_0;
-                        differentBits |= (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) - state.Value32_1;
-                        return differentBits == 0;
-                    }
-                    else
-                    {
-                        // Otherwise, this path is not used when confirming vectorized anchor matches.
-                        // It's only used as part of the scalar search loop, which always checks that the first character matches before calling this helper.
-                        // We know that the candidate is 2 or 3 characters long, and that the first character has already been checked.
-                        // We only have to to check whether the last 2 characters also match.
                         Debug.Assert(TransformInput(matchStart) == state.Value[0], "This should only be called after the first character has been checked");
 
                         return (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) == state.Value32_1;
+                    }
+                    else
+                    {
+                        uint differentBits = (Unsafe.ReadUnaligned<uint>(ref matchByteStart) & CaseMask) - state.Value32_0;
+                        differentBits |= (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref matchByteStart, state.SecondReadByteOffset)) & CaseMask) - state.Value32_1;
+                        return differentBits == 0;
                     }
                 }
             }
@@ -410,7 +422,7 @@ namespace System.Buffers
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state)
+            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state, bool checkedFirstChar)
                 where TValueLength : struct, IValueLength
             {
                 if (typeof(TValueLength) == typeof(ValueLengthLongOrUnknown))
@@ -444,13 +456,18 @@ namespace System.Buffers
         // so this helper is only used for the verification of the whole input.
         public readonly struct CaseInsensitiveUnicode : ICaseSensitivity
         {
-            public static char TransformInput(char input) => throw new UnreachableException();
+            /// <summary>
+            /// With non-ASCII values this transformation is not valid for an arbitrary character,
+            /// but it's only being used to confirm anchor matches, which are always ASCII.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static char TransformInput(char input) => TextInfo.ToUpperAsciiInvariant(input);
             public static Vector128<byte> TransformInput(Vector128<byte> input) => throw new UnreachableException();
             public static Vector256<byte> TransformInput(Vector256<byte> input) => throw new UnreachableException();
             public static Vector512<byte> TransformInput(Vector512<byte> input) => throw new UnreachableException();
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state)
+            public static bool Equals<TValueLength>(ref char matchStart, ref readonly SingleValueState state, bool checkedFirstChar)
                 where TValueLength : struct, IValueLength
             {
                 if (typeof(TValueLength) == typeof(ValueLengthLongOrUnknown))
