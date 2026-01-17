@@ -97,29 +97,21 @@ namespace System.Buffers
                     ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref searchSpace, Vector512<byte>.Count + (int)(ch2ByteOffset / sizeof(char)));
 
                     Vector512<byte> packedSource0 = LoadPacked512(ref searchSpace, 0);
+                    Vector512<byte> packedSource1 = LoadPacked512(ref searchSpace, ch2ByteOffset);
 
                     if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
                     {
                         packedSource0 &= Vector512.Create(CaseConversionMask);
+                        packedSource1 &= Vector512.Create(CaseConversionMask);
                     }
 
-                    Vector512<byte> result = Vector512.Equals(v0Ch1, packedSource0) | Vector512.Equals(v1Ch1, packedSource0);
+                    Vector512<byte> result =
+                        (Vector512.Equals(v0Ch1, packedSource0) & Vector512.Equals(v0Ch2, packedSource1)) |
+                        (Vector512.Equals(v1Ch1, packedSource0) & Vector512.Equals(v1Ch2, packedSource1));
 
                     if (result != Vector512<byte>.Zero)
                     {
-                        Vector512<byte> packedSource1 = LoadPacked512(ref searchSpace, ch2ByteOffset);
-
-                        if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
-                        {
-                            packedSource1 &= Vector512.Create(CaseConversionMask);
-                        }
-
-                        result &= Vector512.Equals(v0Ch2, packedSource1) | Vector512.Equals(v1Ch2, packedSource1);
-
-                        if (result != Vector512<byte>.Zero)
-                        {
-                            goto CandidateFound512;
-                        }
+                        goto CandidateFound512;
                     }
 
                 LoopFooter512:
@@ -160,29 +152,21 @@ namespace System.Buffers
                     ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref searchSpace, Vector256<byte>.Count + (int)(ch2ByteOffset / sizeof(char)));
 
                     Vector256<byte> packedSource0 = LoadPacked256(ref searchSpace, 0);
+                    Vector256<byte> packedSource1 = LoadPacked256(ref searchSpace, ch2ByteOffset);
 
                     if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
                     {
                         packedSource0 &= Vector256.Create(CaseConversionMask);
+                        packedSource1 &= Vector256.Create(CaseConversionMask);
                     }
 
-                    Vector256<byte> result = Vector256.Equals(v0Ch1, packedSource0) | Vector256.Equals(v1Ch1, packedSource0);
+                    Vector256<byte> result =
+                        (Vector256.Equals(v0Ch1, packedSource0) & Vector256.Equals(v0Ch2, packedSource1)) |
+                        (Vector256.Equals(v1Ch1, packedSource0) & Vector256.Equals(v1Ch2, packedSource1));
 
                     if (result != Vector256<byte>.Zero)
                     {
-                        Vector256<byte> packedSource1 = LoadPacked256(ref searchSpace, ch2ByteOffset);
-
-                        if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
-                        {
-                            packedSource1 &= Vector256.Create(CaseConversionMask);
-                        }
-
-                        result &= Vector256.Equals(v0Ch2, packedSource1) | Vector256.Equals(v1Ch2, packedSource1);
-
-                        if (result != Vector256<byte>.Zero)
-                        {
-                            goto CandidateFound256;
-                        }
+                        goto CandidateFound256;
                     }
 
                 LoopFooter256:
@@ -210,7 +194,7 @@ namespace System.Buffers
             }
             else if ((Sse2.IsSupported || AdvSimd.Arm64.IsSupported) && searchSpaceMinusValueTailLength - Vector128<byte>.Count >= 0)
             {
-                Vector128<byte> v0Ch1Vec = Vector128.Create(_v0Ch1);
+                Vector128<byte> v0Ch1 = Vector128.Create(_v0Ch1);
                 Vector128<byte> v1Ch1 = Vector128.Create(_v1Ch1);
                 Vector128<byte> v0Ch2 = Vector128.Create(_v0Ch2);
                 Vector128<byte> v1Ch2 = Vector128.Create(_v1Ch2);
@@ -223,29 +207,21 @@ namespace System.Buffers
                     ValidateReadPosition(ref searchSpaceStart, searchSpaceLength, ref searchSpace, Vector128<byte>.Count + (int)(ch2ByteOffset / sizeof(char)));
 
                     Vector128<byte> packedSource0 = LoadPacked128(ref searchSpace, 0);
+                    Vector128<byte> packedSource1 = LoadPacked128(ref searchSpace, ch2ByteOffset);
 
                     if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
                     {
                         packedSource0 &= Vector128.Create(CaseConversionMask);
+                        packedSource1 &= Vector128.Create(CaseConversionMask);
                     }
 
-                    Vector128<byte> result = Vector128.Equals(v0Ch1Vec, packedSource0) | Vector128.Equals(v1Ch1, packedSource0);
+                    Vector128<byte> result =
+                        (Vector128.Equals(v0Ch1, packedSource0) & Vector128.Equals(v0Ch2, packedSource1)) |
+                        (Vector128.Equals(v1Ch1, packedSource0) & Vector128.Equals(v1Ch2, packedSource1));
 
                     if (result != Vector128<byte>.Zero)
                     {
-                        Vector128<byte> packedSource1 = LoadPacked128(ref searchSpace, ch2ByteOffset);
-
-                        if (typeof(TCaseSensitivity) != typeof(CaseSensitive))
-                        {
-                            packedSource1 &= Vector128.Create(CaseConversionMask);
-                        }
-
-                        result &= Vector128.Equals(v0Ch2, packedSource1) | Vector128.Equals(v1Ch2, packedSource1);
-
-                        if (result != Vector128<byte>.Zero)
-                        {
-                            goto CandidateFound128;
-                        }
+                        goto CandidateFound128;
                     }
 
                 LoopFooter128:
