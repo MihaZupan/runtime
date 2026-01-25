@@ -2,105 +2,78 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace System.Globalization
 {
     public sealed partial class IdnMapping
     {
-        private unsafe string NlsGetAsciiCore(string unicodeString, char* unicode, int count)
+        private unsafe string NlsConvertCore(ReadOnlySpan<char> source, string? backingString, bool fromUnicode)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
             Debug.Assert(GlobalizationMode.UseNls);
-            Debug.Assert(unicodeString != null && unicodeString.Length >= count);
+            Debug.Assert(backingString is null || source.SequenceEqual(backingString));
 
             uint flags = NlsFlags;
 
-            // Determine the required length
-            int length = Interop.Normaliz.IdnToAscii(flags, unicode, count, null, 0);
-            if (length == 0)
+            fixed (char* pSource = &MemoryMarshal.GetReference(source))
             {
-                ThrowForZeroLength(unicode: true);
-            }
+                // Determine the required length
+                int length = fromUnicode
+                    ? Interop.Normaliz.IdnToAscii(flags, pSource, source.Length, null, 0)
+                    : Interop.Normaliz.IdnToUnicode(flags, pSource, source.Length, null, 0);
 
-            // Do the conversion
-            const int StackAllocThreshold = 512; // arbitrary limit to switch from stack to heap allocation
-            if ((uint)length < StackAllocThreshold)
-            {
-                char* output = stackalloc char[length];
-                return NlsGetAsciiCore(unicodeString, unicode, count, flags, output, length);
-            }
-            else
-            {
-                char[] output = new char[length];
-                fixed (char* pOutput = &output[0])
+                if (length == 0)
                 {
-                    return NlsGetAsciiCore(unicodeString, unicode, count, flags, pOutput, length);
+                    ThrowForNativeError(Marshal.GetLastPInvokeError(), fromUnicode);
                 }
+
+                Span<char> output = length <= StackallocThreshold
+                    ? stackalloc char[StackallocThreshold]
+                    : new char[length];
+
+                if (!NlsTryConvertCore(source, output, out int charsWritten, fromUnicode))
+                {
+                    // This should only happen if the source changed concurrently to the call to IdnMapping.
+                    // Throw just in case to avoid exposing uninitialized memory.
+                    ThrowForNativeError(Interop.Errors.ERROR_INSUFFICIENT_BUFFER, fromUnicode);
+                }
+
+                Debug.Assert(charsWritten == length);
+
+                return GetStringForOutput(backingString, output.Slice(0, length));
             }
         }
 
-        private static unsafe string NlsGetAsciiCore(string unicodeString, char* unicode, int count, uint flags, char* output, int outputLength)
+        private unsafe bool NlsTryConvertCore(ReadOnlySpan<char> source, Span<char> destination, out int charsWritten, bool fromUnicode)
         {
             Debug.Assert(!GlobalizationMode.Invariant);
             Debug.Assert(GlobalizationMode.UseNls);
-            Debug.Assert(unicodeString != null && unicodeString.Length >= count);
-
-            int length = Interop.Normaliz.IdnToAscii(flags, unicode, count, output, outputLength);
-            if (length == 0)
-            {
-                ThrowForZeroLength(unicode: true);
-            }
-            Debug.Assert(length == outputLength);
-            return GetStringForOutput(unicodeString, unicode, count, output, length);
-        }
-
-        private unsafe string NlsGetUnicodeCore(string asciiString, char* ascii, int count)
-        {
-            Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(GlobalizationMode.UseNls);
-            Debug.Assert(asciiString != null && asciiString.Length >= count);
 
             uint flags = NlsFlags;
 
-            // Determine the required length
-            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, count, null, 0);
-            if (length == 0)
+            fixed (char* pSource = &MemoryMarshal.GetReference(source))
+            fixed (char* pDestination = &MemoryMarshal.GetReference(destination))
             {
-                ThrowForZeroLength(unicode: false);
-            }
+                charsWritten = fromUnicode
+                    ? Interop.Normaliz.IdnToAscii(flags, pSource, source.Length, pDestination, destination.Length)
+                    : Interop.Normaliz.IdnToUnicode(flags, pSource, source.Length, pDestination, destination.Length);
 
-            // Do the conversion
-            const int StackAllocThreshold = 512; // arbitrary limit to switch from stack to heap allocation
-            if ((uint)length < StackAllocThreshold)
-            {
-                char* output = stackalloc char[length];
-                return NlsGetUnicodeCore(asciiString, ascii, count, flags, output, length);
-            }
-            else
-            {
-                char[] output = new char[length];
-                fixed (char* pOutput = &output[0])
+                if (charsWritten == 0)
                 {
-                    return NlsGetUnicodeCore(asciiString, ascii, count, flags, pOutput, length);
+                    int error = Marshal.GetLastPInvokeError();
+
+                    if (error == Interop.Errors.ERROR_INSUFFICIENT_BUFFER)
+                    {
+                        charsWritten = 0;
+                        return false;
+                    }
+
+                    ThrowForNativeError(error, fromUnicode);
                 }
-            }
-        }
 
-        private static unsafe string NlsGetUnicodeCore(string asciiString, char* ascii, int count, uint flags, char* output, int outputLength)
-        {
-            Debug.Assert(!GlobalizationMode.Invariant);
-            Debug.Assert(GlobalizationMode.UseNls);
-            Debug.Assert(asciiString != null && asciiString.Length >= count);
-
-            int length = Interop.Normaliz.IdnToUnicode(flags, ascii, count, output, outputLength);
-            if (length == 0)
-            {
-                ThrowForZeroLength(unicode: false);
+                return true;
             }
-            Debug.Assert(length == outputLength);
-            return GetStringForOutput(asciiString, ascii, count, output, length);
         }
 
         private uint NlsFlags
@@ -114,13 +87,10 @@ namespace System.Globalization
             }
         }
 
-        [DoesNotReturn]
-        private static void ThrowForZeroLength(bool unicode)
+        private static void ThrowForNativeError(int error, bool unicode)
         {
-            int lastError = Marshal.GetLastPInvokeError();
-
             throw new ArgumentException(
-                lastError == Interop.Errors.ERROR_INVALID_NAME ? SR.Argument_IdnIllegalName :
+                error == Interop.Errors.ERROR_INVALID_NAME ? SR.Argument_IdnIllegalName :
                     (unicode ? SR.Argument_InvalidCharSequenceNoIndex : SR.Argument_IdnBadPunycode),
                 unicode ? "unicode" : "ascii");
         }
