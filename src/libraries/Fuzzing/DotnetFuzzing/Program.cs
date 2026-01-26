@@ -326,6 +326,10 @@ public static class Program
             ? "\"-dict={setup_dir}/dictionary\","
             : null;
 
+        string? maxLengthArgument = fuzzer.MaxInputLength != 4096
+            ? $"\"-max_len={fuzzer.MaxInputLength}\","
+            : null;
+
         // Make it easier to distinguish between long-running CI jobs and short-lived test submissions.
         string nameSuffix = Environment.GetEnvironmentVariable("TF_BUILD") is null ? "-local" : "";
 
@@ -356,6 +360,7 @@ public static class Program
                       ],
                       "FuzzingTargetOptions": [
                         {{{dictionaryArgument}}}
+                        {{{maxLengthArgument}}}
                         "-timeout=60"
                       ]
                     }
@@ -396,6 +401,11 @@ public static class Program
         if (fuzzer.Dictionary is not null)
         {
             script += " -dict=%~dp0dictionary";
+        }
+
+        if (fuzzer.MaxInputLength != 4096)
+        {
+            script += $" -max_len={fuzzer.MaxInputLength}";
         }
 
         // Pass any additional arguments to the fuzzer.

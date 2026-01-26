@@ -22,6 +22,9 @@ internal interface IFuzzer
     /// <summary>Optional name of the directory to use as an initial corpus for the fuzzer.</summary>
     string? Corpus => null;
 
+    /// <summary>Optional suggested maximum input length that the fuzzer should use.</summary>
+    int MaxInputLength => 4096;
+
     /// <summary>Entry point for the fuzzer. Should exercise code paths in <see cref="TargetAssemblies"/> and/or <see cref="TargetCoreLibPrefixes"/>.</summary>
     void FuzzTarget(ReadOnlySpan<byte> bytes);
 }

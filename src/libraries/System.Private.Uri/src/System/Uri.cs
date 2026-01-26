@@ -140,6 +140,11 @@ namespace System
             /// Indicates that there is an authority, but the scheme does not use "//" to delimit it (e.g. "http:\\host").
             /// </summary>
             SchemeNotCanonical_NoTrailingSlashes = 1UL << 58,
+
+            /// <summary>
+            /// Flags that are worth preserving for a relative Uri.
+            /// </summary>
+            RelativeUriFlags = UserEscaped | HasUnicode,
         }
 
         [Conditional("DEBUG")]
@@ -556,6 +561,7 @@ namespace System
         private void CreateUri(Uri baseUri, string? relativeUri, bool dontEscape)
         {
             DebugAssertInCtor();
+            Debug.Assert(baseUri.IsAbsoluteUri);
 
             // Parse relativeUri and populate Uri internal data.
             CreateThis(relativeUri, dontEscape, UriKind.RelativeOrAbsolute);

@@ -63,7 +63,7 @@ namespace System
                 // and we'll allow relative Uri's, then create one.
                 if (uriKind != UriKind.Absolute && err <= ParsingError.LastErrorOkayForRelativeUris)
                 {
-                    _flags &= Flags.UserEscaped | Flags.HasUnicode; // the only flags that makes sense for a relative uri
+                    _flags &= Flags.RelativeUriFlags;
                     if (hasUnicode)
                     {
                         // Iri'ze and then normalize relative uris
@@ -86,7 +86,7 @@ namespace System
                 if (uriKind == UriKind.Relative)
                 {
                     _syntax = null!; // make it be relative Uri
-                    _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                    _flags &= Flags.RelativeUriFlags;
                     return null;
                 }
 
@@ -99,7 +99,7 @@ namespace System
                     || (!OperatingSystem.IsWindows() && InFact(Flags.UnixPath))))
                 {
                     _syntax = null!; //make it be relative Uri
-                    _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                    _flags &= Flags.RelativeUriFlags;
                     return null;
                     // Otherwise an absolute file Uri wins when it's of the form "\\something"
                 }
@@ -113,7 +113,7 @@ namespace System
                     {
                         // RFC 3986 Section 5.4.2 - http:(relativeUri) may be considered a valid relative Uri.
                         _syntax = null!; // convert to relative uri
-                        _flags &= Flags.UserEscaped; // the only flag that makes sense for a relative uri
+                        _flags &= Flags.RelativeUriFlags;
                         return null;
                     }
 
@@ -192,7 +192,7 @@ namespace System
             int i = data.AsSpan().IndexOfAnyExcept(s_asciiOtherThanPercent);
             if (i >= 0)
             {
-                for ( ; i < data.Length; i++)
+                for (; i < data.Length; i++)
                 {
                     char c = data[i];
                     if (c == '%')
@@ -676,7 +676,7 @@ namespace System
             {
                 // If it looks as a relative Uri, custom factory is ignored
                 if (uriKind != UriKind.Absolute && err <= ParsingError.LastErrorOkayForRelativeUris)
-                    return new Uri((flags & Flags.UserEscaped), null, uriString);
+                    return new Uri(flags & Flags.RelativeUriFlags, null, uriString);
 
                 return null;
             }
@@ -944,6 +944,7 @@ namespace System
         private void CreateThisFromUri(Uri otherUri)
         {
             DebugAssertInCtor();
+            Debug.Assert(otherUri.InFact(Flags.Debug_LeftConstructor));
 
             _flags = otherUri._flags;
 

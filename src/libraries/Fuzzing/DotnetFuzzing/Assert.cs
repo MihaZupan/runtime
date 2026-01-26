@@ -9,6 +9,17 @@ internal static class Assert
 {
     // Feel free to add any other helpers as needed.
 
+    public static void Same(object? expected, object? actual)
+    {
+        if (!ReferenceEquals(expected, actual))
+        {
+            Throw(expected, actual);
+        }
+
+        static void Throw(object? expected, object? actual) =>
+            throw new Exception($"Expected={expected} Actual={actual}");
+    }
+
     public static void Equal<T>(T expected, T actual)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -25,6 +36,18 @@ internal static class Assert
 
     public static void False([DoesNotReturnIf(true)] bool actual) =>
         Equal(false, actual);
+
+    public static void NotEmpty(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            ThrowEmpty();
+        }
+
+        static void ThrowEmpty() =>
+            throw new Exception("Value is empty");
+
+    }
 
     public static void NotNull<T>(T value)
     {
@@ -52,6 +75,12 @@ internal static class Assert
 
             throw new Exception($"Expected={expected[diffIndex]} Actual={actual[diffIndex]} at index {diffIndex}");
         }
+    }
+
+    public static TException Throws<TException>(Action action)
+        where TException : Exception
+    {
+        return Throws<TException, Action>(static action => action(), action);
     }
 
     public static TException Throws<TException, TState>(Action<TState> action, TState state)

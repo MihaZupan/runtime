@@ -98,8 +98,14 @@ namespace DotnetFuzzing.Fuzzers
                     }
                 }
 
-                Assert.True(Uri.TryCreate($"http://{chars}/", UriKind.Absolute, out Uri? uri));
-                Assert.Equal(hostNameType, uri.HostNameType);
+                Assert.True(Uri.TryCreate($"http://{chars}/", UriKind.Absolute, out Uri? uri1));
+                Assert.Equal(hostNameType, uri1.HostNameType);
+                Assert.NotEmpty(uri1.Host);
+
+                Assert.True(Uri.TryCreate($"custom://{chars}/", UriKind.Absolute, out Uri? uri2));
+                Assert.Equal(hostNameType, uri2.HostNameType);
+                Assert.NotEmpty(uri2.Host);
+
                 Assert.Equal(hostNameType, Uri.CheckHostName(chars));
             }
         }
