@@ -130,6 +130,11 @@ namespace System
 
             if (comparisonType == StringComparison.Ordinal)
             {
+                if (RuntimeHelpers.IsKnownConstant(value.Length) && value.Length == 1)
+                {
+                    return span.IndexOf(value[0]);
+                }
+
                 return SpanHelpers.IndexOf(ref MemoryMarshal.GetReference(span), span.Length, ref MemoryMarshal.GetReference(value), value.Length);
             }
 
