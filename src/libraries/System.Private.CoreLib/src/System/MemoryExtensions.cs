@@ -313,7 +313,6 @@ namespace System
         }
 
         /// <inheritdoc cref="Contains{T}(ReadOnlySpan{T}, T)"/>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [OverloadResolutionPriority(-1)]
         public static bool Contains<T>(this Span<T> span, T value) where T : IEquatable<T>? =>
             Contains((ReadOnlySpan<T>)span, value);
@@ -324,7 +323,6 @@ namespace System
         /// <typeparam name="T"></typeparam>
         /// <param name="span">The span to search.</param>
         /// <param name="value">The value to search for.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool Contains<T>(this ReadOnlySpan<T> span, T value) where T : IEquatable<T>?
         {
             if (RuntimeHelpers.IsBitwiseEquatable<T>())
