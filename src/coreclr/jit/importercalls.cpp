@@ -7,7 +7,7 @@
 // impImportCall: import a call-inspiring opcode
 //
 // Arguments:
-//    opcode                    - opcode that inspires the call
+//    opcode                    - opcode that inspires the
 //    pResolvedToken            - resolved token for the call target
 //    pConstrainedResolvedToken - resolved constraint token (or nullptr)
 //    newObjThis                - tree for this pointer or uninitialized newobj temp (or nullptr)
