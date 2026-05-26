@@ -7433,14 +7433,18 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
                 if (!opts.MinOpts() && (typ == TYP_INT) && op2->IsCnsIntOrI())
                 {
                     ssize_t modDivisor = op2->AsIntCon()->IconValue();
-                    if ((modDivisor > 0) && FitsIn<uint16_t>(modDivisor) &&
-                        IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
+                    if ((modDivisor > 0) && FitsIn<uint16_t>(modDivisor))
                     {
-                        if (tree->OperIs(GT_MOD))
+                        if (IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
                         {
-                            tree->SetOper(GT_UMOD);
+                            if (tree->OperIs(GT_MOD))
+                            {
+                                tree->SetOper(GT_UMOD);
+                            }
+                            break;
                         }
-                        break;
+
+                        setMethodHasUModByConstUInt16Candidate();
                     }
                 }
 #endif // TARGET_64BIT
@@ -7451,7 +7455,7 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
                 op2  = tree->AsOp()->gtOp2;
             }
 #if defined(TARGET_64BIT) && !defined(TARGET_ARM64)
-            else if (!opts.MinOpts() && tree->OperIs(GT_MOD, GT_UMOD) && !op2->IsIntegralConst() && (typ == TYP_INT) &&
+            else if (!opts.MinOpts() && tree->OperIs(GT_MOD, GT_UMOD) && !op2->IsIntegralConst() &&
                      IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
             {
                 // The dividend structurally fits in uint16 but the divisor
