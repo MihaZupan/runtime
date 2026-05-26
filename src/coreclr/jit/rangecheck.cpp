@@ -14,7 +14,8 @@
 //
 PhaseStatus Compiler::rangeCheckPhase()
 {
-    if ((!doesMethodHaveBoundsChecks() && !doesMethodHaveUModByConstUInt16Candidate()) || (fgSsaPassesCompleted == 0))
+    if ((!doesMethodHaveBoundsChecks() && !doesMethodHaveUDivModByConstUInt16Candidate()) ||
+        (fgSsaPassesCompleted == 0))
     {
         return PhaseStatus::MODIFIED_NOTHING;
     }
@@ -25,9 +26,9 @@ PhaseStatus Compiler::rangeCheckPhase()
     {
         madeChanges = rc->OptimizeRangeChecks();
     }
-    if (doesMethodHaveUModByConstUInt16Candidate())
+    if (doesMethodHaveUDivModByConstUInt16Candidate())
     {
-        madeChanges |= rc->TryMarkUModUInt16Operands();
+        madeChanges |= rc->TryMarkUDivModUInt16Operands();
     }
     return madeChanges ? PhaseStatus::MODIFIED_EVERYTHING : PhaseStatus::MODIFIED_NOTHING;
 }
@@ -2412,16 +2413,16 @@ bool RangeCheck::OptimizeRangeChecks()
 }
 
 //------------------------------------------------------------------------
-// TryMarkUModUInt16Operands: detect GT_MOD/GT_UMOD nodes where the divisor is
-//   a positive uint16 constant and the dividend is provably in uint16 range.
-//   Such nodes are converted to GT_UMOD (if signed) and tagged with
-//   GTF_UMOD_UINT16_OPERANDS so that lowering can emit a cheaper FastMod
-//   sequence specialized for 16-bit operands.
+// TryMarkUDivModUInt16Operands: detect GT_DIV/GT_UDIV/GT_MOD/GT_UMOD nodes where
+//   the divisor is a positive uint16 constant and the dividend is provably in
+//   uint16 range. Such nodes are converted to their unsigned equivalent (if
+//   signed) and tagged with GTF_UDIVMOD_UINT16_OPERANDS so that lowering can
+//   emit a cheaper FastDiv/FastMod sequence specialized for 16-bit operands.
 //
 // Return Value:
 //    True if any node was modified.
 //
-bool RangeCheck::TryMarkUModUInt16Operands()
+bool RangeCheck::TryMarkUDivModUInt16Operands()
 {
     bool madeChanges = false;
 
@@ -2431,12 +2432,12 @@ bool RangeCheck::TryMarkUModUInt16Operands()
         {
             for (GenTree* const tree : stmt->TreeList())
             {
-                if (!tree->OperIs(GT_MOD, GT_UMOD))
+                if (!tree->OperIs(GT_DIV, GT_UDIV, GT_MOD, GT_UMOD))
                 {
                     continue;
                 }
 
-                if ((tree->gtFlags & GTF_UMOD_UINT16_OPERANDS) != 0)
+                if ((tree->gtFlags & GTF_UDIVMOD_UINT16_OPERANDS) != 0)
                 {
                     continue;
                 }
@@ -2480,13 +2481,18 @@ bool RangeCheck::TryMarkUModUInt16Operands()
                     continue;
                 }
 
-                JITDUMP("Marking [%06u] as a uint16 UMOD candidate\n", Compiler::dspTreeID(tree));
+                JITDUMP("Marking [%06u] as a uint16 %s candidate\n", Compiler::dspTreeID(tree),
+                        tree->OperIs(GT_DIV, GT_UDIV) ? "UDIV" : "UMOD");
 
                 if (tree->OperIs(GT_MOD))
                 {
                     tree->SetOper(GT_UMOD);
                 }
-                tree->gtFlags |= GTF_UMOD_UINT16_OPERANDS;
+                else if (tree->OperIs(GT_DIV))
+                {
+                    tree->SetOper(GT_UDIV);
+                }
+                tree->gtFlags |= GTF_UDIVMOD_UINT16_OPERANDS;
                 madeChanges = true;
             }
         }

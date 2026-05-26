@@ -8180,19 +8180,28 @@ bool Lowering::TryLowerConstIntUDivOrUMod(GenTreeOp* divMod)
     if (!m_compiler->opts.MinOpts())
     {
 #ifdef TARGET_64BIT
-        // Replace (uint16 % uint16) with a cheaper variant of FastMod, specialized for 16-bit operands.
+        // Replace (uint16 % uint16) and (uint16 / uint16) with a cheaper variant
+        // specialized for 16-bit operands. Both forms rely on the same precondition:
+        // the divisor is a uint16 constant (>= 2) and the dividend's range fits in
+        // uint16 (recovered either statically by IntegralRange::ForNode here, or
+        // earlier by the range check phase via GTF_UDIVMOD_UINT16_OPERANDS).
         //
-        // uint multiplier = uint.MaxValue / divisor + 1;
-        // ulong result = ((ulong)(dividend * multiplier) * divisor) >> 32;
-        // return (int)result;
+        // FastMod (uint16 n % uint16 d):
+        //     uint  multiplier = uint.MaxValue / divisor + 1;          // = ceil(2^32 / d)
+        //     ulong result     = ((ulong)(n * multiplier) * d) >> 32;
+        //     return (int)result;
         //
-        // The dividend is first truncated to TYP_INT (safe because we know it fits in
-        // uint16), and the final value (always in [0, divisor)) is widened back to the
-        // mod's result type. The dividend's range may have been recovered either
-        // statically by IntegralRange::ForNode at this point, or earlier by the range
-        // check phase (which leaves GTF_UMOD_UINT16_OPERANDS for us).
-        if (!isDiv && FitsIn<uint16_t>(divisorValue) &&
-            (((divMod->gtFlags & GTF_UMOD_UINT16_OPERANDS) != 0) ||
+        // FastDiv (uint16 n / uint16 d):
+        //     uint  multiplier = uint.MaxValue / divisor + 1;
+        //     ulong result     = ((ulong)n * multiplier) >> 32;
+        //     return (int)result;
+        //
+        // In both cases the dividend is first truncated to TYP_INT (safe because
+        // it fits in uint16) and the final value (always in [0, divisor) for mod,
+        // or in [0, ceil(UINT16_MAX / d)] for div) is widened back to the result
+        // type if needed.
+        if (FitsIn<uint16_t>(divisorValue) &&
+            (((divMod->gtFlags & GTF_UDIVMOD_UINT16_OPERANDS) != 0) ||
              IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(dividend, m_compiler))))
         {
             GenTree* dividendInt = dividend;
@@ -8203,34 +8212,63 @@ bool Lowering::TryLowerConstIntUDivOrUMod(GenTreeOp* divMod)
                 BlockRange().InsertBefore(divMod, dividendInt);
             }
 
-            GenTree* multiplier =
-                m_compiler->gtNewIconNode(static_cast<ssize_t>((UINT32_MAX / divisorValue) + 1), TYP_INT);
-            GenTree* mul1 = m_compiler->gtNewOperNode(GT_MUL, TYP_INT, dividendInt, multiplier);
-            mul1->SetUnsigned();
-            GenTree* castUp = m_compiler->gtNewCastNode(TYP_LONG, mul1, /* unsigned */ true, TYP_LONG);
-            BlockRange().InsertBefore(divMod, multiplier, mul1, castUp);
+            const ssize_t multiplierValue = static_cast<ssize_t>((UINT32_MAX / divisorValue) + 1);
 
-            // Reuse the existing constant divisor as a TYP_LONG operand for the second multiply.
-            divisor->BashToConst(static_cast<int64_t>(divisorValue), TYP_LONG);
+            // Both FastMod and FastDiv end with a 64-bit value that is shifted right
+            // by 32. The value being shifted is what differs:
+            //   FastMod: ((ulong)(dividendInt * multiplier)) * divisor
+            //   FastDiv:   (ulong)dividendInt              * multiplier
+            GenTree* shiftInput;
+            GenTree* firstNode;
 
-            GenTree* mul2 = m_compiler->gtNewOperNode(GT_MUL, TYP_LONG, castUp, divisor);
-            mul2->SetUnsigned();
+            if (isDiv)
+            {
+                GenTree* castUp = m_compiler->gtNewCastNode(TYP_LONG, dividendInt, /* unsigned */ true, TYP_LONG);
+                BlockRange().InsertBefore(divMod, castUp);
+
+                // Reuse the existing constant node as a TYP_LONG multiplier.
+                divisor->BashToConst(static_cast<int64_t>(multiplierValue), TYP_LONG);
+
+                GenTree* mul = m_compiler->gtNewOperNode(GT_MUL, TYP_LONG, castUp, divisor);
+                mul->SetUnsigned();
+                BlockRange().InsertBefore(divMod, mul);
+
+                shiftInput = mul;
+                firstNode  = (dividendInt == dividend) ? castUp : dividendInt;
+            }
+            else
+            {
+                GenTree* multiplier = m_compiler->gtNewIconNode(multiplierValue, TYP_INT);
+                GenTree* mul1       = m_compiler->gtNewOperNode(GT_MUL, TYP_INT, dividendInt, multiplier);
+                mul1->SetUnsigned();
+                GenTree* castUp = m_compiler->gtNewCastNode(TYP_LONG, mul1, /* unsigned */ true, TYP_LONG);
+                BlockRange().InsertBefore(divMod, multiplier, mul1, castUp);
+
+                // Reuse the existing constant divisor as a TYP_LONG operand for the second multiply.
+                divisor->BashToConst(static_cast<int64_t>(divisorValue), TYP_LONG);
+
+                GenTree* mul2 = m_compiler->gtNewOperNode(GT_MUL, TYP_LONG, castUp, divisor);
+                mul2->SetUnsigned();
+                BlockRange().InsertBefore(divMod, mul2);
+
+                shiftInput = mul2;
+                firstNode  = (dividendInt == dividend) ? multiplier : dividendInt;
+            }
+
             GenTree* shiftAmount = m_compiler->gtNewIconNode(32);
-            BlockRange().InsertBefore(divMod, mul2, shiftAmount);
-
-            GenTree* firstNode = (dividendInt == dividend) ? multiplier : dividendInt;
+            BlockRange().InsertBefore(divMod, shiftAmount);
 
             if (type == TYP_LONG)
             {
                 // The shift result is already TYP_LONG; turn divMod itself into the shift.
                 divMod->ChangeOper(GT_RSZ);
-                divMod->gtOp1 = mul2;
+                divMod->gtOp1 = shiftInput;
                 divMod->gtOp2 = shiftAmount;
             }
             else
             {
                 assert(type == TYP_INT);
-                GenTree* shift = m_compiler->gtNewOperNode(GT_RSZ, TYP_LONG, mul2, shiftAmount);
+                GenTree* shift = m_compiler->gtNewOperNode(GT_RSZ, TYP_LONG, shiftInput, shiftAmount);
                 BlockRange().InsertBefore(divMod, shift);
 
                 divMod->ChangeOper(GT_CAST);

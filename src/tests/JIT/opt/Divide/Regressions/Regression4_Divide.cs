@@ -78,6 +78,53 @@ public class Program
         return -1;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static ushort Udiv_U2_CharByConst(char c)
+    {
+        return (ushort)(c / 42);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static int Udiv_I4_CharByConst(char c)
+    {
+        return c / 42;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static uint Udiv_U4_CharByConst(char c)
+    {
+        return (uint)c / 42;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long Udiv_I8_CharByConst(char c)
+    {
+        return (long)c / 42;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static ulong Udiv_U8_CharByConst(char c)
+    {
+        return (ulong)c / 42;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static ushort Udiv_TZC(ulong value)
+    {
+        return (ushort)(BitOperations.TrailingZeroCount(value) / 5);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static int Udiv_UInt16Range_ByConst(int value)
+    {
+        if (value is > 0 and < 1234)
+        {
+            return value / 123;
+        }
+
+        return -1;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void Test1()
     {
@@ -152,6 +199,36 @@ public class Program
             return 0;
 
         if (Umod_UInt16Range_ByConst(123) != 0)
+            return 0;
+
+        if (Udiv_U2_CharByConst('a') != 'a' / 42)
+            return 0;
+
+        if (Udiv_I4_CharByConst('a') != 'a' / 42)
+            return 0;
+
+        if (Udiv_U4_CharByConst('a') != 'a' / 42)
+            return 0;
+
+        if (Udiv_I8_CharByConst('a') != 'a' / 42)
+            return 0;
+
+        if (Udiv_U8_CharByConst('a') != 'a' / 42)
+            return 0;
+
+        if (Udiv_TZC(1L << 40) != 8)
+            return 0;
+
+        if (Udiv_TZC(1L << 50) != 10)
+            return 0;
+
+        if (Udiv_UInt16Range_ByConst(0) != -1)
+            return 0;
+
+        if (Udiv_UInt16Range_ByConst(122) != 0)
+            return 0;
+
+        if (Udiv_UInt16Range_ByConst(246) != 2)
             return 0;
 
         if (Bmi1.X64.IsSupported)

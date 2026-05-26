@@ -7273,6 +7273,19 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
             }
 #endif
 #endif // !defined(TARGET_64BIT) && !defined(TARGET_WASM)
+
+#if defined(TARGET_64BIT) && !defined(TARGET_ARM64)
+            // If the divisor is a non-constant that may fold to a uint16
+            // constant later (e.g. via VN/CSE), and the dividend already
+            // structurally fits in uint16, flag the method so the range
+            // check phase re-examines such nodes and lowering can emit a
+            // cheaper FastDiv sequence specialized for 16-bit operands.
+            if (!opts.MinOpts() && !op2->IsIntegralConst() && ((typ == TYP_INT) || (typ == TYP_LONG)) &&
+                IntegralRange::ForType(TYP_USHORT).Contains(IntegralRange::ForNode(op1, this)))
+            {
+                setMethodHasUDivModByConstUInt16Candidate();
+            }
+#endif // TARGET_64BIT && !TARGET_ARM64
             break;
 
         case GT_MOD:
@@ -7459,7 +7472,7 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
                 // hasn't folded yet (e.g. a span length computed from an RVA
                 // static). Let the range check phase re-examine such nodes
                 // after VN/CSE in case the divisor becomes a uint16 constant.
-                setMethodHasUModByConstUInt16Candidate();
+                setMethodHasUDivModByConstUInt16Candidate();
             }
 #endif // TARGET_64BIT && !TARGET_ARM64
             break;

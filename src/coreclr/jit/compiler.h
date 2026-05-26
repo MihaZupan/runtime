@@ -7884,7 +7884,7 @@ public:
 #define OMF_HAS_STACK_ARRAY                    0x00100000 // Method contains stack allocated arrays
 #define OMF_HAS_BOUNDS_CHECKS                  0x00200000 // Method contains bounds checks
 #define OMF_HAS_EARLY_QMARKS                   0x00400000 // Method contains early expandable QMARKs
-#define OMF_HAS_UMOD_BY_CONST_UINT16_CANDIDATE 0x00800000 // Method contains a MOD/UMOD that may turn into a uint16 FastMod candidate during the range check phase
+#define OMF_HAS_UDIVMOD_BY_CONST_UINT16_CANDIDATE 0x00800000 // Method contains a DIV/UDIV/MOD/UMOD that may turn into a uint16 FastDiv/FastMod candidate during the range check phase
 
     // clang-format on
 
@@ -7925,14 +7925,14 @@ public:
         optMethodFlags |= OMF_HAS_BOUNDS_CHECKS;
     }
 
-    bool doesMethodHaveUModByConstUInt16Candidate()
+    bool doesMethodHaveUDivModByConstUInt16Candidate()
     {
-        return (optMethodFlags & OMF_HAS_UMOD_BY_CONST_UINT16_CANDIDATE) != 0;
+        return (optMethodFlags & OMF_HAS_UDIVMOD_BY_CONST_UINT16_CANDIDATE) != 0;
     }
 
-    void setMethodHasUModByConstUInt16Candidate()
+    void setMethodHasUDivModByConstUInt16Candidate()
     {
-        optMethodFlags |= OMF_HAS_UMOD_BY_CONST_UINT16_CANDIDATE;
+        optMethodFlags |= OMF_HAS_UDIVMOD_BY_CONST_UINT16_CANDIDATE;
     }
 
     bool doesMethodHaveExpandableCasts()
