@@ -8174,6 +8174,37 @@ bool Lowering::TryLowerConstIntUDivOrUMod(GenTreeOp* divMod)
 #if defined(TARGET_XARCH) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
     if (!m_compiler->opts.MinOpts() && (divisorValue >= 3))
     {
+#ifdef TARGET_64BIT
+        // Lemire's "FastMod" for unsigned 32-bit MOD by a constant divisor <= INT32_MAX.
+        //
+        //   M       = (2^64 - 1) / d + 1     (precomputed)
+        //   lowbits = (uint64_t)value * M    // low 64 bits of the product
+        //   result  = (lowbits * d) >> 64    // upper 64 bits of the 128-bit product (GT_MULHI)
+        if (!isDiv && (type == TYP_INT) && (divisorValue <= INT32_MAX))
+        {
+            const uint64_t multiplier = UINT64_MAX / static_cast<uint32_t>(divisorValue) + 1;
+
+            GenTree* widenedDividend = m_compiler->gtNewCastNode(TYP_LONG, dividend, /* fromUnsigned */ true, TYP_LONG);
+            GenTree* multiplierCns   = m_compiler->gtNewLconNode(static_cast<int64_t>(multiplier));
+            GenTree* lowbits         = m_compiler->gtNewOperNode(GT_MUL, TYP_LONG, widenedDividend, multiplierCns);
+
+            divisor->gtType = TYP_LONG;
+
+            GenTree* mulhi = m_compiler->gtNewOperNode(GT_MULHI, TYP_LONG, lowbits, divisor);
+            mulhi->SetUnsigned();
+
+            BlockRange().InsertBefore(divMod, widenedDividend, multiplierCns, lowbits, mulhi);
+
+            divMod->ChangeOper(GT_CAST);
+            divMod->AsCast()->gtCastType = TYP_INT;
+            divMod->gtOp1                = mulhi;
+            divMod->gtOp2                = nullptr;
+
+            ContainCheckRange(widenedDividend, divMod);
+            return true;
+        }
+#endif // TARGET_64BIT
+
         size_t magic;
         bool   increment;
         int    preShift;
