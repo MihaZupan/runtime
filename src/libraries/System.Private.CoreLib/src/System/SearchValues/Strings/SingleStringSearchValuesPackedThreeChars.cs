@@ -1,7 +1,6 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -47,7 +46,7 @@ namespace System.Buffers
                 (typeof(TCaseSensitivity) == typeof(CaseSensitive) || typeof(TCaseSensitivity) == typeof(CaseInsensitiveAsciiLetters));
         }
 
-        public SingleStringSearchValuesPackedThreeChars(HashSet<string>? uniqueValues, string value, int ch2Offset, int ch3Offset) : base(uniqueValues)
+        public SingleStringSearchValuesPackedThreeChars(string value, int ch2Offset, int ch3Offset) : base(uniqueValues: null)
         {
             Debug.Assert(Sse2.IsSupported || AdvSimd.Arm64.IsSupported);
 
@@ -77,6 +76,13 @@ namespace System.Buffers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
             IndexOf(ref MemoryMarshal.GetReference(span), span.Length);
+
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span, out string? matchedValue)
+        {
+            int index = IndexOfAnyMultiString(span);
+            matchedValue = index >= 0 ? _valueState.Value : null;
+            return index;
+        }
 
         private int IndexOf(ref char searchSpace, int searchSpaceLength)
         {
@@ -379,13 +385,11 @@ namespace System.Buffers
             return false;
         }
 
-        internal override bool ContainsCore(string value) => HasUniqueValues
-            ? base.ContainsCore(value)
-            : _valueState.Value.Equals(value, IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        internal override bool ContainsCore(string value) =>
+            _valueState.Value.Equals(value, IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-        internal override string[] GetValues() => HasUniqueValues
-            ? base.GetValues()
-            : [_valueState.Value];
+        internal override string[] GetValues() =>
+            [_valueState.Value];
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CompExactlyDependsOn(typeof(Sse2))]

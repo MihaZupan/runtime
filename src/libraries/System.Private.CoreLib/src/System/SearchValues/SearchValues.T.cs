@@ -44,6 +44,7 @@ namespace System.Buffers
 
         // This is only implemented and used by SearchValues<string>.
         internal virtual int IndexOfAnyMultiString(ReadOnlySpan<char> span) => throw new UnreachableException();
+        internal virtual int IndexOfAnyMultiString(ReadOnlySpan<char> span, out string? matchedValue) => throw new UnreachableException();
 
         private string DebuggerDisplay
         {

@@ -315,6 +315,7 @@ namespace System
         public static bool Equals(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> other, System.StringComparison comparisonType) { throw null; }
         public static int IndexOf(this System.ReadOnlySpan<char> span, System.ReadOnlySpan<char> value, System.StringComparison comparisonType) { throw null; }
         public static int IndexOfAny(this System.ReadOnlySpan<char> span, System.Buffers.SearchValues<string> values) { throw null; }
+        public static int IndexOfAny(this System.ReadOnlySpan<char> span, System.Buffers.SearchValues<string> values, out string? matchedValue) { throw null; }
         [System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute(-1)]
         public static int IndexOfAny(this System.Span<char> span, System.Buffers.SearchValues<string> values) { throw null; }
         public static int IndexOfAny<T>(this System.ReadOnlySpan<T> span, System.Buffers.SearchValues<T> values) where T : System.IEquatable<T>? { throw null; }

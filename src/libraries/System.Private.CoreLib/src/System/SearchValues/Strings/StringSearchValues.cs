@@ -36,10 +36,13 @@ namespace System.Buffers
                 // Avoid additional overheads for single-value inputs.
                 string value = values[0];
                 ArgumentNullException.ThrowIfNull(value, nameof(values));
-                string normalizedValue = NormalizeIfNeeded(value, ignoreCase);
 
-                AnalyzeValues(new ReadOnlySpan<string>(ref normalizedValue), ref ignoreCase, out bool ascii, out bool asciiLettersOnly, out _, out _);
-                return CreateForSingleValue(normalizedValue, uniqueValues: null, ignoreCase, ascii, asciiLettersOnly);
+                if (ignoreCase)
+                {
+                    NormalizeIfNeeded(ref value);
+                }
+
+                return CreateForSingleValue(value, ignoreCase);
             }
 
             var uniqueValues = new HashSet<string>(values.Length, ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -53,80 +56,49 @@ namespace System.Buffers
 
             if (uniqueValues.Contains(string.Empty))
             {
-                return new SingleStringSearchValuesFallback<SearchValues.FalseConst>(string.Empty, uniqueValues);
+                // An empty string value will always match at position 0.
+                // This isn't expected to be a common scenario, so we simplify the implementation
+                // by returning the slow fallback which will still guarantee O(i * m) complexity.
+                return new MultiStringSearchValuesFallback(uniqueValues, ignoreCase);
             }
 
-            Span<string> normalizedValues = new string[uniqueValues.Count];
-            int i = 0;
-            foreach (string value in uniqueValues)
+            string[] normalizedValues = new string[uniqueValues.Count];
+            uniqueValues.CopyTo(normalizedValues);
+
+            if (ignoreCase)
             {
-                normalizedValues[i++] = NormalizeIfNeeded(value, ignoreCase);
-            }
-            Debug.Assert(i == normalizedValues.Length);
-
-            // Aho-Corasick's ctor expects values to be sorted by length.
-            normalizedValues.Sort(static (a, b) => a.Length.CompareTo(b.Length));
-
-            // We may not end up choosing Aho-Corasick as the implementation, but it has a nice property of
-            // finding all the unreachable values during the construction stage, so we build the trie early.
-            HashSet<string>? unreachableValues = null;
-            var ahoCorasickBuilder = new AhoCorasickBuilder(normalizedValues, ignoreCase, ref unreachableValues);
-
-            if (unreachableValues is not null)
-            {
-                // Some values are exact prefixes of other values.
-                // Exclude those values now to reduce the number of buckets and make verification steps cheaper during searching.
-                normalizedValues = RemoveUnreachableValues(normalizedValues, unreachableValues);
+                for (int i = 0; i < normalizedValues.Length; i++)
+                {
+                    NormalizeIfNeeded(ref normalizedValues[i]);
+                }
             }
 
-            SearchValues<string> searchValues = CreateFromNormalizedValues(normalizedValues, uniqueValues, ignoreCase, ref ahoCorasickBuilder);
-            ahoCorasickBuilder.Dispose();
-            return searchValues;
-
-            static string NormalizeIfNeeded(string value, bool ignoreCase)
+            if (normalizedValues.Length == 1)
             {
-                if (ignoreCase && value.AsSpan().ContainsAnyExcept(s_allAsciiExceptLowercase))
+                // The input only had duplicate values.
+                return CreateForSingleValue(normalizedValues[0], ignoreCase);
+            }
+
+            return CreateFromNormalizedValues(normalizedValues, uniqueValues, ignoreCase);
+
+            static void NormalizeIfNeeded(ref string value)
+            {
+                if (value.AsSpan().ContainsAnyExcept(s_allAsciiExceptLowercase))
                 {
                     string upperCase = string.FastAllocateString(value.Length);
                     int charsWritten = Ordinal.ToUpperOrdinal(value, new Span<char>(ref upperCase.GetRawStringData(), upperCase.Length));
                     Debug.Assert(charsWritten == upperCase.Length);
                     value = upperCase;
                 }
-
-                return value;
-            }
-
-            static Span<string> RemoveUnreachableValues(Span<string> values, HashSet<string> unreachableValues)
-            {
-                int newCount = 0;
-                foreach (string value in values)
-                {
-                    if (!unreachableValues.Contains(value))
-                    {
-                        values[newCount++] = value;
-                    }
-                }
-
-                Debug.Assert(newCount <= values.Length - unreachableValues.Count);
-                Debug.Assert(newCount > 0);
-
-                return values.Slice(0, newCount);
             }
         }
 
         private static SearchValues<string> CreateFromNormalizedValues(
-            ReadOnlySpan<string> values,
+            Span<string> values,
             HashSet<string> uniqueValues,
-            bool ignoreCase,
-            ref AhoCorasickBuilder ahoCorasickBuilder)
+            bool ignoreCase)
         {
             AnalyzeValues(values, ref ignoreCase, out bool allAscii, out bool asciiLettersOnly, out bool nonAsciiAffectedByCaseConversion, out int minLength);
-
-            if (values.Length == 1)
-            {
-                // We may reach this if we've removed unreachable values and ended up with only 1 remaining.
-                return CreateForSingleValue(values[0], uniqueValues, ignoreCase, allAscii, asciiLettersOnly);
-            }
 
             if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) &&
                 TryGetTeddyAcceleratedValues(values, uniqueValues, ignoreCase, allAscii, asciiLettersOnly, nonAsciiAffectedByCaseConversion, minLength) is { } searchValues)
@@ -135,7 +107,7 @@ namespace System.Buffers
             }
 
             // Fall back to Aho-Corasick for all other multi-value sets.
-            AhoCorasick ahoCorasick = ahoCorasickBuilder.Build();
+            AhoCorasick ahoCorasick = AhoCorasickBuilder.Build(values, ignoreCase);
 
             if (!ignoreCase)
             {
@@ -148,7 +120,7 @@ namespace System.Buffers
                 {
                     // Aho-Corasick can't deal with the matching semantics of invalid values.
                     // We will use a slow but correct O(n * m) fallback implementation.
-                    return new MultiStringIgnoreCaseSearchValuesFallback(uniqueValues);
+                    return new MultiStringSearchValuesFallback(uniqueValues, ignoreCase: true);
                 }
 
                 return PickAhoCorasickImplementation<CaseInsensitiveUnicode>(ahoCorasick, uniqueValues);
@@ -171,7 +143,7 @@ namespace System.Buffers
         }
 
         private static SearchValues<string>? TryGetTeddyAcceleratedValues(
-            ReadOnlySpan<string> values,
+            Span<string> values,
             HashSet<string> uniqueValues,
             bool ignoreCase,
             bool allAscii,
@@ -284,7 +256,7 @@ namespace System.Buffers
         }
 
         private static SearchValues<string> PickTeddyImplementation<TStartCaseSensitivity, TCaseSensitivity>(
-            ReadOnlySpan<string> values,
+            Span<string> values,
             HashSet<string> uniqueValues,
             int n)
             where TStartCaseSensitivity : struct, ICaseSensitivity
@@ -293,6 +265,9 @@ namespace System.Buffers
             Debug.Assert(typeof(TStartCaseSensitivity) != typeof(CaseInsensitiveUnicode));
             Debug.Assert(values.Length > 1);
             Debug.Assert(n is 2 or 3);
+
+            // Sort longest first so that when multiple values match at the same position, we check and report the longest one first.
+            values.Sort(static (a, b) => b.Length.CompareTo(a.Length));
 
             if (values.Length > TeddyBucketCount)
             {
@@ -375,13 +350,10 @@ namespace System.Buffers
             return true;
         }
 
-        private static SearchValues<string> CreateForSingleValue(
-            string value,
-            HashSet<string>? uniqueValues,
-            bool ignoreCase,
-            bool allAscii,
-            bool asciiLettersOnly)
+        private static SearchValues<string> CreateForSingleValue(string value, bool ignoreCase)
         {
+            AnalyzeValues(new ReadOnlySpan<string>(ref value), ref ignoreCase, out bool ascii, out bool asciiLettersOnly, out _, out _);
+
             // We make use of optimizations that may overflow on 32bit systems for long values.
             int maxLength = IntPtr.Size == 4 ? 1_000_000_000 : int.MaxValue;
 
@@ -389,10 +361,10 @@ namespace System.Buffers
             {
                 SearchValues<string>? searchValues = value.Length switch
                 {
-                    < 4 => TryCreateSingleValuesThreeChars<ValueLengthLessThan4>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
-                    <= 8 => TryCreateSingleValuesThreeChars<ValueLength4To8>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
-                    <= 16 => TryCreateSingleValuesThreeChars<ValueLength9To16>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
-                    _ => TryCreateSingleValuesThreeChars<ValueLengthLongOrUnknown>(value, uniqueValues, ignoreCase, allAscii, asciiLettersOnly),
+                    < 4 => TryCreateSingleValuesThreeChars<ValueLengthLessThan4>(value, ignoreCase, ascii, asciiLettersOnly),
+                    <= 8 => TryCreateSingleValuesThreeChars<ValueLength4To8>(value, ignoreCase, ascii, asciiLettersOnly),
+                    <= 16 => TryCreateSingleValuesThreeChars<ValueLength9To16>(value, ignoreCase, ascii, asciiLettersOnly),
+                    _ => TryCreateSingleValuesThreeChars<ValueLengthLongOrUnknown>(value, ignoreCase, ascii, asciiLettersOnly),
                 };
 
                 if (searchValues is not null)
@@ -401,16 +373,13 @@ namespace System.Buffers
                 }
             }
 
-            uniqueValues ??= new HashSet<string>(1, ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal) { value };
-
             return ignoreCase
-                ? new SingleStringSearchValuesFallback<SearchValues.TrueConst>(value, uniqueValues)
-                : new SingleStringSearchValuesFallback<SearchValues.FalseConst>(value, uniqueValues);
+                ? new SingleStringSearchValuesFallback<SearchValues.TrueConst>(value)
+                : new SingleStringSearchValuesFallback<SearchValues.FalseConst>(value);
         }
 
         private static SearchValues<string>? TryCreateSingleValuesThreeChars<TValueLength>(
             string value,
-            HashSet<string>? uniqueValues,
             bool ignoreCase,
             bool allAscii,
             bool asciiLettersOnly)
@@ -418,32 +387,30 @@ namespace System.Buffers
         {
             if (!ignoreCase)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseSensitive>(value, uniqueValues);
+                return CreateSingleValuesThreeChars<TValueLength, CaseSensitive>(value);
             }
 
             if (asciiLettersOnly)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAsciiLetters>(value, uniqueValues);
+                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAsciiLetters>(value);
             }
 
             if (allAscii)
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAscii>(value, uniqueValues);
+                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveAscii>(value);
             }
 
             // SingleStringSearchValuesThreeChars doesn't have logic to handle non-ASCII case conversion, so we require that anchor characters are ASCII.
             // Right now we're always selecting the first character as one of the anchors, and we need at least two.
             if (char.IsAscii(value[0]) && value.AsSpan(1).ContainsAnyInRange((char)0, (char)127))
             {
-                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value, uniqueValues);
+                return CreateSingleValuesThreeChars<TValueLength, CaseInsensitiveUnicode>(value);
             }
 
             return null;
         }
 
-        private static SearchValues<string> CreateSingleValuesThreeChars<TValueLength, TCaseSensitivity>(
-            string value,
-            HashSet<string>? uniqueValues)
+        private static SearchValues<string> CreateSingleValuesThreeChars<TValueLength, TCaseSensitivity>(string value)
             where TValueLength : struct, IValueLength
             where TCaseSensitivity : struct, ICaseSensitivity
         {
@@ -451,10 +418,10 @@ namespace System.Buffers
 
             if (CanUsePackedImpl(value[0]) && CanUsePackedImpl(value[ch2Offset]) && CanUsePackedImpl(value[ch3Offset]))
             {
-                return new SingleStringSearchValuesPackedThreeChars<TValueLength, TCaseSensitivity>(uniqueValues, value, ch2Offset, ch3Offset);
+                return new SingleStringSearchValuesPackedThreeChars<TValueLength, TCaseSensitivity>(value, ch2Offset, ch3Offset);
             }
 
-            return new SingleStringSearchValuesThreeChars<TValueLength, TCaseSensitivity>(uniqueValues, value, ch2Offset, ch3Offset);
+            return new SingleStringSearchValuesThreeChars<TValueLength, TCaseSensitivity>(value, ch2Offset, ch3Offset);
 
             // Unlike with PackedSpanHelpers (Sse2 only), we are also using this approach on ARM64.
             // We use PackUnsignedSaturate on X86 and UnzipEven on ARM, so the set of allowed characters differs slightly (we can't use it for \0 and \xFF on X86).

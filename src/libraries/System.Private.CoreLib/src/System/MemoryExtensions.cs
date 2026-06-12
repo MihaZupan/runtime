@@ -3036,6 +3036,24 @@ namespace System
         }
 
         /// <summary>
+        /// Searches for the first index of any of the specified substring values.
+        /// </summary>
+        /// <param name="span">The span to search.</param>
+        /// <param name="values">The set of values to search for.</param>
+        /// <param name="matchedValue">When this method returns, contains the first matched value if found; otherwise, <see langword="null"/>.</param>
+        /// <returns>The first index of any of the specified values, or -1 if none are found.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int IndexOfAny(this ReadOnlySpan<char> span, SearchValues<string> values, out string? matchedValue)
+        {
+            if (values is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.values);
+            }
+
+            return values.IndexOfAnyMultiString(span, out matchedValue);
+        }
+
+        /// <summary>
         /// Searches for the last index of any of the specified values similar to calling LastIndexOf several times with the logical OR operator. If not found, returns -1.
         /// </summary>
         /// <param name="span">The span to search.</param>

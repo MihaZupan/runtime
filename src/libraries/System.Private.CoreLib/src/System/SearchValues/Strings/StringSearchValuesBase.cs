@@ -17,11 +17,6 @@ namespace System.Buffers
     {
         private readonly HashSet<string>? _uniqueValues;
 
-        /// <summary>
-        /// This exists to allow <see cref="SingleStringSearchValuesThreeChars{TValueLength, TCaseSensitivity}"/> to avoid the HashSet allocation.
-        /// </summary>
-        protected bool HasUniqueValues => _uniqueValues is not null;
-
         public StringSearchValuesBase(HashSet<string>? uniqueValues) =>
             _uniqueValues = uniqueValues;
 

@@ -13,7 +13,7 @@ namespace System.Buffers
         private static object EmptyChildrenSentinel => Array.Empty<int>();
 
         public int SuffixLink;
-        public int MatchLength;
+        public string? Match;
 
         // This is not a radix tree so we may have a lot of very sparse nodes (single child).
         // We save 1 child separately to avoid allocating a separate collection in such cases.

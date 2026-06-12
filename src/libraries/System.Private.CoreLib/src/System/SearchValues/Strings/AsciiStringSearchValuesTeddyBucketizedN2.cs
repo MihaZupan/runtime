@@ -19,6 +19,11 @@ namespace System.Buffers
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
-            IndexOfAnyN2(span);
+            IndexOfAnyN2(span, out _);
+
+        [CompExactlyDependsOn(typeof(Ssse3))]
+        [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span, out string? matchedValue) =>
+            IndexOfAnyN2(span, out matchedValue);
     }
 }

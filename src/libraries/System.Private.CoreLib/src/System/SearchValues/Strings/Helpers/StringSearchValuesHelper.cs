@@ -38,32 +38,35 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool StartsWith<TCaseSensitivity>(ref char matchStart, int lengthRemaining, string[] candidates)
+        public static bool StartsWith<TCaseSensitivity>(ref char matchStart, int lengthRemaining, string[] candidates, out string? matchedValue)
             where TCaseSensitivity : struct, ICaseSensitivity
         {
             foreach (string candidate in candidates)
             {
-                if (StartsWith<TCaseSensitivity>(ref matchStart, lengthRemaining, candidate))
+                if (StartsWith<TCaseSensitivity>(ref matchStart, lengthRemaining, candidate, out matchedValue))
                 {
                     return true;
                 }
             }
 
+            matchedValue = null;
             return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool StartsWith<TCaseSensitivity>(ref char matchStart, int lengthRemaining, string candidate)
+        public static bool StartsWith<TCaseSensitivity>(ref char matchStart, int lengthRemaining, string candidate, out string? matchedValue)
             where TCaseSensitivity : struct, ICaseSensitivity
         {
             Debug.Assert(lengthRemaining > 0);
 
-            if (lengthRemaining < candidate.Length)
+            if (lengthRemaining >= candidate.Length && UnknownLengthEquals<TCaseSensitivity>(ref matchStart, candidate))
             {
-                return false;
+                matchedValue = candidate;
+                return true;
             }
 
-            return UnknownLengthEquals<TCaseSensitivity>(ref matchStart, candidate);
+            matchedValue = null;
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -131,6 +131,9 @@ namespace System.Memory.Tests.Span
         [InlineData(StringComparison.Ordinal, 4, "fobabar", "bar, foo")]
         // Multiple potential matches - we want the first one
         [InlineData(StringComparison.Ordinal, 1, "abcd", "bc, cd")]
+        // Multiple potential matches with different lengths - we want the longest one
+        [InlineData(StringComparison.Ordinal, 0, "abcdef", "abc, abcd")]
+        [InlineData(StringComparison.Ordinal, 10, "1234512345abcdef12345", "abc, abcd")]
         // Simple case sensitivity
         [InlineData(StringComparison.Ordinal, -1, " ABC", "abc")]
         [InlineData(StringComparison.Ordinal, 1, " abc", "abc")]
@@ -170,7 +173,7 @@ namespace System.Memory.Tests.Span
 
             SearchValues<string> stringValues = SearchValues.Create(valuesArray, comparisonType);
 
-            Assert.Equal(expected, IndexOfAnyReferenceImpl(text, valuesArray, comparisonType));
+            TestAgainstReferenceImpl(text, valuesArray, comparisonType, stringValues);
 
             Assert.Equal(expected, text.AsSpan().IndexOfAny(stringValues));
             Assert.Equal(expected, textSpan.IndexOfAny(stringValues));
@@ -185,8 +188,8 @@ namespace System.Memory.Tests.Span
             }
 
             // The tests below assume none of the values contain these characters.
-            Assert.Equal(-1, IndexOfAnyReferenceImpl(new string('\0', 100), valuesArray, comparisonType));
-            Assert.Equal(-1, IndexOfAnyReferenceImpl(new string('\u00FC', 100), valuesArray, comparisonType));
+            Assert.Equal(-1, IndexOfAnyReferenceImpl(new string('\0', 100), valuesArray, comparisonType).Index);
+            Assert.Equal(-1, IndexOfAnyReferenceImpl(new string('\u00FC', 100), valuesArray, comparisonType).Index);
 
             string[] valuesWithDifferentCases = valuesArray;
 
@@ -266,7 +269,7 @@ namespace System.Memory.Tests.Span
                         int actual = haystack.IndexOfAny(stringValues);
                         if (startOffset != actual)
                         {
-                            StringSearchValuesTestHelper.AssertionFailed(haystack, valuesArray, stringValues, comparisonType, startOffset, actual);
+                            AssertionFailed(haystack, valuesArray, stringValues, comparisonType, startOffset, actual);
                         }
                     }
                 }
@@ -293,10 +296,22 @@ namespace System.Memory.Tests.Span
                     int actual = haystack.IndexOfAny(stringValues);
                     if (expectedAtOffset != actual)
                     {
-                        StringSearchValuesTestHelper.AssertionFailed(haystack, valuesArray, stringValues, comparisonType, expectedAtOffset, actual);
+                        AssertionFailed(haystack, valuesArray, stringValues, comparisonType, expectedAtOffset, actual);
                     }
                 }
             }
+        }
+
+        [Fact]
+        public static void IndexOfAny_MayReturnTransformedMatchedValue()
+        {
+            SearchValues<string> searchValues = SearchValues.Create(["abc"], StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, "abc".IndexOfAny(searchValues, out string matchedValue));
+
+            // Implementation detail: we'll return the transformed uppercase value since that's what the implementation
+            // normalized all inputs to when we're ignoring casing.
+            // This is observable behavior, but not a documented guarantee.
+            Assert.Equal("ABC", matchedValue);
         }
 
         [Fact]
@@ -353,7 +368,9 @@ namespace System.Memory.Tests.Span
         [InlineData("123456789abcdefg")]
         [InlineData("123456789abcdefgh")]
         // Multiple values, but they all share the same prefix
+        [InlineData("abc", "abc")]
         [InlineData("abc", "ab", "abcd")]
+        [InlineData("abcd", "abcde", "abcdef")]
         // These should hit the Aho-Corasick implementation
         [InlineData("a", "b")]
         [InlineData("ab", "c")]
@@ -452,7 +469,7 @@ namespace System.Memory.Tests.Span
                         foreach (char replacement in "AaBb _!\u00F6")
                         {
                             string newText = $"{text.AsSpan(0, i)}{replacement}{text.AsSpan(i + 1)}";
-                            Assert.Equal(IndexOfAnyReferenceImpl(newText, valuesArray, comparisonType), newText.IndexOfAny(stringValues));
+                            TestAgainstReferenceImpl(newText, valuesArray, comparisonType, stringValues);
                         }
                     }
                 }
@@ -509,9 +526,7 @@ namespace System.Memory.Tests.Span
         [Fact]
         public static void TestIndexOfAny_RandomInputs()
         {
-            var helper = new StringSearchValuesTestHelper(
-                expected: IndexOfAnyReferenceImpl,
-                searchValues: (searchSpace, values) => searchSpace.IndexOfAny(values));
+            var helper = new StringSearchValuesTestHelper();
 
             helper.TestRandomInputs();
         }
@@ -578,10 +593,7 @@ namespace System.Memory.Tests.Span
                     {
                         foreach (int haystackLength in new[] { 100, 1024 })
                         {
-                            var helper = new StringSearchValuesTestHelper(
-                                expected: IndexOfAnyReferenceImpl,
-                                searchValues: (searchSpace, values) => searchSpace.IndexOfAny(values),
-                                rngSeed: Random.Shared.Next())
+                            var helper = new StringSearchValuesTestHelper(rngSeed: Random.Shared.Next())
                             {
                                 MaxNeedleCount = maxNeedleCount,
                                 MaxNeedleValueLength = maxNeedleValueLength,
@@ -596,20 +608,84 @@ namespace System.Memory.Tests.Span
             }
         }
 
-        private static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
+        private static (int Index, string? Match) IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
         {
-            int minIndex = int.MaxValue;
+            int minIndex = -1;
+            string? match = null;
 
             foreach (string value in values)
             {
                 int i = searchSpace.IndexOf(value, comparisonType);
-                if ((uint)i < minIndex)
+
+                if (i < 0 || (uint)i > (uint)minIndex)
                 {
-                    minIndex = i;
+                    // No match, or we already have an earlier one.
+                    continue;
                 }
+
+                if (i != minIndex || match.Length < value.Length)
+                {
+                    // Either at a lower index, or the same index but a longer match.
+                    // This is the new best match.
+                    match = value;
+                }
+
+                minIndex = i;
             }
 
-            return minIndex == int.MaxValue ? -1 : minIndex;
+            return (minIndex, match);
+        }
+
+        private static void TestAgainstReferenceImpl(ReadOnlySpan<char> text, string[] valuesArray, StringComparison comparisonType, SearchValues<string> searchValues)
+        {
+            int actualIndex = text.IndexOfAny(searchValues);
+            int actualIndexWithMatch = text.IndexOfAny(searchValues, out string? actualMatch);
+
+            (int expectedIndex, string? expectedMatch) = IndexOfAnyReferenceImpl(text, valuesArray, comparisonType);
+
+            if (expectedIndex != actualIndex)
+            {
+                AssertionFailed(text, valuesArray, searchValues, comparisonType, expectedIndex, actualIndex);
+            }
+
+            if (actualIndex != actualIndexWithMatch)
+            {
+                AssertionFailed(text, valuesArray, searchValues, comparisonType, $"Expected {actualIndex}, got {actualIndexWithMatch} (mismatch with match-returning overload)");
+            }
+
+            if (!string.Equals(expectedMatch, actualMatch, comparisonType))
+            {
+                AssertionFailed(text, valuesArray, searchValues, comparisonType, $"Expected match '{expectedMatch}', got '{actualMatch}' at index {expectedIndex}");
+            }
+        }
+
+        private static void AssertionFailed(ReadOnlySpan<char> haystack, string[] needle, SearchValues<string> searchValues, StringComparison comparisonType, int expected, int actual)
+        {
+            AssertionFailed(haystack, needle, searchValues, comparisonType, $"Expected {expected}, got {actual}");
+        }
+
+        private static void AssertionFailed(ReadOnlySpan<char> haystack, string[] needle, SearchValues<string> searchValues, StringComparison comparisonType, string error)
+        {
+            Type implType = searchValues.GetType();
+            string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
+
+            string readableHaystack = ReadableAsciiOrSerialized(haystack.ToString());
+            string readableNeedle = string.Join(", ", needle.Select(ReadableAsciiOrSerialized));
+
+            Assert.Fail($"{error} for impl='{impl}' comparison={comparisonType} needle='{readableNeedle}', haystack='{readableHaystack}'");
+
+            static string ReadableAsciiOrSerialized(string value)
+            {
+                foreach (char c in value)
+                {
+                    if (!char.IsAsciiLetterOrDigit(c))
+                    {
+                        return $"[ {string.Join(", ", value.Select(c => int.CreateChecked(c)))} ]";
+                    }
+                }
+
+                return value;
+            }
         }
 
         private static void RunUsingInvariantCulture(Action action)
@@ -636,28 +712,17 @@ namespace System.Memory.Tests.Span
 
         private sealed class StringSearchValuesTestHelper
         {
-            public delegate int IndexOfAnySearchDelegate(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType);
-
-            public delegate int SearchValuesSearchDelegate(ReadOnlySpan<char> searchSpace, SearchValues<string> values);
-
             public int MaxNeedleCount = 20;
             public int MaxNeedleValueLength = 10;
             public int MaxHaystackLength = 100;
             public int HaystackIterationsPerNeedle = 50;
-            public int MinValueLength = 1;
-
-            private readonly IndexOfAnySearchDelegate _expectedDelegate;
-            private readonly SearchValuesSearchDelegate _searchValuesDelegate;
 
             private readonly char[] _randomAsciiChars;
             private readonly char[] _randomSimpleAsciiChars;
             private readonly char[] _randomChars;
 
-            public StringSearchValuesTestHelper(IndexOfAnySearchDelegate expected, SearchValuesSearchDelegate searchValues, int rngSeed = 42)
+            public StringSearchValuesTestHelper(int rngSeed = 42)
             {
-                _expectedDelegate = expected;
-                _searchValuesDelegate = searchValues;
-
                 _randomAsciiChars = new char[100 * 1024];
                 _randomSimpleAsciiChars = new char[100 * 1024];
                 _randomChars = new char[1024 * 1024];
@@ -731,14 +796,7 @@ namespace System.Memory.Tests.Span
 
                 for (int i = 0; i < values.Length; i++)
                 {
-                    ReadOnlySpan<char> valueSpan;
-                    do
-                    {
-                        valueSpan = GetRandomSlice(rng, needleRandom, MaxNeedleValueLength);
-                    }
-                    while (valueSpan.Length < MinValueLength);
-
-                    values[i] = valueSpan.ToString();
+                    values[i] = GetRandomSlice(rng, needleRandom, MaxNeedleValueLength).ToString();
                 }
 
                 SearchValues<string> valuesOrdinal = SearchValues.Create(values, StringComparison.Ordinal);
@@ -746,22 +804,10 @@ namespace System.Memory.Tests.Span
 
                 for (int i = 0; i < HaystackIterationsPerNeedle; i++)
                 {
-                    Test(rng, StringComparison.Ordinal, haystackRandom, values, valuesOrdinal);
-                    Test(rng, StringComparison.OrdinalIgnoreCase, haystackRandom, values, valuesOrdinalIgnoreCase);
-                }
-            }
+                    ReadOnlySpan<char> haystack = GetRandomSlice(rng, haystackRandom, MaxHaystackLength);
 
-            private void Test(Random rng, StringComparison comparisonType, ReadOnlySpan<char> haystackRandom,
-                string[] needle, SearchValues<string> searchValuesInstance)
-            {
-                ReadOnlySpan<char> haystack = GetRandomSlice(rng, haystackRandom, MaxHaystackLength);
-
-                int expectedIndex = _expectedDelegate(haystack, needle, comparisonType);
-                int searchValuesIndex = _searchValuesDelegate(haystack, searchValuesInstance);
-
-                if (expectedIndex != searchValuesIndex)
-                {
-                    AssertionFailed(haystack, needle, searchValuesInstance, comparisonType, expectedIndex, searchValuesIndex);
+                    TestAgainstReferenceImpl(haystack, values, StringComparison.Ordinal, valuesOrdinal);
+                    TestAgainstReferenceImpl(haystack, values, StringComparison.OrdinalIgnoreCase, valuesOrdinalIgnoreCase);
                 }
             }
 
@@ -769,30 +815,6 @@ namespace System.Memory.Tests.Span
             {
                 ReadOnlySpan<T> slice = span.Slice(rng.Next(span.Length + 1));
                 return slice.Slice(0, Math.Min(slice.Length, rng.Next(maxLength + 1)));
-            }
-
-            public static void AssertionFailed(ReadOnlySpan<char> haystack, string[] needle, SearchValues<string> searchValues, StringComparison comparisonType, int expected, int actual)
-            {
-                Type implType = searchValues.GetType();
-                string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
-
-                string readableHaystack = ReadableAsciiOrSerialized(haystack.ToString());
-                string readableNeedle = string.Join(", ", needle.Select(ReadableAsciiOrSerialized));
-
-                Assert.Fail($"Expected {expected}, got {actual} for impl='{impl}' comparison={comparisonType} needle='{readableNeedle}', haystack='{readableHaystack}'");
-
-                static string ReadableAsciiOrSerialized(string value)
-                {
-                    foreach (char c in value)
-                    {
-                        if (!char.IsAsciiLetterOrDigit(c))
-                        {
-                            return $"[ {string.Join(", ", value.Select(c => int.CreateChecked(c)))} ]";
-                        }
-                    }
-
-                    return value;
-                }
             }
         }
     }

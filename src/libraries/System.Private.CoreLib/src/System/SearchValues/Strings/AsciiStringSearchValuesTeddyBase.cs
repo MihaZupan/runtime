@@ -150,53 +150,53 @@ namespace System.Buffers
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        protected int IndexOfAnyN2(ReadOnlySpan<char> span)
+        protected int IndexOfAnyN2(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // The behavior of the rest of the function remains the same if Avx2 or Avx512BW aren't supported
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             if (Vector512.IsHardwareAccelerated && Avx512Vbmi.IsSupported && span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN2)
             {
-                return IndexOfAnyN2Avx512(span);
+                return IndexOfAnyN2Avx512(span, out matchedValue);
             }
 
             if (Avx2.IsSupported && span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN2)
             {
-                return IndexOfAnyN2Avx2(span);
+                return IndexOfAnyN2Avx2(span, out matchedValue);
             }
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
 
-            return IndexOfAnyN2Vector128(span);
+            return IndexOfAnyN2Vector128(span, out matchedValue);
         }
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        protected int IndexOfAnyN3(ReadOnlySpan<char> span)
+        protected int IndexOfAnyN3(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // The behavior of the rest of the function remains the same if Avx2 or Avx512BW aren't supported
 #pragma warning disable IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
             if (Vector512.IsHardwareAccelerated && Avx512Vbmi.IsSupported && span.Length >= CharsPerIterationAvx512 + MatchStartOffsetN3)
             {
-                return IndexOfAnyN3Avx512(span);
+                return IndexOfAnyN3Avx512(span, out matchedValue);
             }
 
             if (Avx2.IsSupported && span.Length >= CharsPerIterationAvx2 + MatchStartOffsetN3)
             {
-                return IndexOfAnyN3Avx2(span);
+                return IndexOfAnyN3Avx2(span, out matchedValue);
             }
 #pragma warning restore IntrinsicsInSystemPrivateCoreLibAttributeNotSpecificEnough
 
-            return IndexOfAnyN3Vector128(span);
+            return IndexOfAnyN3Vector128(span, out matchedValue);
         }
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        private int IndexOfAnyN2Vector128(ReadOnlySpan<char> span)
+        private int IndexOfAnyN2Vector128(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // See comments in 'IndexOfAnyN3Vector128' below.
             // This method is the same, but compares 2 starting chars instead of 3.
             if (span.Length < CharsPerIterationVector128 + MatchStartOffsetN2)
             {
-                return ShortInputFallback(span);
+                return ShortInputFallback(span, out matchedValue);
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
@@ -226,6 +226,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationVector128)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -237,15 +238,16 @@ namespace System.Buffers
             goto Loop;
 
         CandidateFound:
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
         }
 
         [CompExactlyDependsOn(typeof(Avx2))]
-        private int IndexOfAnyN2Avx2(ReadOnlySpan<char> span)
+        private int IndexOfAnyN2Avx2(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // See comments in 'IndexOfAnyN3Vector128' below.
             // This method is the same, but operates on 32 input characters at a time and compares 2 starting chars instead of 3.
@@ -278,6 +280,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx2)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -289,15 +292,16 @@ namespace System.Buffers
             goto Loop;
 
         CandidateFound:
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
         }
 
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
-        private int IndexOfAnyN2Avx512(ReadOnlySpan<char> span)
+        private int IndexOfAnyN2Avx512(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // See comments in 'IndexOfAnyN3Vector128' below.
             // This method is the same, but operates on 64 input characters at a time and compares 2 starting chars instead of 3.
@@ -330,6 +334,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx512)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -341,8 +346,9 @@ namespace System.Buffers
             goto Loop;
 
         CandidateFound:
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN2, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
@@ -350,12 +356,12 @@ namespace System.Buffers
 
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-        private int IndexOfAnyN3Vector128(ReadOnlySpan<char> span)
+        private int IndexOfAnyN3Vector128(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // We can't process inputs shorter than 18 characters in a vectorized manner here.
             if (span.Length < CharsPerIterationVector128 + MatchStartOffsetN3)
             {
-                return ShortInputFallback(span);
+                return ShortInputFallback(span, out matchedValue);
             }
 
             ref char searchSpace = ref MemoryMarshal.GetReference(span);
@@ -400,6 +406,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationVector128)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -414,15 +421,16 @@ namespace System.Buffers
 
         CandidateFound:
             // We found potential matches, but they may be false-positives, so we must verify each one.
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
         }
 
         [CompExactlyDependsOn(typeof(Avx2))]
-        private int IndexOfAnyN3Avx2(ReadOnlySpan<char> span)
+        private int IndexOfAnyN3Avx2(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // See comments in 'IndexOfAnyN3Vector128' above.
             // This method is the same, but operates on 32 input characters at a time.
@@ -457,6 +465,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx2)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -469,15 +478,16 @@ namespace System.Buffers
             goto Loop;
 
         CandidateFound:
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
         }
 
         [CompExactlyDependsOn(typeof(Avx512Vbmi))]
-        private int IndexOfAnyN3Avx512(ReadOnlySpan<char> span)
+        private int IndexOfAnyN3Avx512(ReadOnlySpan<char> span, out string? matchedValue)
         {
             // See comments in 'IndexOfAnyN3Vector128' above.
             // This method is the same, but operates on 64 input characters at a time.
@@ -512,6 +522,7 @@ namespace System.Buffers
             {
                 if (Unsafe.AreSame(ref searchSpace, ref Unsafe.Add(ref lastSearchSpaceStart, CharsPerIterationAvx512)))
                 {
+                    matchedValue = null;
                     return -1;
                 }
 
@@ -524,15 +535,16 @@ namespace System.Buffers
             goto Loop;
 
         CandidateFound:
-            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset))
+            if (TryFindMatch(span, ref searchSpace, result, MatchStartOffsetN3, out int offset, out string? match))
             {
+                matchedValue = match;
                 return offset;
             }
             goto ContinueLoop;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector128<byte> result, int matchStartOffset, out int offsetFromStart)
+        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector128<byte> result, int matchStartOffset, out int offsetFromStart, out string? matchedValue)
         {
             // 'resultMask' encodes the input positions where at least one bucket may contain a match.
             // These positions are offset by 'matchStartOffset' places.
@@ -561,8 +573,8 @@ namespace System.Buffers
                     Debug.Assert(bucket is not null);
 
                     if (TBucketized.Value
-                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket))
-                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket)))
+                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket), out matchedValue)
+                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket), out matchedValue))
                     {
                         return true;
                     }
@@ -576,11 +588,12 @@ namespace System.Buffers
             while (resultMask != 0);
 
             offsetFromStart = 0;
+            matchedValue = null;
             return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector256<byte> result, int matchStartOffset, out int offsetFromStart)
+        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector256<byte> result, int matchStartOffset, out int offsetFromStart, out string? matchedValue)
         {
             // See comments in 'TryFindMatch' for Vector128<byte> above.
             // This method is the same, but checks the potential matches for 32 input positions.
@@ -606,8 +619,8 @@ namespace System.Buffers
                     Debug.Assert(bucket is not null);
 
                     if (TBucketized.Value
-                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket))
-                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket)))
+                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket), out matchedValue)
+                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket), out matchedValue))
                     {
                         return true;
                     }
@@ -621,11 +634,12 @@ namespace System.Buffers
             while (resultMask != 0);
 
             offsetFromStart = 0;
+            matchedValue = null;
             return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector512<byte> result, int matchStartOffset, out int offsetFromStart)
+        private bool TryFindMatch(ReadOnlySpan<char> span, ref char searchSpace, Vector512<byte> result, int matchStartOffset, out int offsetFromStart, out string? matchedValue)
         {
             // See comments in 'TryFindMatch' for Vector128<byte> above.
             // This method is the same, but checks the potential matches for 64 input positions.
@@ -651,8 +665,8 @@ namespace System.Buffers
                     Debug.Assert(bucket is not null);
 
                     if (TBucketized.Value
-                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket))
-                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket)))
+                        ? StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string[]>(bucket), out matchedValue)
+                        : StartsWith<TCaseSensitivity>(ref matchRef, lengthRemaining, Unsafe.As<string>(bucket), out matchedValue))
                     {
                         return true;
                     }
@@ -666,6 +680,7 @@ namespace System.Buffers
             while (resultMask != 0);
 
             offsetFromStart = 0;
+            matchedValue = null;
             return false;
         }
     }

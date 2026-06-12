@@ -15,7 +15,7 @@ namespace System.Buffers
             _rabinKarp = new RabinKarp(values);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        protected int ShortInputFallback(ReadOnlySpan<char> span) =>
-            _rabinKarp.IndexOfAny<TCaseSensitivity>(span);
+        protected int ShortInputFallback(ReadOnlySpan<char> span, out string? matchedValue) =>
+            _rabinKarp.IndexOfAny<TCaseSensitivity>(span, out matchedValue);
     }
 }

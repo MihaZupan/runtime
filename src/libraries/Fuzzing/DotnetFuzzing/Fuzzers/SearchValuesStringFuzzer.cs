@@ -35,35 +35,66 @@ internal sealed class SearchValuesStringFuzzer : IFuzzer
     {
         SearchValues<string> searchValues = SearchValues.Create(needles, comparisonType);
 
-        int index = haystack.IndexOfAny(searchValues);
-        AssertEqual(index, haystackCopy.IndexOfAny(searchValues), searchValues);
-        AssertEqual(index, IndexOfAnyReferenceImpl(haystack, needles, comparisonType), searchValues);
+        (int expectedIndex, string? expectedMatch) = IndexOfAnyReferenceImpl(haystack, needles, comparisonType);
+
+        AssertEqual(expectedIndex, haystack.IndexOfAny(searchValues), searchValues);
+        AssertEqual(expectedIndex, haystack.IndexOfAny(searchValues, out string? actualMatch), searchValues);
+        AssertEqual(expectedMatch, actualMatch, comparisonType, searchValues);
+
+        AssertEqual(expectedIndex, haystackCopy.IndexOfAny(searchValues), searchValues);
+        AssertEqual(expectedIndex, haystackCopy.IndexOfAny(searchValues, out actualMatch), searchValues);
+        AssertEqual(expectedMatch, actualMatch, comparisonType, searchValues);
     }
 
-    private static int IndexOfAnyReferenceImpl(ReadOnlySpan<char> haystack, string[] needles, StringComparison comparisonType)
+    private static (int Index, string? Match) IndexOfAnyReferenceImpl(ReadOnlySpan<char> searchSpace, ReadOnlySpan<string> values, StringComparison comparisonType)
     {
-        int minIndex = int.MaxValue;
+        int minIndex = -1;
+        string? match = null;
 
-        foreach (string needle in needles)
+        foreach (string value in values)
         {
-            int i = haystack.IndexOf(needle, comparisonType);
-            if ((uint)i < minIndex)
+            int i = searchSpace.IndexOf(value, comparisonType);
+
+            if (i < 0 || (uint)i > (uint)minIndex)
             {
-                minIndex = i;
+                // No match, or we already have an earlier one.
+                continue;
             }
+
+            if (i != minIndex || match!.Length < value.Length)
+            {
+                // Either at a lower index, or the same index but a longer match.
+                // This is the new best match.
+                match = value;
+            }
+
+            minIndex = i;
         }
 
-        return minIndex == int.MaxValue ? -1 : minIndex;
+        return (minIndex, match);
     }
 
     private static void AssertEqual(int expected, int actual, SearchValues<string> searchValues)
     {
         if (expected != actual)
         {
-            Type implType = searchValues.GetType();
-            string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
-
-            throw new Exception($"Expected {expected}, got {actual} for impl='{impl}'");
+            AssertionFailed($"Expected index {expected}, got {actual}", searchValues);
         }
+    }
+
+    private static void AssertEqual(string? expected, string? actual, StringComparison comparisonType, SearchValues<string> searchValues)
+    {
+        if (!string.Equals(expected, actual, comparisonType))
+        {
+            AssertionFailed($"Expected match '{expected}', got '{actual}'", searchValues);
+        }
+    }
+
+    private static void AssertionFailed(string error, SearchValues<string> searchValues)
+    {
+        Type implType = searchValues.GetType();
+        string impl = $"{implType.Name} [{string.Join(", ", implType.GenericTypeArguments.Select(t => t.Name))}]";
+
+        throw new Exception($"{error} for impl='{impl}'");
     }
 }

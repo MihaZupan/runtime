@@ -17,6 +17,10 @@ namespace System.Buffers
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
-            _ahoCorasick.IndexOfAny<TCaseSensitivity, TFastScanVariant>(span);
+            _ahoCorasick.IndexOfAny<TCaseSensitivity, TFastScanVariant>(span, out _);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span, out string? matchedValue) =>
+            _ahoCorasick.IndexOfAny<TCaseSensitivity, TFastScanVariant>(span, out matchedValue);
     }
 }

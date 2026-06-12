@@ -19,29 +19,25 @@ namespace System.Buffers
         private ValueListBuilder<int> _parents;
         private IndexOfAnyAsciiSearcher.AsciiState _startingAsciiChars;
 
-        public AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase, ref HashSet<string>? unreachableValues)
+        private AhoCorasickBuilder(ReadOnlySpan<string> values, bool ignoreCase)
         {
             Debug.Assert(!values.IsEmpty);
             Debug.Assert(!string.IsNullOrEmpty(values[0]));
 
-#if DEBUG
-            // The input should have been sorted by length
-            for (int i = 1; i < values.Length; i++)
-            {
-                Debug.Assert(values[i - 1].Length <= values[i].Length);
-            }
-#endif
-
             _values = values;
             _ignoreCase = ignoreCase;
-            BuildTrie(ref unreachableValues);
         }
 
-        public AhoCorasick Build()
+        public static AhoCorasick Build(ReadOnlySpan<string> values, bool ignoreCase) =>
+            new AhoCorasickBuilder(values, ignoreCase).Build();
+
+        private AhoCorasick Build()
         {
+            BuildTrie();
+
             AddSuffixLinks();
 
-            Debug.Assert(_nodes[0].MatchLength == 0, "The root node shouldn't have a match.");
+            Debug.Assert(_nodes[0].Match is null, "The root node shouldn't have a match.");
 
             for (int i = 0; i < _nodes.Length; i++)
             {
@@ -53,16 +49,15 @@ namespace System.Buffers
                 GenerateStartingAsciiCharsBitmap();
             }
 
-            return new AhoCorasick(_nodes.AsSpan().ToArray(), _startingAsciiChars);
-        }
+            var result = new AhoCorasick(_nodes.AsSpan().ToArray(), _startingAsciiChars);
 
-        public void Dispose()
-        {
             _nodes.Dispose();
             _parents.Dispose();
+
+            return result;
         }
 
-        private void BuildTrie(ref HashSet<string>? unreachableValues)
+        private void BuildTrie()
         {
             _nodes.Append(new AhoCorasickNode());
             _parents.Append(0);
@@ -86,23 +81,10 @@ namespace System.Buffers
 
                     node = ref _nodes[childIndex];
                     nodeIndex = childIndex;
-
-                    if (node.MatchLength != 0)
-                    {
-                        // A previous value is an exact prefix of this one.
-                        // We're looking for the index of the first match, not necessarily the longest one, so we can skip this value.
-                        // We've already normalized the values, so we can do ordinal comparisons here.
-                        unreachableValues ??= new HashSet<string>(StringComparer.Ordinal);
-                        unreachableValues.Add(value);
-                        break;
-                    }
-
-                    if (i == value.Length - 1)
-                    {
-                        node.MatchLength = value.Length;
-                        break;
-                    }
                 }
+
+                node.Match = value;
+                node.SuffixLink = -1;
             }
         }
 
@@ -116,8 +98,8 @@ namespace System.Buffers
             // For example if we have strings "DOTNET" and "OTTER", we want
             // the 'O' and 'T' in "dotnet" to point into 'O' and 'T' in "OTTER".
             // If our text contains the word "dotter", we will walk it character by character.
-            // Once we get to "DOTNET" and read the next character 'T', we can no longer continue with "DOTNET",
-            // and will instead follow the suffix link to "ot" in "OTTER" where we can continue the search.
+            // Once we get to "DOT" and read the next character 'T', we can no longer continue with "DOTNET",
+            // and will instead follow the suffix link to "OT" in "OTTER" where we can continue the search.
             //
             // We also remember when a node's suffix link points to the end of a different value, such that it is itself a match.
             // If we also had the word "POTTERY", the 'R' would contain a suffix link to the 'R' in "OTTER",
@@ -146,7 +128,7 @@ namespace System.Buffers
 
                 // If this node doesn't represent the first character of a value (doesn't immediately follow the root node),
                 // it may have a have a non-zero suffix link.
-                if (parent != 0)
+                if (node.Match is null && parent != 0)
                 {
                     while (suffixLink >= 0)
                     {
@@ -165,30 +147,17 @@ namespace System.Buffers
 
                         suffixLink = suffixNode.SuffixLink;
                     }
-                }
 
-                if (node.MatchLength != 0)
-                {
-                    // This node represents the end of a match.
-                    // Mark it in a special way we can recognize when searching.
-                    node.SuffixLink = -1;
-
-                    // If a node is a match, there is no need to assign suffix links to its children.
-                    // If a child does not match, such that we would look at its suffix link,
-                    // we have already saw an earlier match node that is definitely the earliest possible match.
-                }
-                else
-                {
                     node.SuffixLink = suffixLink;
 
                     if (suffixLink >= 0)
                     {
                         // Remember if this node's suffix link points to a node that is itself a match.
-                        node.MatchLength = _nodes[suffixLink].MatchLength;
+                        node.Match = _nodes[suffixLink].Match;
                     }
-
-                    node.AddChildrenToQueue(queue);
                 }
+
+                node.AddChildrenToQueue(queue);
             }
         }
 

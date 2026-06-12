@@ -26,5 +26,11 @@ namespace System.Buffers
 
         internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span) =>
             -1;
+
+        internal override int IndexOfAnyMultiString(ReadOnlySpan<char> span, out string? matchedValue)
+        {
+            matchedValue = null;
+            return -1;
+        }
     }
 }

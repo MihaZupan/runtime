@@ -97,15 +97,15 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span)
+        public readonly int IndexOfAny<TCaseSensitivity>(ReadOnlySpan<char> span, out string? matchedValue)
             where TCaseSensitivity : struct, ICaseSensitivity
         {
             return typeof(TCaseSensitivity) == typeof(CaseInsensitiveUnicode)
-                ? IndexOfAnyCaseInsensitiveUnicode(span)
-                : IndexOfAnyCore<TCaseSensitivity>(span);
+                ? IndexOfAnyCaseInsensitiveUnicode(span, out matchedValue)
+                : IndexOfAnyCore<TCaseSensitivity>(span, out matchedValue);
         }
 
-        private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span)
+        private readonly int IndexOfAnyCore<TCaseSensitivity>(ReadOnlySpan<char> span, out string? matchedValue)
             where TCaseSensitivity : struct, ICaseSensitivity
         {
             Debug.Assert(typeof(TCaseSensitivity) != typeof(CaseInsensitiveUnicode));
@@ -136,7 +136,7 @@ namespace System.Buffers
                     {
                         int startOffset = (int)((nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(span), ref current) / sizeof(char));
 
-                        if (StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket))
+                        if (StartsWith<TCaseSensitivity>(ref current, span.Length - startOffset, bucket, out matchedValue))
                         {
                             return startOffset;
                         }
@@ -156,16 +156,18 @@ namespace System.Buffers
                 }
             }
 
+            matchedValue = null;
             return -1;
         }
 
-        private readonly unsafe int IndexOfAnyCaseInsensitiveUnicode(ReadOnlySpan<char> span)
+        private readonly unsafe int IndexOfAnyCaseInsensitiveUnicode(ReadOnlySpan<char> span, out string? matchedValue)
         {
             Debug.Assert(span.Length <= MaxInputLength, "Teddy should have handled long inputs.");
 
             if (_hashLength > span.Length)
             {
                 // Can't possibly match, all the values are longer than our input span.
+                matchedValue = null;
                 return -1;
             }
 
@@ -175,7 +177,7 @@ namespace System.Buffers
             Debug.Assert(charsWritten == upperCase.Length);
 
             // CaseSensitive instead of CaseInsensitiveUnicode as we've already done the case conversion.
-            return IndexOfAnyCore<CaseSensitive>(upperCase);
+            return IndexOfAnyCore<CaseSensitive>(upperCase, out matchedValue);
         }
     }
 }

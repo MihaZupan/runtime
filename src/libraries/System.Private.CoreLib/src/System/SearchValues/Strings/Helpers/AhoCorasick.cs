@@ -63,20 +63,22 @@ namespace System.Buffers
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly int IndexOfAny<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span)
+        public readonly int IndexOfAny<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span, out string? matchedValue)
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
             return typeof(TCaseSensitivity) == typeof(StringSearchValuesHelper.CaseInsensitiveUnicode)
-                ? IndexOfAnyCaseInsensitiveUnicode<TFastScanVariant>(span)
-                : IndexOfAnyCore<TCaseSensitivity, TFastScanVariant>(span);
+                ? IndexOfAnyCaseInsensitiveUnicode<TFastScanVariant>(span, out matchedValue)
+                : IndexOfAnyCore<TCaseSensitivity, TFastScanVariant>(span, out matchedValue);
         }
 
-        private readonly int IndexOfAnyCore<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span)
+        private readonly int IndexOfAnyCore<TCaseSensitivity, TFastScanVariant>(ReadOnlySpan<char> span, out string? matchedValue)
             where TCaseSensitivity : struct, StringSearchValuesHelper.ICaseSensitivity
             where TFastScanVariant : struct, IFastScan
         {
             Debug.Assert(typeof(TCaseSensitivity) != typeof(StringSearchValuesHelper.CaseInsensitiveUnicode));
+
+            matchedValue = null;
 
             ref AhoCorasickNode nodes = ref MemoryMarshal.GetArrayDataReference(_nodes);
             int nodeIndex = 0;
@@ -133,12 +135,13 @@ namespace System.Buffers
                     nodeIndex = childIndex;
 
                     Debug.Assert((uint)nodeIndex < (uint)_nodes.Length);
-                    int matchLength = Unsafe.Add(ref nodes, (uint)nodeIndex).MatchLength;
-                    if (matchLength != 0)
+                    string? match = Unsafe.Add(ref nodes, (uint)nodeIndex).Match;
+                    if (match is not null)
                     {
                         // Any result we find from here on out may only be lower (longer match with a start closer to the beginning of the input).
-                        Debug.Assert(result == -1 || result >= i + 1 - matchLength);
-                        result = i + 1 - matchLength;
+                        Debug.Assert(result == -1 || result >= i + 1 - match.Length);
+                        result = i + 1 - match.Length;
+                        matchedValue = match;
                     }
 
                     i++;
@@ -174,14 +177,17 @@ namespace System.Buffers
             }
 
         Return:
+            Debug.Assert((result >= 0) == (matchedValue is not null));
             return result;
         }
 
         // Mostly a copy of IndexOfAnyCore, but we may read two characters at a time in the case of surrogate pairs.
-        private readonly int IndexOfAnyCaseInsensitiveUnicode<TFastScanVariant>(ReadOnlySpan<char> span)
+        private readonly int IndexOfAnyCaseInsensitiveUnicode<TFastScanVariant>(ReadOnlySpan<char> span, out string? matchedValue)
             where TFastScanVariant : struct, IFastScan
         {
             const char LowSurrogateNotSet = '\0';
+
+            matchedValue = null;
 
             ref AhoCorasickNode nodes = ref MemoryMarshal.GetArrayDataReference(_nodes);
             int nodeIndex = 0;
@@ -282,12 +288,13 @@ namespace System.Buffers
                     nodeIndex = childIndex;
 
                     Debug.Assert((uint)nodeIndex < (uint)_nodes.Length);
-                    int matchLength = Unsafe.Add(ref nodes, (uint)nodeIndex).MatchLength;
-                    if (matchLength != 0)
+                    string? match = Unsafe.Add(ref nodes, (uint)nodeIndex).Match;
+                    if (match is not null)
                     {
                         // Any result we find from here on out may only be lower (longer match with a start closer to the beginning of the input).
-                        Debug.Assert(result == -1 || result >= i + 1 - matchLength);
-                        result = i + 1 - matchLength;
+                        Debug.Assert(result == -1 || result >= i + 1 - match.Length);
+                        result = i + 1 - match.Length;
+                        matchedValue = match;
                     }
 
                     i++;
@@ -323,6 +330,7 @@ namespace System.Buffers
             }
 
         Return:
+            Debug.Assert((result >= 0) == (matchedValue is not null));
             return result;
         }
 
