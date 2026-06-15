@@ -97,6 +97,10 @@ public enum DataType
     InterpMethod,
     InterpMethodContextFrame,
     Array,
+    Delegate,
+    TypedByRef,
+    StackTraceArrayHeader,
+    StackTraceElement,
     SyncBlock,
     SyncTableEntry,
     ObjectHeader,
@@ -181,6 +185,7 @@ public enum DataType
     ComInterfaceEntry,
     InternalComInterfaceDispatch,
     AuxiliarySymbolInfo,
+    VASigCookie,
     CodeRangeMapRangeList,
 
     /* GC Data Types */
@@ -196,6 +201,10 @@ public enum DataType
     TableSegment,
     CardTableInfo,
     RegionFreeList,
+
+    EnCEEClassData,
+    EnCAddedFieldElement,
+    UnorderedArrayBase,
 }
 
 public static class DataTypeTargetExtensions
