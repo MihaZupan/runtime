@@ -2928,20 +2928,21 @@ public:
         StubStructMarshalInterop = 8,
         StubArrayOp = 9,
         StubMulticastDelegate = 10,
-        StubUnboxingIL = 11,
-        StubInstantiating = 12,
-        StubTailCallStoreArgs = 13,
-        StubTailCallCallTarget = 14,
+        StubWrapperDelegate = 11,
+        StubUnboxingIL = 12,
+        StubInstantiating = 13,
+        StubTailCallStoreArgs = 14,
+        StubTailCallCallTarget = 15,
 
-        StubVirtualStaticMethodDispatch = 15,
-        StubDelegateShuffleThunk = 16,
+        StubVirtualStaticMethodDispatch = 16,
+        StubDelegateShuffleThunk = 17,
 
-        StubDelegateInvokeMethod = 17,
+        StubDelegateInvokeMethod = 18,
 
-        StubAsyncResume = 18,
+        StubAsyncResume = 19,
 
-        StubCLRToCOMEvent = 19,
-        StubLast = 20
+        StubCLRToCOMEvent = 20,
+        StubLast = 21
     };
 
     enum Flag : DWORD
@@ -3125,6 +3126,12 @@ public:
         LIMITED_METHOD_DAC_CONTRACT;
         _ASSERTE(IsILStub());
         return GetILStubType() == DynamicMethodDesc::StubDelegateInvokeMethod;
+    }
+    bool IsWrapperDelegateStub() const
+    {
+        LIMITED_METHOD_DAC_CONTRACT;
+        _ASSERTE(IsILStub());
+        return GetILStubType() == DynamicMethodDesc::StubWrapperDelegate;
     }
     bool IsUnboxingILStub() const
     {

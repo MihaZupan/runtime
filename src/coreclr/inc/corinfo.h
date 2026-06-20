@@ -1543,6 +1543,8 @@ struct CORINFO_CALL_INFO
     };
 
     CORINFO_CONST_LOOKUP    instParamLookup;
+
+    bool                    wrapperDelegateInvoke;
 };
 
 enum CORINFO_DEVIRTUALIZATION_DETAIL
@@ -1752,6 +1754,9 @@ struct CORINFO_EE_INFO
     // Delegate offsets
     unsigned    offsetOfDelegateInstance;
     unsigned    offsetOfDelegateFirstTarget;
+
+    // Wrapper delegate offsets
+    unsigned    offsetOfWrapperDelegateIndirectCell;
 
     // Reverse PInvoke offsets
     unsigned    sizeOfReversePInvokeFrame;

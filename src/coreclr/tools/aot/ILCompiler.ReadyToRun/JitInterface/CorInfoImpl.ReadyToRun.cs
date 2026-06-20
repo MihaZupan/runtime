@@ -2436,6 +2436,8 @@ namespace Internal.JitInterface
 
             pResult->methodFlags = getMethodAttribsInternal(methodToCall);
 
+            pResult->wrapperDelegateInvoke = false;
+
             Get_CORINFO_SIG_INFO(methodToCall, &pResult->sig, scope: null, useInstantiatingStub);
         }
 

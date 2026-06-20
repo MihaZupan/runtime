@@ -542,9 +542,9 @@ void FlushWriteBarrierInstructionCache()
 /*
 Rough pseudo-code of interface dispatching:
 
-  // jitted code sets r0, r12:
+  // jitted code sets r0, r4:
   r0 = object;
-  r12 = indirectionCell;
+  r4 = indirectionCell;
   // jitted code calls *indirectionCell
   switch (*indirectionCell)
   {
@@ -574,28 +574,25 @@ void  LookupHolder::Initialize(LookupHolder* pLookupHolderRX, PCODE resolveWorke
     // Called directly by JITTED code
     // See ResolveWorkerAsmStub
 
-    // push {r12}
-    _stub._entryPoint[0] = 0xf84d;
-    _stub._entryPoint[1] = 0xcd04;
     // ldr r12, [pc + 8]    ; #_token
-    _stub._entryPoint[2] = 0xf8df;
-    _stub._entryPoint[3] = 0xc008;
+    _stub._entryPoint[0] = 0xf8df;
+    _stub._entryPoint[1] = 0xc008;
     // ldr pc, [pc]         ; #_resolveWorkerTarget
-    _stub._entryPoint[4] = 0xf8df;
-    _stub._entryPoint[5] = 0xf000;
+    _stub._entryPoint[2] = 0xf8df;
+    _stub._entryPoint[3] = 0xf000;
 
     _stub._resolveWorkerTarget = resolveWorkerTarget;
     _stub._token               = dispatchToken;
-    _ASSERTE(6 == LookupStub::entryPointLen);
+    _ASSERTE(4 == LookupStub::entryPointLen);
 }
 
 void  DispatchHolder::Initialize(DispatchHolder* pDispatchHolderRX, PCODE implTarget, PCODE failTarget, size_t expectedMT)
 {
     // Called directly by JITTED code
-    // DispatchHolder._stub._entryPoint(r0:object, r1, r2, r3, r12:IndirectionCell)
+    // DispatchHolder._stub._entryPoint(r0:object, r1, r2, r3, r4:IndirectionCell)
     // {
     //     if (r0.methodTable == this._expectedMT) (this._implTarget)(r0, r1, r2, r3);
-    //     else (this._failTarget)(r0, r1, r2, r3, r12:IndirectionCell);
+    //     else (this._failTarget)(r0, r1, r2, r3, r4);
     // }
 
     int n = 0;
@@ -613,25 +610,26 @@ void  DispatchHolder::Initialize(DispatchHolder* pDispatchHolderRX, PCODE implTa
 
     // r0 : object. It can be null as well.
     // when it is null the code causes an AV. This AV is seen by the VM's personality routine
-    // and it converts it into nullRef.
+    // and it converts it into nullRef. We want the AV to happen before modifying the stack so that we can get the
+    // call stack in windbg at the point of AV. So therefore "ldr r12, [r0]" should be the first instruction.
 
-    // push {r4,r5}
-    _stub._entryPoint[n++] = 0xb430;
-
-    // ldr r4, [r0 + #Object.m_pMethTab]
+    // ldr r12, [r0 + #Object.m_pMethTab]
     _stub._entryPoint[n++] = DISPATCH_STUB_FIRST_WORD;
-    _stub._entryPoint[n++] = 0x4000;
+    _stub._entryPoint[n++] = 0xc000;
+
+    // push {r5}
+    _stub._entryPoint[n++] = 0xb420;
 
     // ldr r5, [pc + #_expectedMT]
     offset = PC_REL_OFFSET(_expectedMT);
     _ASSERTE((offset & 0x3) == 0);
     _stub._entryPoint[n++] = 0x4d00 | (offset >> 2);
 
-    // cmp r5, r4
-    _stub._entryPoint[n++] = 0x42a5;
+    // cmp r5, r12
+    _stub._entryPoint[n++] = 0x4565;
 
-    // pop {r4,r5}
-    _stub._entryPoint[n++] = 0xbc30;
+    // pop {r5}
+    _stub._entryPoint[n++] = 0xbc20;
 
     // bne failTarget
     _stub._entryPoint[n++] = 0xd101;
@@ -666,7 +664,7 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
                                 void * cacheAddr, INT32 * counterAddr)
 {
     // Called directly by JITTED code
-    // ResolveStub._resolveEntryPoint(r0:Object*, r1, r2, r3, r12:IndirectionCell)
+    // ResolveStub._resolveEntryPoint(r0:Object*, r1, r2, r3, r4:IndirectionCellAndFlags)
     // {
     //    MethodTable mt = r0.m_pMethTab;
     //    int i = ((mt + mt >> 12) ^ this._hashedToken) & this._cacheMask
@@ -676,7 +674,7 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     //        if (mt == e.pMT && this._token == e.token) (e.target)(r0, r1, r2, r3);
     //        e = e.pNext;
     //    } while (e != null)
-    //    (this._slowEntryPoint)(r0, r1, r2, r3, r12:IndirectionCell);
+    //    (this._slowEntryPoint)(r0, r1, r2, r3, r4);
     // }
     //
 
@@ -693,19 +691,19 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
 #undef PC_REL_OFFSET
 #define PC_REL_OFFSET(_field) (WORD)(offsetof(ResolveStub, _field) - ((offsetof(ResolveStub, _resolveEntryPoint) + sizeof(*ResolveStub::_resolveEntryPoint) * (n + 2)) & 0xfffffffc))
 
-    // ;; We need three scratch registers, r4, r5 and r6
-    // push {r4,r5,r6}
-    _stub._resolveEntryPoint[n++] = 0xb470;
-
-    // ldr r4, [r0 + #Object.m_pMethTab]
+    // ldr r12, [r0 + #Object.m_pMethTab]
     _stub._resolveEntryPoint[n++] = RESOLVE_STUB_FIRST_WORD;
-    _stub._resolveEntryPoint[n++] = 0x4000;
+    _stub._resolveEntryPoint[n++] = 0xc000;
+
+    // ;; We need two scratch registers, r5 and r6
+    // push {r5,r6}
+    _stub._resolveEntryPoint[n++] = 0xb460;
 
     // ;; Compute i = ((mt + mt >> 12) ^ this._hashedToken) & this._cacheMask
 
-    // add r6, r4, r4 lsr #12
-    _stub._resolveEntryPoint[n++] = 0xeb04;
-    _stub._resolveEntryPoint[n++] = 0x3614;
+    // add r6, r12, r12 lsr #12
+    _stub._resolveEntryPoint[n++] = 0xeb0c;
+    _stub._resolveEntryPoint[n++] = 0x361c;
 
     // ldr r5, [pc + #_hashedToken]
     offset = PC_REL_OFFSET(_hashedToken);
@@ -743,11 +741,11 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     _ASSERTE(offset <= 124 && (offset & 0x3) == 0);
     _stub._resolveEntryPoint[n++] = 0x6835 | (offset<< 4);
 
-    // cmp r4, r5
-    _stub._resolveEntryPoint[n++] = 0x42ac;
+    // cmp r12, r5
+    _stub._resolveEntryPoint[n++] = 0x45ac;
 
     // bne nextEntry
-    _stub._resolveEntryPoint[n++] = 0xd107;
+    _stub._resolveEntryPoint[n++] = 0xd108;
 
     // ;; Check this._token == e.token
     // ldr r5, [pc + #_token]
@@ -755,13 +753,13 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     _ASSERTE((offset & 0x3) == 0);
     _stub._resolveEntryPoint[n++] = 0x4d00 | (offset>>2);
 
-    // ldr r4, [r6 + #ResolveCacheElem.token] ;; use r4 (not r12) to avoid clobbering IndirectionCellAndFlags
+    // ldr r12, [r6 + #ResolveCacheElem.token]
     offset = offsetof(ResolveCacheElem, token);
-    _ASSERTE(offset <= 124 && (offset & 0x3) == 0);
-    _stub._resolveEntryPoint[n++] = 0x6834 | (offset << 4);
+    _stub._resolveEntryPoint[n++] = 0xf8d6;
+    _stub._resolveEntryPoint[n++] = 0xc000 | offset;
 
-    // cmp r4, r5
-    _stub._resolveEntryPoint[n++] = 0x42ac;
+    // cmp r12, r5
+    _stub._resolveEntryPoint[n++] = 0x45ac;
 
     // bne nextEntry
     _stub._resolveEntryPoint[n++] = 0xd103;
@@ -771,9 +769,9 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     _stub._resolveEntryPoint[n++] = 0xf8d6;
     _stub._resolveEntryPoint[n++] = 0xc000 | offset;
 
-    // ;; Restore r4, r5 and r6
-    // pop {r4,r5,r6}
-    _stub._resolveEntryPoint[n++] = 0xbc70;
+    // ;; Restore r5 and r6
+    // pop {r5,r6}
+    _stub._resolveEntryPoint[n++] = 0xbc60;
 
     // ;; Branch to e.target
     // bx       r12 ;; (e.target)(r0,r1,r2,r3)
@@ -790,9 +788,9 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     // cbz r6, slowEntryPoint
     _stub._resolveEntryPoint[n++] = 0xb116;
 
-    // ldr r4, [r0 + #Object.m_pMethTab]
+    // ldr r12, [r0 + #Object.m_pMethTab]
     _stub._resolveEntryPoint[n++] = 0xf8d0;
-    _stub._resolveEntryPoint[n++] = 0x4000;
+    _stub._resolveEntryPoint[n++] = 0xc000;
 
     // b loop
     offset = (WORD)((loop - (n + 2)) * sizeof(WORD));
@@ -800,8 +798,13 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     _stub._resolveEntryPoint[n++] = 0xe000 | offset;
 
     // slowEntryPoint:
-    // pop {r4,r5,r6}
-    _stub._resolveEntryPoint[n++] = 0xbc70;
+    // pop {r5,r6}
+    _stub._resolveEntryPoint[n++] = 0xbc60;
+
+    // nop for alignment
+    _stub._resolveEntryPoint[n++] = 0xbf00;
+
+    // the slow entry point be DWORD-aligned (see _ASSERTE below) insert nops if necessary .
 
     // ARMSTUB TODO: promotion
 
@@ -809,9 +812,10 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
     _ASSERTE(_stub._resolveEntryPoint + n == _stub._slowEntryPoint);
     _ASSERTE(n == ResolveStub::resolveEntryPointLen);
 
-    // ResolveStub._slowEntryPoint(r0, r1, r2, r3, r12:IndirectionCellAndFlags)
+    // ResolveStub._slowEntryPoint(r0:MethodToken, r1, r2, r3, r4:IndirectionCellAndFlags)
     // {
-    //     this._resolveWorkerTarget(r0, r1, r2, r3, [sp]:IndirectionCellAndFlags, r12:DispatchToken);
+    //     r12 = this._tokenSlow;
+    //     this._resolveWorkerTarget(r0, r1, r2, r3, r4, r12);
     // }
 
     // The following macro relies on this entry point being DWORD-aligned. We've already asserted that the
@@ -823,10 +827,6 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
 #define PC_REL_OFFSET(_field) (WORD)(offsetof(ResolveStub, _field) - ((offsetof(ResolveStub, _slowEntryPoint) + sizeof(*ResolveStub::_slowEntryPoint) * (n + 2)) & 0xfffffffc))
 
     n = 0;
-
-    // push {r12}
-    _stub._slowEntryPoint[n++] = 0xf84d;
-    _stub._slowEntryPoint[n++] = 0xcd04;
 
     // ldr r12, [pc + #_tokenSlow]
     offset = PC_REL_OFFSET(_tokenSlow);
@@ -840,10 +840,10 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
 
     _ASSERTE(n == ResolveStub::slowEntryPointLen);
 
-    // ResolveStub._failEntryPoint(r0:MethodToken, r1, r2, r3, r12:IndirectionCellAndFlags)
+    // ResolveStub._failEntryPoint(r0:MethodToken, r1, r2, r3, r4:IndirectionCellAndFlags)
     // {
-    //     if(--*(this._pCounter) < 0) r12 = r12 | SDF_ResolveBackPatch;
-    //     this._resolveEntryPoint(r0, r1, r2, r3, r12:IndirectionCellAndFlags);
+    //     if(--*(this._pCounter) < 0) r4 = r4 | SDF_ResolveBackPatch;
+    //     this._resolveEntryPoint(r0, r1, r2, r3, r4);
     // }
 
     // The following macro relies on this entry point being DWORD-aligned. We've already asserted that the
@@ -856,36 +856,36 @@ void ResolveHolder::Initialize(ResolveHolder* pResolveHolderRX,
 
     n = 0;
 
-    // push {r4, r5}
-    _stub._failEntryPoint[n++] = 0xb430;
+    // push {r5}
+    _stub._failEntryPoint[n++] = 0xb420;
 
     // ldr r5, [pc + #_pCounter]
     offset = PC_REL_OFFSET(_pCounter);
     _ASSERTE((offset & 0x3) == 0);
     _stub._failEntryPoint[n++] = 0x4d00 | (offset >>2);
 
-    // ldr r4, [r5]
+    // ldr r12, [r5]
     _stub._failEntryPoint[n++] = 0xf8d5;
-    _stub._failEntryPoint[n++] = 0x4000;
+    _stub._failEntryPoint[n++] = 0xc000;
 
-    // subs r4, r4, #1
-    _stub._failEntryPoint[n++] = 0xf1b4;
-    _stub._failEntryPoint[n++] = 0x0401;
+    // subs r12, r12, #1
+    _stub._failEntryPoint[n++] = 0xf1bc;
+    _stub._failEntryPoint[n++] = 0x0c01;
 
-    // str r4, [r5]
+    // str r12, [r5]
     _stub._failEntryPoint[n++] = 0xf8c5;
-    _stub._failEntryPoint[n++] = 0x4000;
+    _stub._failEntryPoint[n++] = 0xc000;
 
-    // pop {r4, r5}
-    _stub._failEntryPoint[n++] = 0xbc30;
+    // pop {r5}
+    _stub._failEntryPoint[n++] = 0xbc20;
 
     // bge resolveEntryPoint
     _stub._failEntryPoint[n++] = 0xda01;
 
-    // or r12, r12, SDF_ResolveBackPatch
+    // or r4, r4, SDF_ResolveBackPatch
     _ASSERTE(SDF_ResolveBackPatch < 256);
-    _stub._failEntryPoint[n++] = 0xf04c;
-    _stub._failEntryPoint[n++] = 0x0c00 | SDF_ResolveBackPatch;
+    _stub._failEntryPoint[n++] = 0xf044;
+    _stub._failEntryPoint[n++] = 0x0400 | SDF_ResolveBackPatch;
 
     // resolveEntryPoint:
     // b _resolveEntryPoint
@@ -936,10 +936,10 @@ VOID StubLinkerCPU::EmitShuffleThunk(ShuffleEntry *pShuffleEntryArray)
         // No real prolog for the simple case, we're a tail call so we shouldn't be on the stack for any walk
         // or unwind.
 
-        // On entry r0 holds the delegate instance. Load r12 = address of _methodPtrAux (IndirectionCell
-        // for VSD). Do this before the shuffle entries overwrite r0.
-        //  add r12, r0, #offsetof(DelegateObject, _methodPtrAux)
-        ThumbEmitAdd(ThumbReg(12), ThumbReg(0), DelegateObject::GetOffsetOfMethodPtrAux());
+        // On entry r0 holds the delegate instance. Look up the real target address stored in the MethodPtrAux
+        // field and stash it in r12.
+        //  ldr r12, [r0, #offsetof(DelegateObject, _methodPtrAux)]
+        ThumbEmitLoadRegIndirect(ThumbReg(12), ThumbReg(0), DelegateObject::GetOffsetOfMethodPtrAux());
 
         // Emit the instructions to rewrite the argument registers. Most will be register-to-register (e.g.
         // move r1 to r0) but one or two of them might move values from the top of the incoming stack
@@ -969,27 +969,35 @@ VOID StubLinkerCPU::EmitShuffleThunk(ShuffleEntry *pShuffleEntryArray)
             pEntry++;
         }
 
-        // Tail call to real target via the IndirectionCell in r12. Using ldr pc, [r12] preserves lr
-        // (which holds the caller's return address) and leaves r12 intact as the IndirectionCell for VSD.
-        //  ldr pc, [r12]
-        ThumbEmitLoadRegIndirect(thumbRegPc, ThumbReg(12), 0);
+        // Tail call to real target.
+        //  bx r12
+        ThumbEmitJumpRegister(ThumbReg(12));
 
         return;
     }
 
     // In the more complex case we need to re-write at least some of the arguments on the stack as well as
-    // argument registers. We need some temporary registers to perform stack-to-stack copies. r12 will hold
-    // the IndirectionCell address (address of _methodPtrAux) throughout so that VSD stubs receive it intact.
-    // We save r4-r6 as scratch registers, do the stack re-write, restore them, then tail-call the target
-    // through the IndirectionCell using ldr pc, [r12]. We don't save lr because we're not making any calls.
+    // argument registers. We need some temporary registers to perform stack-to-stack copies and we've
+    // reserved our one remaining volatile register, r12, to store the eventual target method address. So
+    // we're going to generate a hybrid-tail call. Using a tail call has the advantage that we don't need to
+    // erect and link an explicit CLR frame to enable crawling of this thunk. Additionally re-writing the
+    // stack can be more performant in some scenarios than copying the stack (in the presence of floating point
+    // or arguments requieing 64-bit alignment we might not have to move some or even most of the values).
+    // The hybrid nature is that we'll erect a standard native frame (with a proper prolog and epilog) so we
+    // can save some non-volatile registers to act as temporaries. Once we've performed the stack re-write
+    // we'll poke the saved LR value (which will become a PC value on the pop in the epilog) to return to the
+    // target method instead of us, thus atomically removing our frame from the stack and tail-calling the
+    // real target.
 
-    // push {r4, r5, r6}
-    ThumbEmitPush(ThumbReg(4).Mask() | ThumbReg(5).Mask() | ThumbReg(6).Mask());
+    // Prolog:
+    ThumbEmitProlog(3,      // Save r4-r6,lr (count doesn't include lr)
+                    0,      // No additional space in the stack frame required
+                    FALSE); // Don't push argument registers
 
-    // On entry r0 holds the delegate instance. Load r12 = address of _methodPtrAux (IndirectionCell for
-    // VSD). Do this before the shuffle entries overwrite r0.
-    //  add r12, r0, #offsetof(DelegateObject, _methodPtrAux)
-    ThumbEmitAdd(ThumbReg(12), ThumbReg(0), DelegateObject::GetOffsetOfMethodPtrAux());
+    // On entry r0 holds the delegate instance. Look up the real target address stored in the MethodPtrAux
+    // field and stash it in r12.
+    //  ldr r12, [r0, #offsetof(DelegateObject, _methodPtrAux)]
+    ThumbEmitLoadRegIndirect(ThumbReg(12), ThumbReg(0), DelegateObject::GetOffsetOfMethodPtrAux());
 
     // As we copy slots from lower in the argument stack to higher we need to keep track of source and
     // destination pointers into those arguments (if we just use offsets from SP we get into trouble with
@@ -999,7 +1007,7 @@ VOID StubLinkerCPU::EmitShuffleThunk(ShuffleEntry *pShuffleEntryArray)
     // stack frame in the prolog.
     //  add r4, sp, #cbSavedRegs
     //  add r5, sp, #cbSavedRegs
-    DWORD cbSavedRegs = 3 * 4; // r4, r5, r6
+    DWORD cbSavedRegs = 4 * 4; // r4, r5, r6, lr
     ThumbEmitAdd(ThumbReg(4), thumbRegSp, cbSavedRegs);
     ThumbEmitAdd(ThumbReg(5), thumbRegSp, cbSavedRegs);
 
@@ -1080,12 +1088,15 @@ VOID StubLinkerCPU::EmitShuffleThunk(ShuffleEntry *pShuffleEntryArray)
         pEntry++;
     }
 
-    // Arguments are copied. Restore scratch registers, then tail-call the real target through
-    // the IndirectionCell. r12 still holds _methodPtrAux address throughout.
-    //  pop {r4, r5, r6}
-    ThumbEmitPop(ThumbReg(4).Mask() | ThumbReg(5).Mask() | ThumbReg(6).Mask());
-    //  ldr pc, [r12]
-    ThumbEmitLoadRegIndirect(thumbRegPc, ThumbReg(12), 0);
+    // Arguments are copied. Now we modify the saved value of LR we created in our prolog (which will be
+    // popped back off into PC in our epilog) so that it points to the real target address in r12 rather than
+    // our return address. We haven't modified LR ourselves, so the net result is that executing our epilog
+    // will pop our frame and tail call to the real method.
+    //  str r12, [sp + #(cbSavedRegs-4)]
+    ThumbEmitStoreRegIndirect(ThumbReg(12), thumbRegSp, cbSavedRegs - 4);
+
+    // Epilog:
+    ThumbEmitEpilog();
 }
 
 
