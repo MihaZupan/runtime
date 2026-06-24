@@ -162,11 +162,11 @@ namespace System.Text.Json
             destination = destination.Slice(totalWritten, JsonConstants.MaxExpansionFactorWhileEscaping);
             int written = 0;
 
-            destination[written++] = (byte)'\\';
             switch (value)
             {
                 case JsonConstants.Quote:
                     // Optimize for the common quote case.
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'u';
                     destination[written++] = (byte)'0';
                     destination[written++] = (byte)'0';
@@ -174,24 +174,31 @@ namespace System.Text.Json
                     destination[written++] = (byte)'2';
                     break;
                 case JsonConstants.LineFeed:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'n';
                     break;
                 case JsonConstants.CarriageReturn:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'r';
                     break;
                 case JsonConstants.Tab:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'t';
                     break;
                 case JsonConstants.BackSlash:
                     destination[written++] = (byte)'\\';
+                    destination[written++] = (byte)'\\';
                     break;
                 case JsonConstants.BackSpace:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'b';
                     break;
                 case JsonConstants.FormFeed:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'f';
                     break;
                 default:
+                    destination[written++] = (byte)'\\';
                     destination[written++] = (byte)'u';
 
                     bool result = Utf8Formatter.TryFormat(value, destination.Slice(written), out int bytesWritten, format: s_hexStandardFormat);
@@ -288,11 +295,11 @@ namespace System.Text.Json
             destination = destination.Slice(totalWritten, JsonConstants.MaxExpansionFactorWhileEscaping);
             int written = 0;
 
-            destination[written++] = '\\';
             switch ((byte)value)
             {
                 case JsonConstants.Quote:
                     // Optimize for the common quote case.
+                    destination[written++] = '\\';
                     destination[written++] = 'u';
                     destination[written++] = '0';
                     destination[written++] = '0';
@@ -300,24 +307,31 @@ namespace System.Text.Json
                     destination[written++] = '2';
                     break;
                 case JsonConstants.LineFeed:
+                    destination[written++] = '\\';
                     destination[written++] = 'n';
                     break;
                 case JsonConstants.CarriageReturn:
+                    destination[written++] = '\\';
                     destination[written++] = 'r';
                     break;
                 case JsonConstants.Tab:
+                    destination[written++] = '\\';
                     destination[written++] = 't';
                     break;
                 case JsonConstants.BackSlash:
                     destination[written++] = '\\';
+                    destination[written++] = '\\';
                     break;
                 case JsonConstants.BackSpace:
+                    destination[written++] = '\\';
                     destination[written++] = 'b';
                     break;
                 case JsonConstants.FormFeed:
+                    destination[written++] = '\\';
                     destination[written++] = 'f';
                     break;
                 default:
+                    destination[written++] = '\\';
                     destination[written++] = 'u';
 #if NET
                     int intChar = value;
