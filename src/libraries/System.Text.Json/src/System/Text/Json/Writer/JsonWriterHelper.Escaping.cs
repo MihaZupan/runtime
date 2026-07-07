@@ -75,6 +75,12 @@ namespace System.Text.Json
             " !#$%()*,-./0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~"u8);
         private static readonly SearchValues<char> s_allowedChars = SearchValues.Create(
             " !#$%()*,-./0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~");
+
+        /// <summary>
+        /// Avoid calling into <see cref="SearchValues"/> for very short inputs where
+        /// the search won't be vectorized, and the overhead of the extra call is noticeable.
+        /// </summary>
+        private const int MinLengthForVectorizedEscapeScan = 8;
 #endif
 
         public static int NeedsEscaping(ReadOnlySpan<byte> value, JavaScriptEncoder? encoder)
@@ -82,7 +88,20 @@ namespace System.Text.Json
 #if NET
             if (encoder is null || ReferenceEquals(encoder, JavaScriptEncoder.Default))
             {
-                return value.IndexOfAnyExcept(s_allowedBytes);
+                if (value.Length >= MinLengthForVectorizedEscapeScan)
+                {
+                    return value.IndexOfAnyExcept(s_allowedBytes);
+                }
+
+                for (int i = 0; i < value.Length; i++)
+                {
+                    if (NeedsEscaping(value[i]))
+                    {
+                        return i;
+                    }
+                }
+
+                return -1;
             }
 #endif
 
@@ -94,7 +113,21 @@ namespace System.Text.Json
 #if NET
             if (encoder is null || ReferenceEquals(encoder, JavaScriptEncoder.Default))
             {
-                return value.IndexOfAnyExcept(s_allowedChars);
+                if (value.Length >= MinLengthForVectorizedEscapeScan)
+                {
+                    return value.IndexOfAnyExcept(s_allowedChars);
+                }
+
+                for (int i = 0; i < value.Length; i++)
+                {
+                    char c = value[i];
+                    if (!IsAsciiValue(c) || NeedsEscapingNoBoundsCheck(c))
+                    {
+                        return i;
+                    }
+                }
+
+                return -1;
             }
 #endif
 
