@@ -413,6 +413,21 @@ namespace System.Net.ServerSentEvents.Tests
 
         [Theory]
         [MemberData(nameof(NewlineTrickleAsyncData))]
+        public async Task Delegate_ReturnsDefault_ItemProduced(string newline, bool trickle, bool useAsync)
+        {
+            using Stream stream = GetStream($"data: test{newline}{newline}", trickle);
+            SseItemParser<int> itemParser = static (_, _) => default;
+
+            List<SseItem<int>> items = useAsync ?
+                await ReadAllEventsAsync(stream, itemParser) :
+                ReadAllEvents(stream, itemParser);
+
+            SseItem<int> item = Assert.Single(items);
+            Assert.Equal(0, item.Data);
+        }
+
+        [Theory]
+        [MemberData(nameof(NewlineTrickleAsyncData))]
         public async Task Retry_SetsReconnectionInterval(string newline, bool trickle, bool useAsync)
         {
             using Stream stream = GetStream(
@@ -916,6 +931,63 @@ namespace System.Net.ServerSentEvents.Tests
             ArrayPool<byte>.Shared.Return(arrayPoolArray);
 
             Assert.Equal(2, count);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Parse_DataBufferBelowConfiguredLimit_ItemProduced(bool useAsync)
+        {
+            const int DataLineCount = 509;
+            using Stream stream = GetStream(string.Concat(Enumerable.Repeat("data: a\n", DataLineCount)) + "\n", trickle: true);
+            var options = new SseParserOptions<string>(static (_, bytes) => Encoding.UTF8.GetString(bytes.ToArray()))
+            {
+                MaxBufferSize = 1024
+            };
+            SseParser<string> parser = SseParser.Create(stream, options);
+
+            var items = new List<SseItem<string>>();
+            if (useAsync)
+            {
+                await foreach (SseItem<string> parsedItem in parser.EnumerateAsync())
+                {
+                    items.Add(parsedItem);
+                }
+            }
+            else
+            {
+                items.AddRange(parser.Enumerate());
+            }
+
+            SseItem<string> item = Assert.Single(items);
+            Assert.Equal((DataLineCount * 2) - 1, item.Data.Length);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Parse_DataBufferExceedsConfiguredLimit_Throws(bool useAsync)
+        {
+            using Stream stream = GetStream(string.Concat(Enumerable.Repeat("data: a\n", 510)), trickle: true);
+            var options = new SseParserOptions<string>(static (_, bytes) => Encoding.UTF8.GetString(bytes.ToArray()))
+            {
+                MaxBufferSize = 1024
+            };
+            SseParser<string> parser = SseParser.Create(stream, options);
+
+            if (useAsync)
+            {
+                await Assert.ThrowsAsync<InvalidDataException>(async () =>
+                {
+                    await foreach (SseItem<string> _ in parser.EnumerateAsync())
+                    {
+                    }
+                });
+            }
+            else
+            {
+                Assert.Throws<InvalidDataException>(() => parser.Enumerate().ToList());
+            }
         }
 
         [Theory]

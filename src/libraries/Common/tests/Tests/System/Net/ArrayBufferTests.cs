@@ -136,6 +136,24 @@ namespace Tests.System.Net
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
+        public void DiscardAll_ClearsActiveBytesAndPreservesCapacity(bool usePool)
+        {
+            using var buffer = new ArrayBuffer(42, usePool);
+            int capacity = buffer.Capacity;
+            buffer.Commit(buffer.AvailableLength);
+            buffer.Discard(1);
+
+            buffer.DiscardAll();
+
+            Assert.Equal(0, buffer.ActiveLength);
+            Assert.Equal(0, buffer.ActiveStartOffset);
+            Assert.Equal(capacity, buffer.Capacity);
+            AssertInvariants(buffer);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
         public void AddByteByByteAndConsumeByteByByte_Success(bool usePool)
         {
             const int Size = 64 * 1024 + 1;
