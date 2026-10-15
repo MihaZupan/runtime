@@ -7419,6 +7419,7 @@ private:
     GenTree* fgOptimizeBitwiseXor(GenTreeOp* xorOp);
     GenTree* fgPropagateCommaThrow(GenTree* parent, GenTreeOp* commaThrow, GenTreeFlags precedingSideEffects);
     GenTree* fgMorphRetInd(GenTreeOp* tree);
+    bool fgOptimizeModToZeroCompare(GenTreeOp* tree);
     GenTree* fgMorphModToZero(GenTreeOp* tree);
     GenTree* fgMorphModToSubMulDiv(GenTreeOp* tree);
     GenTree* fgMorphUModToAndSub(GenTreeOp* tree);

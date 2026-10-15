@@ -7464,52 +7464,10 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
                 }
             }
 
-            // Pattern-matching optimization:
-            //    (a % c) ==/!= 0
-            // for power-of-2 constant `c`
-            // =>
-            //    a & (c - 1) ==/!= 0
-            // For integer `a`, even if negative.
-            if (opts.OptimizationEnabled())
+            // Handle divisibility tests before MOD can be expanded or turned into a helper call.
+            if (opts.OptimizationEnabled() && fgOptimizeModToZeroCompare(tree->AsOp()))
             {
-                // We handle this in pre-order because MOD may otherwise be morphed into a helper call
-
-                GenTree* cnsNode   = nullptr;
-                GenTree* otherNode = nullptr;
-
-                if (op2->IsIntegralConst(0))
-                {
-                    cnsNode   = op2;
-                    otherNode = op1;
-                }
-                else if (op1->IsIntegralConst(0))
-                {
-                    cnsNode   = op1;
-                    otherNode = op2;
-                }
-
-                if ((cnsNode != nullptr) && otherNode->OperIs(GT_MOD) && varTypeIsIntegral(otherNode))
-                {
-                    GenTree* divisor = otherNode->gtGetOp2();
-                    if (divisor->IsCnsIntOrI())
-                    {
-                        const ssize_t modValue = divisor->AsIntCon()->IconValue();
-                        if (isPow2(modValue))
-                        {
-                            JITDUMP("\nTransforming:\n");
-                            DISPTREE(tree);
-
-                            otherNode->SetOper(GT_AND, GenTree::PRESERVE_VN); // Change % => &
-                            otherNode->gtFlags &= ~(GTF_DIV_MOD_NO_OVERFLOW | GTF_DIV_MOD_NO_BY_ZERO);
-
-                            divisor->AsIntConCommon()->SetIconValue(modValue - 1); // Change c => c - 1
-                            fgUpdateConstTreeValueNumber(divisor);
-
-                            JITDUMP("\ninto:\n");
-                            DISPTREE(tree);
-                        }
-                    }
-                }
+                return fgMorphTree(tree);
             }
             FALLTHROUGH;
         }
@@ -12040,6 +11998,126 @@ GenTree* Compiler::fgMorphHWIntrinsicOptional(GenTreeHWIntrinsic* tree)
     return tree;
 }
 #endif // FEATURE_HW_INTRINSICS
+
+//------------------------------------------------------------------------
+// fgOptimizeModToZeroCompare: Optimize integer (value % constant) ==/!= 0.
+//
+// Arguments:
+//    tree - The equality or inequality comparison to optimize
+//
+// Returns:
+//    True if the comparison was transformed.
+//
+bool Compiler::fgOptimizeModToZeroCompare(GenTreeOp* tree)
+{
+    assert(tree->OperIs(GT_EQ, GT_NE));
+
+    GenTree* mod  = tree->gtOp1;
+    GenTree* zero = tree->gtOp2;
+    if (mod->IsIntegralConst(0))
+    {
+        std::swap(mod, zero);
+    }
+
+    if (!zero->IsIntegralConst(0) || !mod->OperIs(GT_MOD, GT_UMOD) || !varTypeIsIntegral(mod))
+    {
+        return false;
+    }
+
+    GenTree* divisorNode = mod->gtGetOp2();
+    if (!divisorNode->IsIntegralConst() || divisorNode->IsIconHandle())
+    {
+        return false;
+    }
+
+    const var_types type       = mod->TypeGet();
+    const bool      isSigned   = mod->OperIs(GT_MOD);
+    const unsigned  bits       = genTypeSize(type) * BITS_PER_BYTE;
+    const uint64_t  maxValue   = (bits == 64) ? UINT64_MAX : UINT32_MAX;
+    const int64_t   constValue = divisorNode->AsIntConCommon()->IntegralValue();
+    uint64_t        divisor    = static_cast<uint64_t>(constValue);
+    if (isSigned && (constValue < 0))
+    {
+        divisor = 0 - divisor;
+    }
+    divisor &= maxValue;
+
+    // Leave division by zero and signed division by -1 alone to preserve their exceptions.
+    // Remainders by 1 are folded separately.
+    if (divisor <= 1)
+    {
+        return false;
+    }
+
+    if (!isPow2(divisor) && !fgGlobalMorph)
+    {
+        // New arithmetic nodes need value numbering, which follows global morph.
+        return false;
+    }
+
+    JITDUMP("\nOptimizing divisibility test:\n");
+    DISPTREE(tree);
+
+    if (isPow2(divisor))
+    {
+        mod->ChangeOper(GT_AND, GenTree::PRESERVE_VN);
+        mod->gtFlags &= ~(GTF_DIV_MOD_NO_OVERFLOW | GTF_DIV_MOD_NO_BY_ZERO);
+        divisorNode->AsIntConCommon()->SetValueTruncating(static_cast<int64_t>(divisor - 1));
+        fgUpdateConstTreeValueNumber(divisorNode);
+    }
+    else
+    {
+        const unsigned shift      = BitOperations::TrailingZeroCount(divisor);
+        const uint64_t oddDivisor = divisor >> shift;
+        uint64_t       inverse    = oddDivisor;
+
+        // An odd number is its own inverse modulo 8. Each Newton iteration doubles
+        // the number of correct bits in the inverse modulo 2^bits.
+        for (unsigned precision = 3; precision < bits; precision *= 2)
+        {
+            inverse *= 2 - oddDivisor * inverse;
+        }
+
+        // Multiplication by the inverse permutes the integers modulo 2^bits.
+        // Multiples of an odd divisor map to their quotients; rotating by the
+        // power-of-two factor also rejects inputs with nonzero low bits.
+        // See https://duriansoftware.com/joe/optimizing-is-multiple-checks-with-modular-arithmetic
+        uint64_t limit = (isSigned ? (maxValue >> 1) : maxValue) / divisor;
+        mod->ChangeOper(GT_MUL);
+        mod->gtFlags &= ~(GTF_DIV_MOD_NO_OVERFLOW | GTF_DIV_MOD_NO_BY_ZERO);
+        divisorNode->AsIntConCommon()->SetValueTruncating(static_cast<int64_t>(inverse));
+        fgUpdateConstTreeValueNumber(divisorNode);
+
+        GenTree* value = mod;
+        if (isSigned)
+        {
+            // Signed quotients range from -limit to limit (a non-power-of-two
+            // divisor cannot divide MIN_VALUE). Translate that range to [0, 2*limit]
+            // before rotating away the power-of-two factor.
+            const uint64_t offset     = limit << shift;
+            GenTree*       offsetNode = (type == TYP_LONG) ? gtNewLconNode(static_cast<int64_t>(offset))
+                                                           : gtNewIconNode(static_cast<ssize_t>(offset), type);
+            value                     = gtNewOperNode(GT_ADD, type, value, offsetNode);
+            limit *= 2;
+        }
+
+        if (shift != 0)
+        {
+            value = gtNewOperNode(GT_ROR, type, value, gtNewIconNode(shift));
+        }
+
+        zero->AsIntConCommon()->SetValueTruncating(static_cast<int64_t>(limit));
+        fgUpdateConstTreeValueNumber(zero);
+        tree->SetOper(tree->OperIs(GT_EQ) ? GT_LE : GT_GT, GenTree::PRESERVE_VN);
+        tree->SetUnsigned();
+        tree->gtOp1 = value;
+        tree->gtOp2 = zero;
+    }
+
+    JITDUMP("\ninto:\n");
+    DISPTREE(tree);
+    return true;
+}
 
 //------------------------------------------------------------------------
 // fgMorphModToZero: Transform 'a % 1' into the equivalent '0'.
