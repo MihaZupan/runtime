@@ -669,25 +669,6 @@ class EMPTY_BASES PtrSHash : public SHash< PtrSHashTraits<ELEMENT, KEY> >
 {
 };
 
-template <typename ELEMENT, typename KEY>
-class PtrSHashWithCleanupTraits
-    : public PtrSHashTraits<ELEMENT, KEY>
-{
-public:
-    void OnDestructPerEntryCleanupAction(ELEMENT * elem)
-    {
-        delete elem;
-    }
-    static const bool s_DestructPerEntryCleanupAction = true;
-};
-
-// a class that automatically deletes data referenced by the pointers (so effectively it takes ownership of the data)
-// since I was too lazy to implement Remove() APIs properly, removing entries is disallowed
-template <typename ELEMENT, typename KEY>
-class EMPTY_BASES PtrSHashWithCleanup : public SHash< NoRemoveSHashTraits< PtrSHashWithCleanupTraits<ELEMENT, KEY> > >
-{
-};
-
 // Provides case-sensitive comparison and hashing functionality through static
 // and functor object methods. Can be instantiated with CHAR or WCHAR.
 template <typename CharT>

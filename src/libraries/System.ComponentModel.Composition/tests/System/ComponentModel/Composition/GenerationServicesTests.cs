@@ -20,14 +20,6 @@ namespace Microsoft.Internal
             Second = 2
         }
 
-        public static class DelegateTestClass
-        {
-            public static int Method(int i)
-            {
-                return i;
-            }
-        }
-
         private Func<T> CreateValueGenerator<T>(T value)
         {
             DynamicMethod methodBuilder = new DynamicMethod(TestServices.GenerateRandomString(), typeof(T), Type.EmptyTypes);

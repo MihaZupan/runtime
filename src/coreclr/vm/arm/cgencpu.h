@@ -41,7 +41,6 @@
 class MethodDesc;
 class FramedMethodFrame;
 class Module;
-struct DeclActionInfo;
 class ComCallMethodDesc;
 class ZapNode;
 struct ArgLocDesc;

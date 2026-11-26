@@ -304,9 +304,6 @@ namespace System.Composition.UnitTests
     }
 
 
-    public interface ICol { }
-
-
     [Export(typeof(IX)), Export(typeof(IY)), Shared]
     public class XY : IX, IY { }
     public class SharingTest : ContainerTests

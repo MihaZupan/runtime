@@ -56,7 +56,6 @@ enum StubCodeBlockKind : int;
 //-------------------------------------------------------------------------
 class  InstructionFormat;
 class  CheckDuplicatedStructLayouts;
-class  CodeBasedStubCache;
 struct  CodeLabel;
 
 struct CodeRun;

@@ -149,10 +149,4 @@ internal static partial class Interop
                 Marshal.FreeHGlobal(tu);
         }
     }
-
-    internal static class ExitCodes
-    {
-        internal const uint NERR_Success = 0;
-        internal const uint NERR_UserNotFound = 2221;
-    }
 }

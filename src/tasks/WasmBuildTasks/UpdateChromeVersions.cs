@@ -403,18 +403,5 @@ public partial class UpdateChromeVersions : MBU.Task
 
     private sealed record ChromiumDashRelease(string channel, int chromium_main_branch_position, string milesone, string platform, string version);
 
-    private sealed record PerOSVersions(string os, ChromeVersionSpec[] versions);
     private sealed record ChromeVersionSpec(string os, string channel, string version, string branch_base_position, string v8_version);
-    private sealed record ChromeDepsVersionSpec(string chromium_version, string chromium_base_position, string v8_version)
-    {
-        public ChromeVersionSpec ToChromeVersionSpec(string os, string channel) => new
-        (
-            os,
-            channel,
-            chromium_version,
-            chromium_base_position,
-            v8_version
-        );
-    }
-
 }

@@ -31,13 +31,6 @@ public:
     static LoaderAllocator *GetLoaderAllocator(const TKey &k) { return k->GetLoaderAllocator(); }
 };
 
-template <class TKey_, class TValue_>
-class DefaultCrossLoaderAllocatorHashTraits : public NoRemoveDefaultCrossLoaderAllocatorHashTraits<TKey_, TValue_>
-{
-public:
-    static const bool s_supports_remove = true;
-};
-
 // Base class for a native object that depends on a LoaderAllocator's lifetime
 class LADependentNativeObject
 {
@@ -417,7 +410,7 @@ private:
 public:
 
 #ifndef DACCESS_COMPILE
-    // Add an entry to the CrossLoaderAllocatorHash, the default implementation of does DefaultCrossLoaderAllocatorHashTraits will not check for duplicates.
+    // Add an entry without checking for duplicates.
     void Add(TKey key, TValue value, LoaderAllocator *pLoaderAllocatorOfValue);
 
     // Remove an entry to the CrossLoaderAllocatorHash, only removes one entry

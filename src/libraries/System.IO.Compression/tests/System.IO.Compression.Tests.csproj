@@ -22,7 +22,6 @@
     <Compile Include="WinZipAesStreamConformanceTests.cs" />
     <Compile Include="ZipCryptoStreamWrappedConformanceTests.cs" />
     <Compile Include="Utilities\ClampedReadStream.cs" />
-    <Compile Include="Utilities\StripHeaderAndFooter.cs" />
     <Compile Include="XunitAssemblyAttributes.cs" />
     <Compile Include="ZipArchive\zip_CreateTests.cs" />
     <Compile Include="ZipArchive\zip_CreateTests.Comments.cs" />

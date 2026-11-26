@@ -360,11 +360,6 @@ namespace Microsoft.Extensions.DependencyInjection.Tests
             Assert.NotNull(callSite.Key);
         }
 
-        private class FakeIntService : IFakeOpenGenericService<int>
-        {
-            public int Value => 0;
-        }
-
         private class FakeStringService : IFakeOpenGenericService<string>
         {
             public string Value => string.Empty;

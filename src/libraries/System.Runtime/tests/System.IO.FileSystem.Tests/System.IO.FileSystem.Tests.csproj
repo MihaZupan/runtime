@@ -221,7 +221,6 @@
     <Compile Include="PortedCommon\DllImports.cs" />
     <Compile Include="PortedCommon\IOInputs.cs" />
     <Compile Include="PortedCommon\IOServices.cs" />
-    <Compile Include="PortedCommon\PathInfo.cs" />
     <Compile Include="DirectoryInfo\EnumerableAPIs.cs" />
     <Compile Include="DirectoryInfo\GetDirectories.cs" />
     <Compile Include="DirectoryInfo\GetFiles.cs" />

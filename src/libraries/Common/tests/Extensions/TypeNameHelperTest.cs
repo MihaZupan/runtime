@@ -281,8 +281,6 @@ namespace Microsoft.Extensions.Internal
                 public class InnerGeneric<T2, T3>
                 {
                     public class InnerGenericLeafNode<T4> { }
-
-                    public class InnerLeafNode { }
                 }
             }
         }

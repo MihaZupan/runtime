@@ -64,11 +64,6 @@ namespace System.ServiceModel.Syndication.Tests
         public override int LinePosition => _mlineInfo.LinePosition;
     }
 
-    //nametable could be added for next "release"
-    public class XmlDiffNameTable
-    {
-    }
-
     public class XmlDiffDocument : XmlDiffNode, IXPathNavigable
     {
         private bool _bLoaded;

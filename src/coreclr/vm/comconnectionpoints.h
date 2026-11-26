@@ -118,26 +118,6 @@ public:
     }
 
 private:
-    // Structures used for the AD callback wrappers.
-    struct GetConnectionPointContainer_Args
-    {
-        ConnectionPoint *pThis;
-        IConnectionPointContainer **ppCPC;
-    };
-
-    struct Advise_Args
-    {
-        ConnectionPoint *pThis;
-        IUnknown *pUnk;
-        DWORD *pdwCookie;
-    };
-
-    struct Unadvise_Args
-    {
-        ConnectionPoint *pThis;
-        DWORD dwCookie;
-    };
-
     // Worker methods.
     void AdviseWorker(IUnknown *pUnk, DWORD *pdwCookie);
     void UnadviseWorker( DWORD dwCookie );

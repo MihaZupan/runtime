@@ -193,12 +193,6 @@ struct CalleeSavedRegisters {
     #undef CALLEE_SAVED_REGISTER
 };
 
-struct CalleeSavedRegistersPointers {
-    #define CALLEE_SAVED_REGISTER(regname) PTR_TADDR p##regname;
-    ENUM_CALLEE_SAVED_REGISTERS();
-    #undef CALLEE_SAVED_REGISTER
-};
-
 #define SCRATCH_REGISTER_X86REG kRAX
 
 #ifdef UNIX_AMD64_ABI

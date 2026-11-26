@@ -45,13 +45,6 @@ namespace System.DirectoryServices.Protocols
         PhantomRoot = 2
     }
 
-    internal static class UtilityHandle
-    {
-        private static readonly ConnectionHandle s_handle = new ConnectionHandle();
-
-        public static ConnectionHandle GetHandle() => s_handle;
-    }
-
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public class SortKey
     {

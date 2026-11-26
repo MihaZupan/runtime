@@ -364,13 +364,6 @@ struct Agnostic_CanTailCall
     WORD      fIsTailPrefix;
 };
 
-struct Agnostic_Environment
-{
-    DWORD name_index;
-    ;
-    DWORD val_index;
-};
-
 struct Agnostic_GetCallInfo
 {
     Agnostic_CORINFO_RESOLVED_TOKEN ResolvedToken;
@@ -446,18 +439,6 @@ struct Agnostic_CanAccessClassOut
 {
     Agnostic_CORINFO_HELPER_DESC AccessHelper;
     DWORD                        result;
-};
-
-struct Agnostic_AppendClassNameIn
-{
-    DWORD     nBufLenIsZero;
-    DWORDLONG classHandle;
-};
-
-struct Agnostic_AppendClassNameOut
-{
-    DWORD nLen;
-    DWORD name_index;
 };
 
 struct Agnostic_CheckMethodModifier
@@ -595,18 +576,6 @@ struct Agnostic_GetThreadStaticInfo_NativeAOT
     Agnostic_CORINFO_CONST_LOOKUP tlsIndexObject;
     Agnostic_CORINFO_CONST_LOOKUP threadStaticBaseSlow;
     Agnostic_CORINFO_CONST_LOOKUP tlsGetAddrFtnPtr;
-};
-
-struct Agnostic_GetClassCtorInitializationInfo
-{
-    Agnostic_CORINFO_CONST_LOOKUP addr;
-    Agnostic_CORINFO_CONST_LOOKUP targetAddr;
-    int                           size;
-};
-
-struct Agnostic_GetThreadLocalFieldInfo
-{
-    DWORD staticBlockIndex;
 };
 
 struct Agnostic_GetTailCallHelpers

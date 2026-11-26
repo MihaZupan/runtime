@@ -577,8 +577,6 @@ namespace System.Linq.Expressions.Tests
 
         private delegate int ByRefInts(ref int x, int y);
 
-        private delegate int BothByRefInts(ref int x, ref int y);
-
         [Theory, PerCompilationType(nameof(AssignExpressionMethodInfoUsingFactoriesArguments))]
         public void MethodNoConvertOpWriteByRefParameter(Func<Expression, Expression, MethodInfo, BinaryExpression> factory, bool useInterpreter)
         {

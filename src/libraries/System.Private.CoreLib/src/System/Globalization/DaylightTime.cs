@@ -26,19 +26,4 @@ namespace System.Globalization
         // Delta to stardard offset in ticks.
         public TimeSpan Delta => _delta;
     }
-
-    // Value type version of DaylightTime
-    internal readonly struct DaylightTimeStruct
-    {
-        public DaylightTimeStruct(DateTime start, DateTime end, TimeSpan delta)
-        {
-            Start = start;
-            End = end;
-            Delta = delta;
-        }
-
-        public readonly DateTime Start;
-        public readonly DateTime End;
-        public readonly TimeSpan Delta;
-    }
 }

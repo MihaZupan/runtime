@@ -86,7 +86,6 @@
     <Compile Include="System\Transactions\DtcProxyShim\ResourceManagerNotifyShim.cs" />
     <Compile Include="System\Transactions\DtcProxyShim\ResourceManagerShim.cs" />
     <Compile Include="System\Transactions\DtcProxyShim\TransactionNotifyShim.cs" />
-    <Compile Include="System\Transactions\DtcProxyShim\TransactionOutcome.cs" />
     <Compile Include="System\Transactions\DtcProxyShim\TransactionShim.cs" />
     <Compile Include="System\Transactions\DtcProxyShim\VoterNotifyShim.cs" />
     <Compile Include="System\Transactions\DtcProxyShim\VoterShim.cs" />

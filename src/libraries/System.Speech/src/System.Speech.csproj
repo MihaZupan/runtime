@@ -125,11 +125,11 @@ System.Speech.Recognition.SpeechRecognizer</PackageDescription>
     <Compile Include="Internal\SrgsParser\IPropertyTag.cs" />
     <Compile Include="Internal\SrgsParser\IRule.cs" />
     <Compile Include="Internal\SrgsParser\IRuleRef.cs" />
-    <Compile Include="Internal\SrgsParser\IScript.cs" />
     <Compile Include="Internal\SrgsParser\ISemanticTag.cs" />
     <Compile Include="Internal\SrgsParser\ISrgsParser.cs" />
     <Compile Include="Internal\SrgsParser\ISubset.cs" />
     <Compile Include="Internal\SrgsParser\IToken.cs" />
+    <Compile Include="Internal\SrgsParser\RuleMethodScript.cs" />
     <Compile Include="Internal\SrgsParser\SrgsDocumentParser.cs" />
     <Compile Include="Internal\SrgsParser\XmlParser.cs" />
     <Compile Include="Internal\Synthesis\AudioBase.cs" />

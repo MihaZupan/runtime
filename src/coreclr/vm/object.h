@@ -75,7 +75,6 @@ class MethodTable;
 class Thread;
 class Assembly;
 class AssemblyNative;
-class WaitHandleNative;
 
 struct RCW;
 

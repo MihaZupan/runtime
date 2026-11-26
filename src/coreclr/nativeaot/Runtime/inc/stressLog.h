@@ -216,7 +216,6 @@ class ThreadStressLog;
 typedef DPTR(ThreadStressLog) PTR_ThreadStressLog;
 struct StressLogChunk;
 typedef DPTR(StressLogChunk) PTR_StressLogChunk;
-struct DacpStressLogEnumCBArgs;
 //==========================================================================================
 // StressLog - per-thread circular queue of stresslog messages
 //

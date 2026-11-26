@@ -111,10 +111,6 @@ private:
         }
     };
 
-    class StaticallyAllocatedEntry : public Entry
-    {
-    };
-
 public:
     struct Shard
     {

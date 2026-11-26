@@ -79,14 +79,6 @@ namespace System.Security.Cryptography.X509Certificates
     };
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct CERT_BASIC_CONSTRAINTS2_INFO
-    {
-        public int fCA;
-        public int fPathLenConstraint;
-        public int dwPathLenConstraint;
-    };
-
-    [StructLayout(LayoutKind.Sequential)]
     internal struct CERT_POLICY_INFO
     {
         public IntPtr pszPolicyIdentifier;

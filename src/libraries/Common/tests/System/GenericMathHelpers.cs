@@ -249,90 +249,12 @@ namespace System
         public static int WriteSignificandLittleEndian(TSelf value, Span<byte> destination) => value.WriteSignificandLittleEndian(destination);
     }
 
-    public static class FloatingPointConstantsHelper<TSelf>
-        where TSelf : IFloatingPointConstants<TSelf>
-    {
-        public static TSelf E => TSelf.E;
-
-        public static TSelf Pi => TSelf.Pi;
-
-        public static TSelf Tau => TSelf.Tau;
-    }
-
-    public static class FloatingPointIeee754Helper<TSelf>
-        where TSelf : IFloatingPointIeee754<TSelf>
-    {
-        public static TSelf Epsilon => TSelf.Epsilon;
-
-        public static TSelf NaN => TSelf.NaN;
-
-        public static TSelf NegativeInfinity => TSelf.NegativeInfinity;
-
-        public static TSelf NegativeZero => TSelf.NegativeZero;
-
-        public static TSelf PositiveInfinity => TSelf.PositiveInfinity;
-
-        public static TSelf Atan2(TSelf y, TSelf x) => TSelf.Atan2(y, x);
-
-        public static TSelf Atan2Pi(TSelf y, TSelf x) => TSelf.Atan2Pi(y, x);
-
-        public static TSelf BitDecrement(TSelf x) => TSelf.BitDecrement(x);
-
-        public static TSelf BitIncrement(TSelf x) => TSelf.BitIncrement(x);
-
-        public static TSelf FusedMultiplyAdd(TSelf left, TSelf right, TSelf addend) => TSelf.FusedMultiplyAdd(left, right, addend);
-
-        public static TSelf Ieee754Remainder(TSelf left, TSelf right) => TSelf.Ieee754Remainder(left, right);
-
-        public static int ILogB(TSelf x) => TSelf.ILogB(x);
-
-        public static TSelf ReciprocalEstimate(TSelf x) => TSelf.ReciprocalEstimate(x);
-
-        public static TSelf ReciprocalSqrtEstimate(TSelf x) => TSelf.ReciprocalSqrtEstimate(x);
-
-        public static TSelf ScaleB(TSelf x, int n) => TSelf.ScaleB(x, n);
-    }
-
-    public static class HyperbolicFunctionsHelper<TSelf>
-        where TSelf : IHyperbolicFunctions<TSelf>
-    {
-        public static TSelf Acosh(TSelf x) => TSelf.Acosh(x);
-
-        public static TSelf Asinh(TSelf x) => TSelf.Asinh(x);
-
-        public static TSelf Atanh(TSelf x) => TSelf.Atanh(x);
-
-        public static TSelf Cosh(TSelf x) => TSelf.Cosh(x);
-
-        public static TSelf Sinh(TSelf x) => TSelf.Sinh(x);
-
-        public static TSelf Tanh(TSelf x) => TSelf.Tanh(x);
-    }
-
     public static class IncrementOperatorsHelper<TSelf>
         where TSelf : IIncrementOperators<TSelf>
     {
         public static TSelf op_Increment(TSelf value) => ++value;
 
         public static TSelf op_CheckedIncrement(TSelf value) => checked(++value);
-    }
-
-    public static class LogarithmicFunctionsHelper<TSelf>
-        where TSelf : ILogarithmicFunctions<TSelf>
-    {
-        public static TSelf Log(TSelf x) => TSelf.Log(x);
-
-        public static TSelf Log(TSelf x, TSelf newBase) => TSelf.Log(x, newBase);
-
-        public static TSelf LogP1(TSelf x) => TSelf.LogP1(x);
-
-        public static TSelf Log2(TSelf x) => TSelf.Log2(x);
-
-        public static TSelf Log2P1(TSelf x) => TSelf.Log2P1(x);
-
-        public static TSelf Log10(TSelf x) => TSelf.Log10(x);
-
-        public static TSelf Log10P1(TSelf x) => TSelf.Log10P1(x);
     }
 
     public static class MinMaxValueHelper<TSelf>
@@ -466,24 +388,6 @@ namespace System
         public static bool TryParse(string s, IFormatProvider provider, out TSelf result) => TSelf.TryParse(s, provider, out result);
     }
 
-    public static class PowerFunctionsHelper<TSelf>
-        where TSelf : IPowerFunctions<TSelf>
-    {
-        public static TSelf Pow(TSelf x, TSelf y) => TSelf.Pow(x, y);
-    }
-
-    public static class RootFunctionsHelper<TSelf>
-        where TSelf : IRootFunctions<TSelf>
-    {
-        public static TSelf Cbrt(TSelf x) => TSelf.Cbrt(x);
-
-        public static TSelf Hypot(TSelf x, TSelf y) => TSelf.Hypot(x, y);
-
-        public static TSelf RootN(TSelf x, int n) => TSelf.RootN(x, n);
-
-        public static TSelf Sqrt(TSelf x) => TSelf.Sqrt(x);
-    }
-
     public static class ShiftOperatorsHelper<TSelf, TOther, TResult>
         where TSelf : IShiftOperators<TSelf, TOther, TResult>
     {
@@ -522,38 +426,6 @@ namespace System
         public static TResult op_Subtraction(TSelf left, TOther right) => left - right;
 
         public static TResult op_CheckedSubtraction(TSelf left, TOther right) => checked(left - right);
-    }
-
-    public static class TrigonometricFunctionsHelper<TSelf>
-        where TSelf : ITrigonometricFunctions<TSelf>
-    {
-        public static TSelf Acos(TSelf x) => TSelf.Acos(x);
-
-        public static TSelf AcosPi(TSelf x) => TSelf.AcosPi(x);
-
-        public static TSelf Asin(TSelf x) => TSelf.Asin(x);
-
-        public static TSelf AsinPi(TSelf x) => TSelf.AsinPi(x);
-
-        public static TSelf Atan(TSelf x) => TSelf.Atan(x);
-
-        public static TSelf AtanPi(TSelf x) => TSelf.AtanPi(x);
-
-        public static TSelf Cos(TSelf x) => TSelf.Cos(x);
-
-        public static TSelf CosPi(TSelf x) => TSelf.CosPi(x);
-
-        public static TSelf Sin(TSelf x) => TSelf.Sin(x);
-
-        public static (TSelf Sin, TSelf Cos) SinCos(TSelf x) => TSelf.SinCos(x);
-
-        public static (TSelf SinPi, TSelf CosPi) SinCosPi(TSelf x) => TSelf.SinCosPi(x);
-
-        public static TSelf SinPi(TSelf x) => TSelf.SinPi(x);
-
-        public static TSelf Tan(TSelf x) => TSelf.Tan(x);
-
-        public static TSelf TanPi(TSelf x) => TSelf.TanPi(x);
     }
 
     public static class UnaryNegationOperatorsHelper<TSelf, TResult>

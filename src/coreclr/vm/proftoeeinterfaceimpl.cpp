@@ -10319,14 +10319,6 @@ HRESULT ProfToEEInterfaceImpl::InitializeCurrentThread()
     return S_OK;
 }
 
-struct InternalProfilerModuleEnum : public ProfilerModuleEnum
-{
-    CDynArray<ModuleID> *GetRawElementsArray()
-    {
-        return &m_elements;
-    }
-};
-
 HRESULT ProfToEEInterfaceImpl::EnumNgenModuleMethodsInliningThisMethod(
     ModuleID    inlinersModuleId,
     ModuleID    inlineeModuleId,

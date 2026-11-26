@@ -12,8 +12,6 @@
 #include "eehash.h"
 #include "stringliteralmap.h"
 #include "clsload.hpp"
-#include "typectxt.h"
-#include "genericdict.h"
 
 #ifndef DACCESS_COMPILE
 
@@ -140,67 +138,6 @@ DWORD EEUnicodeStringLiteralHashTableHelper::Hash(EEStringData *pKey)
 
     return (HashBytes((const BYTE *) pKey->GetStringBuffer(), pKey->GetCharCount() * sizeof(WCHAR)));
 }
-
-
-// ============================================================================
-// Instantiation hash table helper.
-// ============================================================================
-
-EEHashEntry_t *EEInstantiationHashTableHelper::AllocateEntry(const SigTypeContext *pKey, BOOL bDeepCopy, AllocationHeap pHeap)
-{
-    CONTRACTL
-    {
-        NOTHROW;
-        GC_NOTRIGGER;
-    }
-    CONTRACTL_END
-
-    EEHashEntry_t *pEntry = (EEHashEntry_t *) new (nothrow) BYTE[SIZEOF_EEHASH_ENTRY + sizeof(SigTypeContext)];
-    if (!pEntry)
-        return NULL;
-    *((SigTypeContext*)pEntry->Key) = *pKey;
-
-    return pEntry;
-}
-
-void EEInstantiationHashTableHelper::DeleteEntry(EEHashEntry_t *pEntry, AllocationHeap pHeap)
-{
-    LIMITED_METHOD_CONTRACT;
-
-    delete [] (BYTE*)pEntry;
-}
-
-BOOL EEInstantiationHashTableHelper::CompareKeys(EEHashEntry_t *pEntry, const SigTypeContext *pKey)
-{
-    LIMITED_METHOD_CONTRACT;
-
-    SigTypeContext *pThis = (SigTypeContext*)&pEntry->Key;
-    return SigTypeContext::Equal(pThis, pKey);
-}
-
-DWORD EEInstantiationHashTableHelper::Hash(const SigTypeContext *pKey)
-{
-    LIMITED_METHOD_CONTRACT;
-
-    DWORD dwHash = 5381;
-    DWORD i;
-
-    for (i = 0; i < pKey->m_classInst.GetNumArgs(); i++)
-        dwHash = ((dwHash << 5) + dwHash) ^ (unsigned int)(SIZE_T)pKey->m_classInst[i].AsPtr();
-
-    for (i = 0; i < pKey->m_methodInst.GetNumArgs(); i++)
-        dwHash = ((dwHash << 5) + dwHash) ^ (unsigned int)(SIZE_T)pKey->m_methodInst[i].AsPtr();
-
-    return dwHash;
-}
-
-const SigTypeContext *EEInstantiationHashTableHelper::GetKey(EEHashEntry_t *pEntry)
-{
-    LIMITED_METHOD_CONTRACT;
-
-    return (const SigTypeContext*)&pEntry->Key;
-}
-
 
 
 // ============================================================================

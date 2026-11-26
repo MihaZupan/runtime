@@ -8,17 +8,6 @@
 #ifndef __INVOKEUTIL_H__
 #define __INVOKEUTIL_H__
 
-// The following class represents the value class
-#include <pshpack1.h>
-
-struct InterfaceMapData
-{
-    REFLECTCLASSBASEREF     m_targetType;
-    REFLECTCLASSBASEREF     m_interfaceType;
-    PTRARRAYREF             m_targetMethods;
-    PTRARRAYREF             m_interfaceMethods;
-};
-
 // Calling Conventions
 // NOTE: These are defined in CallingConventions.cs They must match up.
 #define Standard_CC     0x0001
@@ -32,8 +21,6 @@ struct InterfaceMapData
 #define COPYBACK_PRIMITIVE      1
 #define COPYBACK_OBJECTREF      2
 #define COPYBACK_VALUECLASS     3
-
-#include <poppack.h>
 
 // Helpers for reflection field access, primitive conversions, and exception wrapping.
 class InvokeUtil

@@ -258,7 +258,6 @@
     <Compile Include="CodeGen\ReadyToRunObjectWriter.cs" />
     <Compile Include="Compiler\CompilationModuleGroup.ReadyToRun.cs" />
     <Compile Include="Compiler\CompositeImageSettings.cs" />
-    <Compile Include="Compiler\CryptographicHashProvider.cs" />
     <Compile Include="Compiler\DeferredWasmCallFinalizationPlan.cs" />
     <Compile Include="Compiler\DeferredWasmCallProcessor.cs" />
     <Compile Include="Compiler\DeferredWasmCallRewriter.cs" />

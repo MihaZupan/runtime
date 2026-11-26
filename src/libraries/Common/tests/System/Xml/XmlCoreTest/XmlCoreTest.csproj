@@ -9,7 +9,6 @@
     <Compile Include="CustomWriter.cs" />
     <Compile Include="FilePathUtil.cs" />
     <Compile Include="ManagedNodeWriter.cs" />
-    <Compile Include="MiscUtil.cs" />
     <Compile Include="ReaderCreateUtil.cs" />
     <Compile Include="ReaderUtil.cs" />
     <Compile Include="UnicodeCharHelper.cs" />

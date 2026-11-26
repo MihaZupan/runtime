@@ -2221,13 +2221,6 @@ public:
 
 class ILHandleRefMarshaler : public ILMarshaler
 {
-    // Managed layout for SRI.HandleRef class
-    struct HANDLEREF
-    {
-        OBJECTREF m_wrapper;
-        LPVOID    m_handle;
-    };
-
 public:
     enum
     {

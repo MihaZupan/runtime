@@ -416,11 +416,6 @@ namespace System.Reflection.Tests
             {
             }
 
-            public class Nested
-            {
-
-            }
-
     #pragma warning disable 0067 // event never used
             public event Action<int> StuffHappened;
     #pragma warning restore 0067

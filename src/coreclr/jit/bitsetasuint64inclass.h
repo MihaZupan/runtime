@@ -12,9 +12,6 @@ template <typename Env, typename BitSetTraits>
 class BitSetUint64ValueRetType;
 
 template <typename Env, typename BitSetTraits>
-class BitSetUint64Iter;
-
-template <typename Env, typename BitSetTraits>
 class BitSetUint64
 {
 public:

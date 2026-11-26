@@ -16,7 +16,6 @@
 #include "runtimeexceptionkind.h"
 #include "interoputil.h"
 
-class BaseBind;
 class AssemblySpec;
 class PEAssembly;
 

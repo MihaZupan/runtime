@@ -115,6 +115,7 @@ public class SparseTest : ISparseType
     public int MultiplyBy20(int a) { return a * 20; }
 }
 
+// These signatures embed the interop types used by PunningLib.il in TypeImpl.
 public class OnlyLoadOnceCaller
 {
     public static int GetField_1(OnlyLoadOnce_1 s)

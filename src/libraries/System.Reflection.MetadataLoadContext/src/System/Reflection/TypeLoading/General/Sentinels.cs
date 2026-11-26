@@ -19,11 +19,6 @@ namespace System.Reflection.TypeLoading
             internal SentinelType() : base() { }
         }
 
-        private sealed class SentinelAssembly : RoStubAssembly
-        {
-            internal SentinelAssembly() : base() { }
-        }
-
         private sealed class SentinelMethod : RoMethod
         {
             internal SentinelMethod() : base(Sentinels.RoType) { }

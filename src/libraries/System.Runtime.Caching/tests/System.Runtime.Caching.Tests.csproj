@@ -9,7 +9,6 @@
     <Compile Include="Common\PokerChangeMonitor.cs" />
     <Compile Include="Common\PokerMemoryCache.cs" />
     <Compile Include="Common\PokerObjectCache.cs" />
-    <Compile Include="Common\TestNotificationSystem.cs" />
     <Compile Include="System.Runtime.Caching\HostFileChangeMonitorTest.cs" />
     <Compile Include="System.Runtime.Caching\CountersTest.cs" />
     <Compile Include="System.Runtime.Caching\ObjectCacheTest.cs" />

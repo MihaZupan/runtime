@@ -106,36 +106,4 @@ namespace SerializerTrimmingTest
         [JsonConstructor]
         public MyStruct(int x, int y) => (X, Y) = (x, y);
     }
-
-    internal class MyClassWithParameterizedCtor
-    {
-        public int X { get; set; }
-        [JsonInclude]
-        public int Y;
-
-        public MyClassWithParameterizedCtor(int x, int y) => (X, Y) = (x, y);
-    }
-
-    internal class MyBigClass
-    {
-        public string A { get; }
-        [JsonInclude]
-        public string B;
-        public string C { get; }
-        [JsonInclude]
-        public int One;
-        public int Two { get; }
-        [JsonInclude]
-        public int Three;
-
-        public MyBigClass(string a, string b, string c, int one, int two, int three)
-        {
-            A = a;
-            B = b;
-            C = c;
-            One = one;
-            Two = two;
-            Three = three;
-        }
-    }
 }

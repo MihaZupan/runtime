@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
-using System.Threading;
 
 namespace System.Management
 {
@@ -361,35 +360,6 @@ namespace System.Management
             catch
             {
             }
-        }
-    }
-
-    internal sealed class WmiEventState
-    {
-        private readonly Delegate d;
-        private readonly ManagementEventArgs args;
-        private readonly AutoResetEvent h;
-
-        internal WmiEventState(Delegate d, ManagementEventArgs args, AutoResetEvent h)
-        {
-            this.d = d;
-            this.args = args;
-            this.h = h;
-        }
-
-        public Delegate Delegate
-        {
-            get { return d; }
-        }
-
-        public ManagementEventArgs Args
-        {
-            get { return args; }
-        }
-
-        public AutoResetEvent AutoResetEvent
-        {
-            get { return h; }
         }
     }
 

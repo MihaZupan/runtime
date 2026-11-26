@@ -305,7 +305,6 @@ class REF : public OBJECTREF
 #define MAX_NAMESPACE_LENGTH    1024
 
 class EEConfig;
-class ClassLoaderList;
 class Module;
 
 #define EXTERN extern

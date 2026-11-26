@@ -52,8 +52,6 @@ enum class InstructionType : UINT8
     Branch_IndirectUnconditional
 };
 
-class InstructionInfo;
-
 // Wraps the MSVC disassembler or the coredistools disassembler
 class Disassembler
 {

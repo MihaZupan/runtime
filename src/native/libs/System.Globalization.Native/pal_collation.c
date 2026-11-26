@@ -41,8 +41,6 @@ c_static_assert_msg(USEARCH_DONE == -1, "managed side requires -1 for not found"
 
 #define USED_STRING_SEARCH ((UStringSearch*) (-1))
 
-typedef struct { int32_t key; UCollator* UCollator; } TCollatorMap;
-
 typedef struct SearchIteratorNode
 {
     UStringSearch* searchIterator;

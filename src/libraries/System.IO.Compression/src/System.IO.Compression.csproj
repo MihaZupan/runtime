@@ -33,7 +33,6 @@
     <Compile Include="System\IO\Compression\DeflateManaged\InflaterManaged.cs" />
     <Compile Include="System\IO\Compression\DeflateManaged\InflaterState.cs" />
     <Compile Include="System\IO\Compression\DeflateManaged\InputBuffer.cs" />
-    <Compile Include="System\IO\Compression\DeflateManaged\MatchState.cs" />
     <Compile Include="System\IO\Compression\DeflateManaged\OutputWindow.cs" />
     <Compile Include="System\IO\Compression\DeflateZLib\Deflater.cs" />
     <Compile Include="System\IO\Compression\DeflateZLib\DeflateStream.cs" />

@@ -14,18 +14,6 @@ namespace System.IO.Strategies
     // this type defines a set of stateless FileStream/FileStreamStrategy helper methods
     internal static partial class FileStreamHelpers
     {
-        // Async completion/return codes used by
-        // SafeFileHandle.OverlappedValueTaskSource
-        internal static class TaskSourceCodes
-        {
-            internal const long NoResult = 0;
-            internal const long ResultSuccess = (long)1 << 32;
-            internal const long ResultError = (long)2 << 32;
-            internal const long RegisteringCancellation = (long)4 << 32;
-            internal const long CompletedCallback = (long)8 << 32;
-            internal const ulong ResultMask = ((ulong)uint.MaxValue) << 32;
-        }
-
         private static OSFileStreamStrategy ChooseStrategyCore(SafeFileHandle handle, FileAccess access, bool isAsync) =>
             isAsync ?
                 new AsyncWindowsFileStreamStrategy(handle, access) :

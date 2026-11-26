@@ -573,51 +573,6 @@ namespace System.Text.Unicode.Tests
             Assert.Equal(expected, tss.ToStringState.ToStringMode);
         }
 
-        private struct Utf8SpanFormattableInt32Wrapper : IUtf8SpanFormattable, IHasToStringState
-        {
-            private readonly int _value;
-            public ToStringState ToStringState { get; }
-
-            public Utf8SpanFormattableInt32Wrapper(int value)
-            {
-                ToStringState = new ToStringState();
-                _value = value;
-            }
-
-            public bool TryFormat(Span<byte> utf8Destination, out int bytesWritten, ReadOnlySpan<char> format, IFormatProvider provider)
-            {
-                ToStringState.LastFormat = format.ToString();
-                ToStringState.LastProvider = provider;
-                ToStringState.ToStringMode = ToStringMode.ISpanFormattableTryFormat;
-
-                ReadOnlySpan<byte> src = Encoding.UTF8.GetBytes(_value.ToString(format.ToString(), provider)).AsSpan();
-                if (src.TryCopyTo(utf8Destination))
-                {
-                    bytesWritten = src.Length;
-                    return true;
-                }
-
-                bytesWritten = 0;
-                return false;
-            }
-
-            public string ToString(string format, IFormatProvider formatProvider)
-            {
-                ToStringState.LastFormat = format;
-                ToStringState.LastProvider = formatProvider;
-                ToStringState.ToStringMode = ToStringMode.IFormattableToString;
-                return _value.ToString(format, formatProvider);
-            }
-
-            public override string ToString()
-            {
-                ToStringState.LastFormat = null;
-                ToStringState.LastProvider = null;
-                ToStringState.ToStringMode = ToStringMode.ObjectToString;
-                return _value.ToString();
-            }
-        }
-
         private sealed class SpanFormattableStringWrapper : IFormattable, ISpanFormattable, IHasToStringState
         {
             private readonly string _value;

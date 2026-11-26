@@ -143,7 +143,6 @@
     <Compile Include="System\Net\NetworkInformation\LinuxIcmpV6Statistics.cs" />
     <Compile Include="System\Net\NetworkInformation\LinuxTcpStatistics.cs" />
     <Compile Include="System\Net\NetworkInformation\LinuxUdpStatistics.cs" />
-    <Compile Include="System\Net\NetworkInformation\LinuxIPAddressInformation.cs" />
     <Compile Include="System\Net\NetworkInformation\LinuxIPGlobalProperties.cs" />
     <Compile Include="System\Net\NetworkInformation\LinuxIPGlobalStatistics.cs" />
     <Compile Include="System\Net\NetworkInformation\LinuxIPInterfaceProperties.cs" />

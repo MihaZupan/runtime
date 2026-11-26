@@ -894,11 +894,6 @@ namespace System.Text.Json.Serialization.Tests
             public override string ConvertName(string name) => Enum.TryParse(name, out T value) ? value.ToString("D") : name;
         }
 
-        private class ZeroAppenderPolicy : JsonNamingPolicy
-        {
-            public override string ConvertName(string name) => name + "0";
-        }
-
         private static JsonSerializerOptions CreateStringEnumOptionsForType(Type enumType, bool useGenericVariant, JsonNamingPolicy? namingPolicy = null, bool allowIntegerValues = true)
         {
             Debug.Assert(enumType.IsEnum);

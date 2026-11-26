@@ -19,5 +19,3 @@ enum
     PAL_SHA512,
 };
 typedef uint32_t PAL_HashAlgorithm;
-
-typedef struct digest_ctx_st DigestCtx;

@@ -313,9 +313,6 @@ namespace System.Reflection.Tests
 
     public enum Eint : int { }
     public enum Euint : uint { }
-    public enum Eshort : short { }
-    public enum Eushort : ushort { }
-
     public interface IContraVariant<in T> { }
     public interface ICoVariant<out T> { }
 

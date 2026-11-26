@@ -105,28 +105,6 @@ namespace System.Text.Json.Serialization.Tests
             internal float GetMyFloat => MyFloat;
         }
 
-        private class MyClass_WithNonPublicAccessors_WithPropertyAttributes_And_PropertyIgnore
-        {
-            [JsonInclude]
-            [JsonIgnore]
-            public int MyInt { get; private set; }
-
-            [JsonInclude]
-            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-            public string MyString { get; internal set; } = "DefaultString";
-
-            [JsonInclude]
-            [JsonIgnore(Condition = JsonIgnoreCondition.Always)]
-            public float MyFloat { private get; set; }
-
-            [JsonInclude]
-            [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-            public Uri MyUri { internal get; set; }
-
-            // For test validation.
-            internal float GetMyFloat => MyFloat;
-        }
-
         [Fact]
 #if BUILDING_SOURCE_GENERATOR_TESTS
         // Need support for extension data.
@@ -158,12 +136,6 @@ namespace System.Text.Json.Serialization.Tests
             [JsonExtensionData]
             [JsonInclude]
             public Dictionary<string, JsonElement> ExtensionData { get; private set; }
-        }
-
-        private class ClassWithExtensionData_NonPublicGetter
-        {
-            [JsonExtensionData]
-            public Dictionary<string, JsonElement> ExtensionData { internal get; set; }
         }
 
         [Fact]

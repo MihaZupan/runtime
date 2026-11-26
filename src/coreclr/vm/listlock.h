@@ -435,13 +435,6 @@ class ListLockBase
     }
 };
 
-class WaitingThreadListElement
-{
-public:
-    Thread *                   m_pThread;
-    WaitingThreadListElement * m_pNext;
-};
-
 typedef class ListLockBase<void*> ListLock;
 typedef class ListLockEntryBase<void*> ListLockEntry;
 

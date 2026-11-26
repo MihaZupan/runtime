@@ -22,14 +22,6 @@ namespace FPBehaviorApp
         CONVERT_NATIVECOMPILERBEHAVIOR,
     }
 
-    public enum ConversionType
-    {
-        ToInt,
-        ToLong,
-        ToUInt,
-        ToULong
-    }
-
     public static class Native
     {
         [DllImport("out_of_range_fp_to_int_conversionsnative")]

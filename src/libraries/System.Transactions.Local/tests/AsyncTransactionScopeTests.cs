@@ -1766,9 +1766,4 @@ namespace System.Transactions.Tests
             set;
         }
     }
-
-    public interface IStatus
-    {
-        string GetStatus(string id, bool fail);
-    }
 }

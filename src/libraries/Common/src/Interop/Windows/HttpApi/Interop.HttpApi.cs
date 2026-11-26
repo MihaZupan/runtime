@@ -322,28 +322,6 @@ internal static partial class Interop
             HttpServerProtectionLevelProperty,
         }
 
-        internal enum TOKENBINDING_HASH_ALGORITHM : byte
-        {
-            TOKENBINDING_HASH_ALGORITHM_SHA256 = 4,
-        }
-
-        internal enum TOKENBINDING_SIGNATURE_ALGORITHM : byte
-        {
-            TOKENBINDING_SIGNATURE_ALGORITHM_RSA = 1,
-            TOKENBINDING_SIGNATURE_ALGORITHM_ECDSAP256 = 3,
-        }
-
-        internal enum TOKENBINDING_TYPE : byte
-        {
-            TOKENBINDING_TYPE_PROVIDED = 0,
-            TOKENBINDING_TYPE_REFERRED = 1,
-        }
-
-        internal enum TOKENBINDING_EXTENSION_FORMAT
-        {
-            TOKENBINDING_EXTENSION_FORMAT_UNDEFINED = 0,
-        }
-
         [Flags]
         internal enum HTTP_FLAGS : uint
         {

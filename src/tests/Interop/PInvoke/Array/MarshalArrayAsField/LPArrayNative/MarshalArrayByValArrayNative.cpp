@@ -59,7 +59,6 @@ typedef struct { BSTR		arr[ARRAY_LENGTH]; } S_BSTRArray;
 
 //struct array in a struct
 typedef struct { TestStruct	arr[ARRAY_LENGTH]; } S_StructArray;
-typedef struct { BOOL		arr[ARRAY_LENGTH]; } S_BOOLArray;
 
 enum class TestEnum : int32_t
 {

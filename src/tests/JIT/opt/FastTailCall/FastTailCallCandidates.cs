@@ -440,20 +440,6 @@ public class FastTailCallCandidates
         }
     }
 
-    public struct HFASize24
-    {
-        public double a;
-        public double b;
-        public double c;
-
-        public HFASize24(double a, double b, double c)
-        {
-            this.a = a;
-            this.b = b;
-            this.c = c;
-        }
-    }
-
     public struct HFASize32
     {
         public double a;
@@ -850,28 +836,6 @@ public class FastTailCallCandidates
     // Stack Based args.
     ////////////////////////////////////////////////////////////////////////////
 
-    public struct StructSizeOneNotExplicit
-    {
-        public byte a;
-
-        public StructSizeOneNotExplicit(byte a)
-        {
-            this.a = a;
-        }
-    }
-
-    public struct StructSizeTwoNotExplicit
-    {
-        public byte a;
-        public byte b;
-
-        public StructSizeTwoNotExplicit(byte a, byte b)
-        {
-            this.a = a;
-            this.b = b;
-        }
-    }
-
     public struct StructSizeThreeNotExplicit
     {
         public byte a;
@@ -969,32 +933,6 @@ public class FastTailCallCandidates
         {
             this.a = a;
             this.b = b;
-        }
-    }
-
-    public struct StructSize24NotExplicit
-    {
-        public long a;
-        public long b;
-        public long c;
-
-        public StructSize24NotExplicit(long a, long b, long c)
-        {
-            this.a = a;
-            this.b = b;
-            this.c = c;
-        }
-    }
-
-    public struct StructSize48Nested
-    {
-        public StructSize24NotExplicit a;
-        public StructSize24NotExplicit b;
-
-        public StructSize48Nested(long a, long b, long c, long d, long e, long f)
-        {
-            this.a = new StructSize24NotExplicit(a, b, c);
-            this.b = new StructSize24NotExplicit(d, e, f);
         }
     }
 

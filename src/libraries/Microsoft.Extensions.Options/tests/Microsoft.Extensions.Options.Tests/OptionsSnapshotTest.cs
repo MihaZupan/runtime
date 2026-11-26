@@ -69,18 +69,6 @@ namespace Microsoft.Extensions.Options.Tests
             }
         }
 
-        public class ControllerWithSnapshot
-        {
-            FakeOptions _options;
-
-            public ControllerWithSnapshot(IOptionsSnapshot<FakeOptions> snap)
-            {
-                _options = snap.Value;
-            }
-
-            public string Message => _options?.Message;
-        }
-
         [Fact]
         public void SnapshotDoesNotChangeUntilNextRequestOnConfigChanges()
         {

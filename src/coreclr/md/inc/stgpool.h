@@ -46,7 +46,6 @@ const int DFT_CODE_HEAP_SIZE = 8192;
 // Forwards.
 class StgStringPool;
 class StgBlobPool;
-class StgCodePool;
 
 //  Perform binary search on index table.
 //

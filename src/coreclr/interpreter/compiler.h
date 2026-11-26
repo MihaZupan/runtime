@@ -807,12 +807,6 @@ private:
         Value
     };
 
-    struct TokenArg
-    {
-        CORINFO_RESOLVED_TOKEN* token;
-        InterpCompiler::GenericHandleEmbedOptions options;
-    };
-
     struct GenericHandleData
     {
         GenericHandleData(int genericVar, int dataItemIndex)

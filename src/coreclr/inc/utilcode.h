@@ -544,62 +544,6 @@ inline void SetBit(BYTE * pcBits,int iBit,int bOn)
 }
 #endif
 
-template<typename T>
-class SimpleListNode final
-{
-public:
-    SimpleListNode(T const& _t)
-        : data{ _t }
-        , next{}
-    {
-        LIMITED_METHOD_CONTRACT;
-    }
-
-    T                  data;
-    SimpleListNode<T>* next;
-};
-
-template<typename T>
-class SimpleList final
-{
-public:
-    typedef SimpleListNode<T> Node;
-
-    SimpleList()
-        : _head{}
-    {
-        LIMITED_METHOD_CONTRACT;
-    }
-
-    void LinkHead(Node* pNode)
-    {
-        LIMITED_METHOD_CONTRACT;
-        pNode->next = _head;
-        _head = pNode;
-    }
-
-    Node* UnlinkHead()
-    {
-        LIMITED_METHOD_CONTRACT;
-        Node* ret = _head;
-
-        if (_head)
-        {
-            _head = _head->next;
-        }
-        return ret;
-    }
-
-    Node* Head()
-    {
-        LIMITED_METHOD_CONTRACT;
-        return _head;
-    }
-
-private:
-    Node* _head;
-};
-
 //*****************************************************************************
 // This class implements a dynamic array of structures for which the order of
 // the elements is unimportant.  This means that any item placed in the list

@@ -12,19 +12,6 @@ public class Test_ReversePInvokeTest
     const int iNative = 11;//the value passed from Native side to Managed side
     const int iManaged = 10;//The value passed from Managed side to Native sid
 
-    enum StructID
-    {
-        INNER2Id,
-        InnerExplicitId,
-        InnerArrayExplicitId,
-        OUTER3Id,
-        UId,
-        ByteStructPack2ExplicitId,
-        ShortStructPack4ExplicitId,
-        IntStructPack8ExplicitId,
-        LongStructPack16ExplicitId
-    }
-
     #region Methods implementation
 
     #region ReversePinvoke, ByRef, Cdel

@@ -154,57 +154,6 @@ class BranchInstructionFormat : public InstructionFormat
 
 };
 
-//-----------------------------------------------------------------------
-// InstructionFormat for loading a label to the register (pcaddi/ld.d)
-//-----------------------------------------------------------------------
-class LoadFromLabelInstructionFormat : public InstructionFormat
-{
-    public:
-        LoadFromLabelInstructionFormat() : InstructionFormat( InstructionFormat::k32)
-        {
-            LIMITED_METHOD_CONTRACT;
-        }
-
-        virtual UINT GetSizeOfInstruction(UINT refSize, UINT variationCode)
-        {
-            _ASSERTE(!"LOONGARCH64: not implementation on loongarch64!!!");
-            WRAPPER_NO_CONTRACT;
-            return 8;
-
-        }
-
-        virtual UINT GetHotSpotOffset(UINT refsize, UINT variationCode)
-        {
-            WRAPPER_NO_CONTRACT;
-            return 0;
-        }
-
-        virtual BOOL CanReach(UINT refSize, UINT variationCode, BOOL fExternal, INT_PTR offset)
-        {
-            return fExternal;
-        }
-
-        virtual VOID EmitInstruction(UINT refSize, int64_t fixedUpReference, BYTE *pOutBufferRX, BYTE *pOutBufferRW, UINT variationCode, BYTE *pDataBuffer)
-        {
-            _ASSERTE(!"LOONGARCH64: not implementation on loongarch64!!!");
-            LIMITED_METHOD_CONTRACT;
-            // VariationCode is used to indicate the register the label is going to be loaded
-
-            DWORD imm =(DWORD)(fixedUpReference>>12);
-            if (imm>>21)
-                COMPlusThrow(kNotSupportedException);
-
-            // pcaddi r21, #Page_of_fixedUpReference
-            *((DWORD*)pOutBufferRW) = 0;
-
-            // ld.d  r21, [r21, #offset_of_fixedUpReference_to_its_page]
-            UINT64 target = (UINT64)(fixedUpReference + pOutBufferRX)>>3;
-            *((DWORD*)(pOutBufferRW+4)) = 0;
-        }
-};
-
-
-
 static BYTE gBranchIF[sizeof(BranchInstructionFormat)];
 
 #endif

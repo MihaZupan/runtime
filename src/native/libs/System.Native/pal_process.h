@@ -124,16 +124,6 @@ typedef struct
 } RLimit;
 
 /**
- * The native struct is dependent on the size of a numeric type
- * so make it the largest possible value here and then we will
- * copy to native as necessary
- */
-typedef struct
-{
-    uint64_t Bits[16]; // __CPU_SETSIZE / (8 * sizeof(int64_t))
-} CpuSetBits;
-
-/**
  * Get the current limit for the specified resource of the current process.
  * Returns 0 on success; returns -1 on failure and errno is set to the error reason.
  */

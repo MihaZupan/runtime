@@ -1005,37 +1005,6 @@ namespace ETW
             }ExceptionThrownFlags;
         }ExceptionStructs;
     };
-    // Class to wrap all Contention logic for ETW
-    class ContentionLog
-    {
-    public:
-        typedef union _ContentionStructs
-        {
-            typedef  enum _ContentionFlags {
-                ManagedContention=0,
-                NativeContention=1
-            } ContentionFlags;
-        } ContentionStructs;
-    };
-
-    class WaitHandleLog
-    {
-    public:
-        typedef union _WaitHandleStructs
-        {
-            typedef  enum _WaitSource {
-                Unknown=0,
-                MonitorWait=1
-            } WaitSource;
-        } WaitHandleStructs;
-    };
-
-    // Class to wrap all Interop logic for ETW
-    class InteropLog
-    {
-    public:
-    };
-
     // Class to wrap all Information logic for ETW
     class InfoLog
     {

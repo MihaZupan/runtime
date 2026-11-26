@@ -176,22 +176,6 @@ private:
 
 }; // class VirtualSort
 
-class ReorderData
-{
-public:
-    typedef enum
-    {
-        MinReorderBucketType=0,  // bucket# shouldn't be less than this value
-        Undefined=0,             // use this for initialization
-        Duplicate=1,             // duplicate string
-        ProfileData=2,           // bucket# for IBC data
-        PublicData=3,            // bucket# for public data
-        OtherData=4,             // bucket# for other data
-        NonPublicData=5,         // bucket# for non-public data
-        MaxReorderBucketType=255 // bucket# shouldn't exceeed this value
-    } ReorderBucketType;
-};
-
 typedef CMetaDataHashBase CMemberRefHash;
 typedef CMetaDataHashBase CLookUpHash;
 

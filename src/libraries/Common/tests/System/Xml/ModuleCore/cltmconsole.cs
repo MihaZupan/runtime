@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -63,21 +62,6 @@ namespace OLEDB.Test.ModuleCore
         public override Encoding Encoding
         {
             get { return Encoding.Unicode; }
-        }
-    }
-
-
-    ////////////////////////////////////////////////////////////////
-    // CLTMTraceListener
-    //
-    ////////////////////////////////////////////////////////////////
-    public class CLTMTraceListener //: TraceListener
-    {
-        //Data
-
-        //Constructor
-        public CLTMTraceListener()
-        {
         }
     }
 }

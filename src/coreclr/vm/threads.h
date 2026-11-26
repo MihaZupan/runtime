@@ -123,7 +123,6 @@ class     AppDomain;
 class     PInvoke;
 class     Frame;
 class     ThreadBaseObject;
-class     AppDomainStack;
 class     DeadlockAwareLock;
 class     EECodeInfo;
 class     DebuggerPatchSkip;
@@ -381,10 +380,6 @@ EXTERN_C void STDCALL OnHijackWorker(HijackArgs * pArgs);
 
 // This is the code we pass around for Thread.Interrupt, mainly for assertions
 #define APC_Code    0xEECEECEE
-
-#ifdef DACCESS_COMPILE
-class BaseStackGuard;
-#endif
 
 struct PortableTailCallFrame
 {

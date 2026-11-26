@@ -19,25 +19,9 @@ delegate long dc5(long l, EQStruct<long> t);
 delegate long dc6(EQClass<long> t, long l);
 delegate long dc7(long l, EQClass<long> t);
 
-//Open Instance Non-Generic delegates for M1-M9 over a reference generic
-delegate long do1_ref(GenericClass<EQStruct<long>> o,long l);
-delegate long do4_ref(GenericClass<EQStruct<long>> o, EQStruct<long> t, long l);
-delegate long do5_ref(GenericClass<EQStruct<long>> o, long l, EQStruct<long> t);
-delegate long do6_ref(GenericClass<EQStruct<long>> o, EQClass<long> t, long l);
-delegate long do7_ref(GenericClass<EQStruct<long>> o, long l, EQClass<long> t);
-
-//Open Instance Non-Generic delegates for M1-M9 over a value generic
-delegate long do1_val(ref GenericStruct<EQStruct<long>> o,long l);
-delegate long do4_val(ref GenericStruct<EQStruct<long>> o, EQStruct<long> t, long l);
-delegate long do5_val(ref GenericStruct<EQStruct<long>> o, long l, EQStruct<long> t);
-delegate long do6_val(ref GenericStruct<EQStruct<long>> o, EQClass<long> t, long l);
-delegate long do7_val(ref GenericStruct<EQStruct<long>> o, long l, EQClass<long> t);
-
 //Closed Static Non-Generic delegates for SM1-SM9
 delegate long dcs1();
 delegate long dcs2(long l);
-delegate long dcs5(EQStruct<long> t);
-delegate long dcs7(EQClass<long> t);
 
 //////////////////////////////////////////////////////////////////////
 //Generic delegate types over varous generic targets

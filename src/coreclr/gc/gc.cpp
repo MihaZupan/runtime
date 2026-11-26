@@ -639,9 +639,7 @@ class generation;
 class heap_segment;
 class CObjectHeader;
 class dynamic_data;
-class l_heap;
 class sorted_table;
-class c_synchronize;
 
 #ifdef FEATURE_PREMORTEM_FINALIZATION
 static

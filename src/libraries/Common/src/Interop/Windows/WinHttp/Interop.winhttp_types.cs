@@ -174,15 +174,6 @@ internal static partial class Interop
         public const uint WINHTTP_OPTION_STREAM_ERROR_CODE = 159;
         public const uint WINHTTP_OPTION_REQUIRE_STREAM_END = 160;
 
-        public enum WINHTTP_WEB_SOCKET_BUFFER_TYPE
-        {
-            WINHTTP_WEB_SOCKET_BINARY_MESSAGE_BUFFER_TYPE = 0,
-            WINHTTP_WEB_SOCKET_BINARY_FRAGMENT_BUFFER_TYPE = 1,
-            WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE = 2,
-            WINHTTP_WEB_SOCKET_UTF8_FRAGMENT_BUFFER_TYPE = 3,
-            WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE = 4
-        }
-
         public const uint WINHTTP_OPTION_CONTEXT_VALUE = 45;
 
         public const uint WINHTTP_FLAG_ASYNC = 0x10000000;
@@ -372,13 +363,5 @@ internal static partial class Interop
         public const uint API_READ_DATA = 3;
         public const uint API_WRITE_DATA = 4;
         public const uint API_SEND_REQUEST = 5;
-
-        public enum WINHTTP_WEB_SOCKET_OPERATION
-        {
-            WINHTTP_WEB_SOCKET_SEND_OPERATION = 0,
-            WINHTTP_WEB_SOCKET_RECEIVE_OPERATION = 1,
-            WINHTTP_WEB_SOCKET_CLOSE_OPERATION = 2,
-            WINHTTP_WEB_SOCKET_SHUTDOWN_OPERATION = 3
-        }
     }
 }

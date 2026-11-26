@@ -101,7 +101,6 @@
     <Compile Include="System\Configuration\DefaultValidator.cs" />
     <Compile Include="System\Configuration\DefinitionUpdate.cs" />
     <Compile Include="System\Configuration\ElementInformation.cs" />
-    <Compile Include="System\Configuration\EmptyImpersonationContext.cs" />
     <Compile Include="System\Configuration\ErrorInfoXmlDocument.cs" />
     <Compile Include="System\Configuration\ErrorsHelper.cs" />
     <Compile Include="System\Configuration\ExceptionAction.cs" />
@@ -190,7 +189,6 @@
     <Compile Include="System\Configuration\SafeBitVector32.cs" />
     <Compile Include="System\Configuration\SchemeSettingElement.cs" />
     <Compile Include="System\Configuration\SchemeSettingElementCollection.cs" />
-    <Compile Include="System\Configuration\SchemeSettingInternal.cs" />
     <Compile Include="System\Configuration\SectionInformation.cs" />
     <Compile Include="System\Configuration\SectionInput.cs" />
     <Compile Include="System\Configuration\SectionRecord.cs" />

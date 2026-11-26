@@ -10,7 +10,6 @@ namespace DelegateCombine1Test
 {
     delegate bool booldelegate();
     delegate void voiddelegate();
-    delegate void delegatecombine(booldelegate delegate1, booldelegate delegate2);
 
     public class DelegateCombine1
     {

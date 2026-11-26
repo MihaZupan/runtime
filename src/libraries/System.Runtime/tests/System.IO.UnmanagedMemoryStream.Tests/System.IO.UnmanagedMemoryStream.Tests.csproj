@@ -15,11 +15,9 @@
     <Compile Include="ArrayHelpers.cs" />
     <Compile Include="UmaTests.cs" />
     <Compile Include="UmsCtorTests.cs" />
-    <Compile Include="HGlobalSafeBuffer.cs" />
     <Compile Include="UmsSafeBuffer.cs" />
     <Compile Include="UmaCtorTests.cs" />
     <Compile Include="UmsTests.cs" />
-    <Compile Include="UmsManager.cs" />
     <Compile Include="UmsSecurityTest.cs" />
   </ItemGroup>
   <ItemGroup>

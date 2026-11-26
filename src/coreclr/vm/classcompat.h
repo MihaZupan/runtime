@@ -52,7 +52,6 @@ class   Substitution;
 class   SystemDomain;
 class   TypeHandle;
 class   AllocMemTracker;
-class   ZapCodeMap;
 class   InteropMethodTableSlotDataMap;
 class   LoadingEntry_LockHolder;
 class   DispatchMapBuilder;

@@ -30,27 +30,6 @@ internal static partial class Interop
         public CLAIM_SECURITY_ATTRIBUTE_INFORMATION_V1 Attribute;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct CLAIM_SECURITY_ATTRIBUTE_FQBN_VALUE
-    {
-        // DWORD64->unsigned __int64
-        public ulong Version;
-
-        // PWSTR->WCHAR*
-        [MarshalAsAttribute(UnmanagedType.LPWStr)]
-        public string Name;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct CLAIM_SECURITY_ATTRIBUTE_OCTET_STRING_VALUE
-    {
-        /// PVOID->void*
-        public IntPtr pValue;
-
-        /// DWORD->unsigned int
-        public uint ValueLength;
-    }
-
     [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Unicode)]
     internal struct CLAIM_VALUES_ATTRIBUTE_V1
     {

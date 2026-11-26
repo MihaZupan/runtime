@@ -408,7 +408,6 @@ class gc_heap;
 
 #ifdef BACKGROUND_GC
 class exclusive_sync;
-class recursive_gc_sync;
 #endif //BACKGROUND_GC
 
 #ifdef MULTIPLE_HEAPS
@@ -1239,13 +1238,6 @@ int get_alignment_constant (BOOL small_object_p)
 #endif // FEATURE_STRUCTALIGN
 }
 
-struct etw_opt_info
-{
-    size_t desired_allocation;
-    size_t new_allocation;
-    int    gen_number;
-};
-
 // Note, I am not removing the ones that are no longer used
 // because the older versions of the runtime still use them
 // and ETW interprets them.
@@ -1293,11 +1285,6 @@ enum alloc_wait_reason
 
     // we don't allow too much uoh allocation during bgc.
     awr_uoh_alloc_during_bgc = 11
-};
-
-struct alloc_thread_wait_data
-{
-    int awr;
 };
 
 enum msl_take_state
@@ -1547,7 +1534,6 @@ class gc_heap
 
 #ifdef BACKGROUND_GC
     friend class exclusive_sync;
-    friend class recursive_gc_sync;
 #endif //BACKGROUND_GC
 
 #if defined (WRITE_BARRIER_CHECK) && !defined (SERVER_GC)

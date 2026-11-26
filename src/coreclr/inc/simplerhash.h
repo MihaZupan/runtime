@@ -32,37 +32,16 @@
 //
 // s_growth_factor_numerator
 // s_growth_factor_denominator                  Factor to grow allocation (numerator/denominator).
-//                                              Typically inherited from default traits (3/2)
 //
 // s_density_factor_numerator
 // s_density_factor_denominator                 Maximum occupied density of table before growth
-//                                              occurs (num/denom).  Typically inherited (3/4).
+//                                              occurs (num/denom).
 //
 // s_minimum_allocation                         Minimum table allocation count (size on first growth.)  It is
-//                                              probably preferable to call Reallocate on initialization rather
-//                                              than override his from the default traits. (7)
+//                                              probably preferable to call Reallocate on initialization.
 //
 // NoMemory()                                   Called when the hash table is unable to grow due to potential
 //                                              overflow or the lack of a sufficiently large prime.
-
-void DECLSPEC_NORETURN ThrowOutOfMemory();
-
-class DefaultSimplerHashBehavior
-{
-public:
-    static const unsigned s_growth_factor_numerator = 3;
-    static const unsigned s_growth_factor_denominator = 2;
-
-    static const unsigned s_density_factor_numerator = 3;
-    static const unsigned s_density_factor_denominator = 4;
-
-    static const unsigned s_minimum_allocation = 7;
-
-    inline static void DECLSPEC_NORETURN NoMemory()
-    {
-        ::ThrowOutOfMemory();
-    }
-};
 
 // Stores info about primes, including the magic number and shift amount needed
 // to implement a divide without using the divide instruction
@@ -336,88 +315,5 @@ public:
 };
 
 #include "simplerhash.inl"
-
-// A few simple KeyFuncs types...
-
-// Base class for types whose equality function is the same as their "==".
-template<typename T>
-struct KeyFuncsDefEquals
-{
-    static bool Equals(const T& x, const T& y)
-    {
-        return x == y;
-    }
-};
-
-template<typename T>
-struct PtrKeyFuncs: public KeyFuncsDefEquals<const T*>
-{
-public:
-    static unsigned GetHashCode(const T* ptr)
-    {
-        // Hmm.  Maybe (unsigned) ought to be "ssize_t" -- or this ought to be ifdef'd by size.
-        return static_cast<unsigned>(reinterpret_cast<uintptr_t>(ptr));
-    }
-};
-
-template<typename T> // Must be coercable to "unsigned" with no loss of information.
-struct SmallPrimitiveKeyFuncs: public KeyFuncsDefEquals<T>
-{
-    static unsigned GetHashCode(const T& val)
-    {
-        return static_cast<unsigned>(val);
-    }
-};
-
-template<typename T> // Assumed to be of size sizeof(UINT64).
-struct LargePrimitiveKeyFuncs: public KeyFuncsDefEquals<T>
-{
-    static unsigned GetHashCode(const T val)
-    {
-        // A static cast when T is a float or a double converts the value (i.e. 0.25 converts to 0)
-        //
-        // Instead we want to use all of the bits of a float to create the hash value
-        // So we cast the address of val to a pointer to an equivalent sized unsigned int
-        // This allows us to read the actual bit representation of a float type
-        //
-        // We can't read beyond the end of val, so we use sizeof(T) to determine
-        // exactly how many bytes to read
-        //
-        if (sizeof(T) == 8)
-        {
-            // cast &val to (UINT64 *) then deref to get the bits
-            UINT64 asUINT64 = *(reinterpret_cast<const UINT64 *>(&val));
-
-            // Get the upper and lower 32-bit values from the 64-bit value
-            UINT32 upper32 = static_cast<UINT32> (asUINT64 >> 32);
-            UINT32 lower32 = static_cast<UINT32> (asUINT64 & 0xFFFFFFFF);
-
-            // Exclusive-Or the upper32 and the lower32 values
-            return static_cast<unsigned>(upper32 ^ lower32);
-
-        }
-        else if (sizeof(T) == 4)
-        {
-            // cast &val to (UINT32 *) then deref to get the bits
-            UINT32 asUINT32 = *(reinterpret_cast<const UINT32 *>(&val));
-
-            // Just return the 32-bit value
-            return static_cast<unsigned>(asUINT32);
-        }
-        else if ((sizeof(T) == 2) || (sizeof(T) == 1))
-        {
-            // For small sizes we must have an integer type
-            // so we can just use the static_cast.
-            //
-            return static_cast<unsigned>(val);
-        }
-        else
-        {
-            // Only support Hashing for types that are 8,4,2 or 1 bytes in size
-            assert(!"Unsupported size");
-            return static_cast<unsigned>(val);  // compile-time error here when we have a illegal size
-        }
-    }
-};
 
 #endif // _SIMPLERHASHTABLE_H_

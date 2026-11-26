@@ -138,12 +138,6 @@ namespace System.Speech.Internal.SapiInterop
         SPAS_RUN = 3
     }
 
-    internal enum SPXMLRESULTOPTIONS
-    {
-        SPXRO_SML = 0x00000000,
-        SPXRO_Alternates_SML = 0x00000001
-    }
-
     internal enum SPCONTEXTSTATE
     {
         SPCS_DISABLED = 0,
@@ -949,50 +943,6 @@ namespace System.Speech.Internal.SapiInterop
         void CommitAlternate(ISpPhraseAlt pPhraseAlt, out ISpRecoResult ppNewResult);
         void CommitText(uint ulStartElement, uint ulCountOfElements, [MarshalAs(UnmanagedType.LPWStr)] string pszCorrectedData, SPCOMMITFLAGS commitFlags);
         void SetTextFeedback([MarshalAs(UnmanagedType.LPWStr)] string pszFeedback, [MarshalAs(UnmanagedType.Bool)] bool fSuccessful);
-    }
-
-    [ComImport, Guid("AE39362B-45A8-4074-9B9E-CCF49AA2D0B6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ISpXMLRecoResult : ISpRecoResult
-    {
-        // ISpPhrase Methods
-        new void GetPhrase(out IntPtr ppCoMemPhrase);
-        new void GetSerializedPhrase(out IntPtr ppCoMemPhrase);
-        new void GetText(uint ulStart, uint ulCount, [MarshalAs(UnmanagedType.Bool)] bool fUseTextReplacements, [MarshalAs(UnmanagedType.LPWStr)] out string ppszCoMemText, out byte pbDisplayAttributes);
-        new void Discard(uint dwValueTypes);
-
-        // ISpRecoResult Methods
-        new void Slot5(); // new void GetResultTimes(out SPRECORESULTTIMES pTimes);
-        new void GetAlternates(int ulStartElement, int cElements, int ulRequestCount, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2), Out] IntPtr[] ppPhrases, out int pcPhrasesReturned);
-        new void GetAudio(uint ulStartElement, uint cElements, out ISpStreamFormat ppStream);
-        new void Slot8(); // void SpeakAudio(UInt32 ulStartElement, UInt32 cElements, UInt32 dwFlags, out UInt32 pulStreamNumber);
-        new void Serialize(out IntPtr ppCoMemSerializedResult);
-        new void Slot10(); // void ScaleAudio(ref Guid pAudioFormatId, IntPtr pWaveFormatEx);
-        new void Slot11(); // void GetRecoContext(out ISpRecoContext ppRecoContext);
-
-        // ISpXMLRecoResult Methods
-        void GetXMLResult([MarshalAs(UnmanagedType.LPWStr)] out string ppszCoMemXMLResult, SPXMLRESULTOPTIONS Options);
-        void GetXMLErrorInfo(out SPSEMANTICERRORINFO pSemanticErrorInfo);
-    }
-
-    [ComImport, Guid("F264DA52-E457-4696-B856-A737B717AF79"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ISpPhraseEx : ISpPhrase
-    {
-        // ISpPhrase Methods
-        new void GetPhrase(out IntPtr ppCoMemPhrase);
-        new void GetSerializedPhrase(out IntPtr ppCoMemPhrase);
-        new void GetText(uint ulStart, uint ulCount, [MarshalAs(UnmanagedType.Bool)] bool fUseTextReplacements, [MarshalAs(UnmanagedType.LPWStr)] out string ppszCoMemText, out byte pbDisplayAttributes);
-        new void Discard(uint dwValueTypes);
-
-        // ISpPhraseEx Methods
-        void GetXMLResult([MarshalAs(UnmanagedType.LPWStr)] out string ppszCoMemXMLResult, SPXMLRESULTOPTIONS Options);
-        void GetXMLErrorInfo(out SPSEMANTICERRORINFO pSemanticErrorInfo);
-        void Slot7(); // void GetAudio(UInt32 ulStartElement, UInt32 cElements, out ISpStreamFormat ppStream);
-    }
-
-    [ComImport, Guid("C8D7C7E2-0DDE-44b7-AFE3-B0C991FBEB5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface ISpDisplayAlternates
-    {
-        void GetDisplayAlternates(IntPtr pPhrase, uint cRequestCount, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2), Out] IntPtr[] ppCoMemPhrases, out uint pcPhrasesReturned);
     }
 
     /// <summary>

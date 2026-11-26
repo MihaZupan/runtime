@@ -321,8 +321,6 @@ namespace System.ComponentModel.Composition
         public const string TestContractName = "TestContractName";
     }
 
-    public class TestContractTypeWithoutName { }
-
     public class TypeDerivingFromTestContractType : TestContractType { }
 
     [Export(typeof(TestContractType))]
@@ -568,11 +566,6 @@ namespace System.ComponentModel.Composition
     {
     }
 
-    public interface IExportableTest
-    {
-        string Var1 { get; }
-    }
-
     [AttributeUsage(AttributeTargets.All)]
     [MetadataAttribute]
     public class ExportableTestAttribute : Attribute
@@ -608,11 +601,6 @@ namespace System.ComponentModel.Composition
     [PartNotDiscoverable]
     public class ComponentWithCollectionProperty
     {
-    }
-
-    public interface ICollectionOfStrings
-    {
-        IEnumerable<string> Values { get; }
     }
 
     public class SubtractProvider
@@ -660,11 +648,6 @@ namespace System.ComponentModel.Composition
     {
         [ImportMany("Add")]
         public IEnumerable<Lazy<Func<int, int, int>>> opInfo;
-    }
-
-    public interface IStrongValueMetadata
-    {
-        int value { get; set; }
     }
 
     public class UntypedExportImporter

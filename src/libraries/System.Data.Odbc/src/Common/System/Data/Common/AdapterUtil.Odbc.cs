@@ -137,21 +137,6 @@ namespace System.Data.Common
             return InvalidEnumerationValue(typeof(IsolationLevel), (int)value);
         }
 
-        // DBDataPermissionAttribute.KeyRestrictionBehavior
-        internal static ArgumentOutOfRangeException InvalidKeyRestrictionBehavior(KeyRestrictionBehavior value)
-        {
-#if DEBUG
-            switch (value)
-            {
-                case KeyRestrictionBehavior.PreventUsage:
-                case KeyRestrictionBehavior.AllowOnly:
-                    Debug.Fail("valid KeyRestrictionBehavior " + value.ToString());
-                    break;
-            }
-#endif
-            return InvalidEnumerationValue(typeof(KeyRestrictionBehavior), (int)value);
-        }
-
         // IDataParameter.Direction
         internal static ArgumentOutOfRangeException InvalidParameterDirection(ParameterDirection value)
         {
@@ -600,12 +585,6 @@ namespace System.Data.Common
         internal static long TimerFromSeconds(int seconds)
         {
             long result = checked((long)seconds * TimeSpan.TicksPerSecond);
-            return result;
-        }
-
-        internal static bool TimerHasExpired(long timerExpire)
-        {
-            bool result = TimerCurrent() > timerExpire;
             return result;
         }
 

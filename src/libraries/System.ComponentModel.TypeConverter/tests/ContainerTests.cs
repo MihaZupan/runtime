@@ -889,33 +889,6 @@ namespace System.ComponentModel.Tests
             }
         }
 
-        private class MyContainer : IContainer
-        {
-            private ComponentCollection components = new ComponentCollection(
-                new Component[0]);
-
-            public ComponentCollection Components
-            {
-                get { return components; }
-            }
-
-            public void Add(IComponent component)
-            {
-            }
-
-            public void Add(IComponent component, string name)
-            {
-            }
-
-            public void Remove(IComponent component)
-            {
-            }
-
-            public void Dispose()
-            {
-            }
-        }
-
         public class GetServiceContainer : Container
         {
             public new object GetService(Type service)

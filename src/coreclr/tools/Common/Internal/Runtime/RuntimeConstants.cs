@@ -21,14 +21,6 @@ namespace Internal.Runtime
         public const int Mask = Uninitialized | HasPreInitializedData;
     }
 
-    internal static class ArrayTypesConstants
-    {
-        /// <summary>
-        /// Maximum allowable size for array element types.
-        /// </summary>
-        public const int MaxSizeForValueClassInArray = 0xFFFF;
-    }
-
     // keep in sync with GC_ALLOC_FLAGS in gcinterface.h
     internal enum GC_ALLOC_FLAGS
     {
@@ -77,11 +69,6 @@ namespace Internal.Runtime
         // Uses the same bit as IsObjectiveCMessageSendMask since we never have
         // TARGET_X86 and FEATURE_OBJCMARSHAL used at the same time.
         public const int IsStdcall = 0x8;
-    }
-
-    internal static class GvmDispatchCellFlags
-    {
-        public const int IsAsyncVariant = unchecked((int)0x80000000);
     }
 
     internal static class GenericMethodsHashtableConstants

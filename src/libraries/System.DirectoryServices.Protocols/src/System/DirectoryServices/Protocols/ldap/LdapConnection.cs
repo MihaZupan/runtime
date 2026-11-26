@@ -14,8 +14,6 @@ using System.Xml;
 
 namespace System.DirectoryServices.Protocols
 {
-    internal delegate DirectoryResponse GetLdapResponseCallback(int messageId, LdapOperation operation, ResultAll resultType, TimeSpan requestTimeout, bool exceptionOnTimeOut);
-
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal unsafe delegate Interop.BOOL QUERYCLIENTCERT(IntPtr Connection, IntPtr trusted_CAs, IntPtr* certificateHandle);
 

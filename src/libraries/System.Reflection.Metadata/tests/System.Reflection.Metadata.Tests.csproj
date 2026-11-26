@@ -66,7 +66,6 @@
     <Compile Include="Metadata\MetadataReaderTestHelpers.cs" />
     <Compile Include="Metadata\MetadataReaderTests.cs" />
     <Compile Include="Metadata\Ecma335\Encoding\MethodBodyStreamEncoderTests.cs" />
-    <Compile Include="Metadata\TypeSystem\MethodImportRow.cs" />
     <Compile Include="Metadata\PortablePdb\StandalonePortablePdbStreamTests.cs" />
     <Compile Include="Metadata\TagToTokenTests.cs" />
     <Compile Include="Metadata\PortablePdb\DocumentNameTests.cs" />

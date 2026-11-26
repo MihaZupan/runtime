@@ -24,7 +24,6 @@ using System.Linq;
 using System.Runtime.Loader;
 
 delegate void TestPreLoaderDelegate(ReliabilityTest test, string[] paths);
-delegate void AssemblyLoadContextUnloadDelegate();
 
 internal class CustomAssemblyResolver : AssemblyLoadContext
 {

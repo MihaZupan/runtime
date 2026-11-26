@@ -88,15 +88,6 @@ public class EMFloat : EmFloatStruct
         NAN_NAN = 24,
     };
 
-    private enum OPERAND
-    {
-        OPERAND_ZERO = 0,
-        OPERAND_SUBNORMAL = 1,
-        OPERAND_NORMAL = 2,
-        OPERAND_INFINITY = 3,
-        OPERAND_NAN = 4,
-    };
-
     /*
     ** Following was already defined in NMGLOBAL.H
     **

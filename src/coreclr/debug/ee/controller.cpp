@@ -3959,12 +3959,6 @@ void DebuggerController::EnableTraceCall(FramePointer maxFrame)
     }
 }
 
-struct PatchTargetVisitorData
-{
-    DebuggerController* controller;
-    FramePointer maxFrame;
-};
-
 //
 // DisableTraceCall disables call events on the controller
 //

@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace System.Diagnostics.Tracing
 {
@@ -75,10 +74,6 @@ namespace System.Diagnostics.Tracing
     {
         NetPerf,
         NetTrace
-    }
-
-    internal sealed class EventPipeWaitHandle : WaitHandle
-    {
     }
 
     internal static partial class EventPipeInternal

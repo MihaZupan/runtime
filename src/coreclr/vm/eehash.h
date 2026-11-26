@@ -28,7 +28,6 @@ class AllocMemTracker;
 class ClassLoader;
 struct LockOwner;
 class NameHandle;
-class SigTypeContext;
 
 // The "blob" you get to store in the hash table
 
@@ -221,66 +220,6 @@ public:
     }
 };
 
-/* to be used as static variable - no constructor/destructor, assumes zero
-   initialized memory */
-template <class KeyType, class Helper, BOOL bDefaultCopyIsDeep>
-class EEHashTableStatic : public EEHashTableBase<KeyType, Helper, bDefaultCopyIsDeep>
-{
-};
-
-class EEIntHashTableHelper
-{
-public:
-    static EEHashEntry_t *AllocateEntry(int iKey, BOOL bDeepCopy, AllocationHeap pHeap = 0)
-    {
-        CONTRACTL
-        {
-            WRAPPER(THROWS);
-            WRAPPER(GC_NOTRIGGER);
-        }
-        CONTRACTL_END
-
-        _ASSERTE(!bDeepCopy && "Deep copy is not supported by the EEPtrHashTableHelper");
-
-        EEHashEntry_t *pEntry = (EEHashEntry_t *) new (nothrow) BYTE[SIZEOF_EEHASH_ENTRY + sizeof(int)];
-        if (!pEntry)
-            return NULL;
-        *((int*) pEntry->Key) = iKey;
-
-        return pEntry;
-    }
-
-    static void DeleteEntry(EEHashEntry_t *pEntry, AllocationHeap pHeap = 0)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        // Delete the entry.
-        delete [] (BYTE*) pEntry;
-    }
-
-    static BOOL CompareKeys(EEHashEntry_t *pEntry, int iKey)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        return *((int*)pEntry->Key) == iKey;
-    }
-
-    static DWORD Hash(int iKey)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        return (DWORD)iKey;
-    }
-
-    static int GetKey(EEHashEntry_t *pEntry)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        return *((int*) pEntry->Key);
-    }
-};
-typedef EEHashTable<int, EEIntHashTableHelper, FALSE> EEIntHashTable;
-
 typedef struct PtrPlusInt
 {
 	void* pValue;
@@ -419,86 +358,6 @@ public:
 };
 
 typedef EEHashTable<EEStringData *, EEUnicodeStringLiteralHashTableHelper, TRUE> EEUnicodeStringLiteralHashTable;
-
-
-// Generic pointer hash table helper.
-
-template <class KeyPointerType>
-class EEPtrHashTableHelper
-{
-public:
-    static EEHashEntry_t *AllocateEntry(KeyPointerType pKey, BOOL bDeepCopy, AllocationHeap Heap)
-    {
-        CONTRACTL
-        {
-            WRAPPER(THROWS);
-            WRAPPER(GC_NOTRIGGER);
-        }
-        CONTRACTL_END
-
-        _ASSERTE(!bDeepCopy && "Deep copy is not supported by the EEPtrHashTableHelper");
-        _ASSERTE(sizeof(KeyPointerType) == sizeof(void *) && "KeyPointerType must be a pointer type");
-
-        EEHashEntry_t *pEntry = (EEHashEntry_t *) new (nothrow) BYTE[SIZEOF_EEHASH_ENTRY + sizeof(KeyPointerType)];
-        if (!pEntry)
-            return NULL;
-        *((KeyPointerType*)pEntry->Key) = pKey;
-
-        return pEntry;
-    }
-
-    static void DeleteEntry(EEHashEntry_t *pEntry, AllocationHeap Heap)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        // Delete the entry.
-        delete [] (BYTE*) pEntry;
-    }
-
-    static BOOL CompareKeys(EEHashEntry_t *pEntry, KeyPointerType pKey)
-    {
-        LIMITED_METHOD_CONTRACT;
-        SUPPORTS_DAC;
-
-        KeyPointerType pEntryKey = *((KeyPointerType*)pEntry->Key);
-        return pEntryKey == pKey;
-    }
-
-    static DWORD Hash(KeyPointerType pKey)
-    {
-        LIMITED_METHOD_CONTRACT;
-        SUPPORTS_DAC;
-
-#ifdef TARGET_X86
-        return (DWORD)(size_t) dac_cast<TADDR>(pKey);
-#else
-        // <TODO> IA64: Is this a good hashing mechanism on IA64?</TODO>
-        return (DWORD)(((size_t) dac_cast<TADDR>(pKey)) >> 3);
-#endif
-    }
-
-    static KeyPointerType GetKey(EEHashEntry_t *pEntry)
-    {
-        LIMITED_METHOD_CONTRACT;
-
-        return *((KeyPointerType*)pEntry->Key);
-    }
-};
-
-typedef EEHashTable<PTR_VOID, EEPtrHashTableHelper<PTR_VOID>, FALSE> EEPtrHashTable;
-typedef DPTR(EEPtrHashTable) PTR_EEPtrHashTable;
-
-// Define a hash of generic instantiations (represented by a SigTypeContext).
-class EEInstantiationHashTableHelper
-{
-public:
-    static EEHashEntry_t *AllocateEntry(const SigTypeContext *pKey, BOOL bDeepCopy, AllocationHeap pHeap = 0);
-    static void DeleteEntry(EEHashEntry_t *pEntry, AllocationHeap pHeap = 0);
-    static BOOL CompareKeys(EEHashEntry_t *pEntry, const SigTypeContext *pKey);
-    static DWORD Hash(const SigTypeContext *pKey);
-    static const SigTypeContext *GetKey(EEHashEntry_t *pEntry);
-};
-typedef EEHashTable<const SigTypeContext*, EEInstantiationHashTableHelper, FALSE> EEInstantiationHashTable;
 
 // ComComponentInfo hashtable.
 

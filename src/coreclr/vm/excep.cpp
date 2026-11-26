@@ -9080,16 +9080,6 @@ void ExceptionNotifications::DeliverFirstChanceNotification()
     }
 }
 
-struct TAResetStateCallbackData
-{
-    // Do we have more managed code up the stack?
-    BOOL fDoWeHaveMoreManagedCodeOnStack;
-
-    // StackFrame representing the crawlFrame above which
-    // we are searching for presence of managed code.
-    StackFrame sfSeedCrawlFrame;
-};
-
 #endif // !DACCESS_COMPILE
 
 

@@ -724,27 +724,6 @@ HRESULT GetBucketParametersForCurrentException(
 } // HRESULT GetBucketParametersForCurrentException()
 
 
-class WatsonThreadData {
- public:
-
-    WatsonThreadData(EXCEPTION_POINTERS *pExc, TypeOfReportedError t, Thread* pThr, DWORD dwID, FaultReportResult res)
-       : pExceptionInfo(pExc)
-       , tore(t)
-       , pThread(pThr)
-       , dwThreadID(dwID)
-       , result(res)
-    {
-    }
-
-    EXCEPTION_POINTERS  *pExceptionInfo; // Information about the exception, NULL if the error is not caused by an exception
-    TypeOfReportedError tore;            // Information about the fault
-    Thread*             pThread;         // Thread object for faulting thread, could be NULL
-    DWORD               dwThreadID;      // OS Thread ID for faulting thread
-    FaultReportResult   result;          // Result of invoking Watson
-};
-
-
-
 DWORD WINAPI ResetWatsonBucketsCallbackForStackOverflow(LPVOID pParam)
 {
     CONTRACTL

@@ -2055,12 +2055,6 @@ namespace IntelHardwareIntrinsicTest.SSE2
         }
     }
 
-    public enum SpecialCheck
-    {
-        Undefined = 0,
-        Sse2MultiplyHorizontalAdd = 1,
-    }
-
     public partial class Program
     {
         private static void PrintErrorHeaderTu<T>(string functionName, string testFuncString) where T : struct

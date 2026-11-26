@@ -551,39 +551,6 @@ namespace System.ComponentModel.Composition
             }
         }
 
-        private class DelayDuckImporter
-        {
-            [Import("Duck")]
-            public Lazy<IDuck> Duck
-            {
-                get;
-                set;
-            }
-        }
-
-        private class DuckImporter
-        {
-            [Import("Duck")]
-            public IDuck Duck
-            {
-                get;
-                set;
-            }
-        }
-
-        public class QuackLikeADuck
-        {
-            public virtual string Quack()
-            {
-                return "Quack";
-            }
-        }
-
-        public interface IDuck
-        {
-            string Quack();
-        }
-
         [ComImport]
         [Guid("148BD52A-A2AB-11CE-B11F-00AA00530503")]
         private class CTaskScheduler

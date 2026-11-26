@@ -7376,28 +7376,6 @@ void Debugger::EnsureDebuggerAttached(Thread * pThread, EXCEPTION_POINTERS * pEx
 }
 
 
-// Proxy code for AttachDebuggerForBreakpoint
-// Structure used in the proxy function callback
-struct SendExceptionOnHelperThreadParams
-{
-    Debugger        *m_pThis;
-    HRESULT         m_retval;
-    Thread          *m_pThread;
-    OBJECTHANDLE    m_exceptionHandle;
-    bool            m_continuable;
-    FramePointer    m_framePointer;
-    SIZE_T          m_nOffset;
-    CorDebugExceptionCallbackType m_eventType;
-    DWORD           m_dwFlags;
-
-
-    SendExceptionOnHelperThreadParams() :
-        m_pThis(NULL),
-        m_retval(S_OK),
-        m_pThread(NULL)
-        {LIMITED_METHOD_CONTRACT; }
-};
-
 //**************************************************************************
 // This function sends Exception and ExceptionCallback2 event.
 //
@@ -10132,60 +10110,6 @@ bool Debugger::ResumeThreads(AppDomain* pAppDomain)
     // Return that we've continued the process.
     return true;
 }
-
-
-class CodeBuffer
-{
-public:
-
-    BYTE *getCodeBuffer(DebuggerJitInfo *dji)
-    {
-        CONTRACTL
-        {
-            NOTHROW;
-            GC_NOTRIGGER;
-        }
-        CONTRACTL_END;
-
-        CodeRegionInfo codeRegionInfo = CodeRegionInfo::GetCodeRegionInfo(dji);
-
-        if (codeRegionInfo.getAddrOfColdCode())
-        {
-            _ASSERTE(codeRegionInfo.getSizeOfHotCode() != 0);
-            _ASSERTE(codeRegionInfo.getSizeOfColdCode() != 0);
-            S_SIZE_T totalSize = S_SIZE_T( codeRegionInfo.getSizeOfHotCode() ) +
-                                                S_SIZE_T( codeRegionInfo.getSizeOfColdCode() );
-            if ( totalSize.IsOverflow() )
-            {
-                _ASSERTE(0 && "Buffer overflow error in getCodeBuffer");
-                return NULL;
-            }
-
-            BYTE *code = (BYTE *) buffer.AllocNoThrow( totalSize.Value() );
-            if (code)
-            {
-                memcpy(code,
-                       (void *) codeRegionInfo.getAddrOfHotCode(),
-                       codeRegionInfo.getSizeOfHotCode());
-
-                memcpy(code + codeRegionInfo.getSizeOfHotCode(),
-                       (void *) codeRegionInfo.getAddrOfColdCode(),
-                       codeRegionInfo.getSizeOfColdCode());
-
-                // Now patch the control transfer instructions
-            }
-
-            return code;
-        }
-        else
-        {
-            return dac_cast<PTR_BYTE>(codeRegionInfo.getAddrOfHotCode());
-        }
-    }
-private:
-
-    CQuickBytes buffer;
-};
 
 
 //---------------------------------------------------------------------------------------

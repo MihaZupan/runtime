@@ -138,21 +138,6 @@ namespace System.Security.Cryptography.Tests
             }
         }
 
-        private sealed class EmptyDSA : DSA
-        {
-            public override byte[] CreateSignature(byte[] rgbHash) => throw new NotImplementedException();
-            public override void ImportParameters(DSAParameters parameters) => throw new NotImplementedException();
-            public override DSAParameters ExportParameters(bool includePrivateParameters) => throw new NotImplementedException();
-            public override bool VerifySignature(byte[] rgbHash, byte[] rgbSignature) => throw new NotImplementedException();
-
-            public new byte[] HashData(byte[] data, int offset, int count, HashAlgorithmName hashAlgorithm) =>
-                base.HashData(data, offset, count, hashAlgorithm);
-            public new byte[] HashData(Stream data, HashAlgorithmName hashAlgorithm) =>
-                base.HashData(data, hashAlgorithm);
-            public new bool TryHashData(ReadOnlySpan<byte> source, Span<byte> destination, HashAlgorithmName hashAlgorithm, out int bytesWritten) =>
-                base.TryHashData(source, destination, hashAlgorithm, out bytesWritten);
-        }
-
         private sealed class OverrideAbstractDSA : DSA
         {
             private readonly DSA _dsa;

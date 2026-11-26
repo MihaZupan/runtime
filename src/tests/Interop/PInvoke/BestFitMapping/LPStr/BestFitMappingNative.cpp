@@ -16,12 +16,6 @@ typedef struct TLPStr_Test_Class
     LPSTR pStr;
 } LPStr_Test_Class;
 
-typedef struct TLPStrTestStructOfArrays
-{
-    LPSTR pStr1;
-    LPSTR pStr2;
-} LPStrTestStructOfArrays;
-
 extern "C" bool DLL_EXPORT STDMETHODCALLTYPE LPStrBuffer_In_String(LPSTR pStr)
 {
     printf ("xx %s \n", pStr);

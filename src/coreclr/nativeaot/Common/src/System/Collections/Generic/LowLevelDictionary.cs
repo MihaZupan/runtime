@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace System.Collections.Generic
@@ -57,7 +56,6 @@ namespace System.Collections.Generic
             {
                 ArgumentNullException.ThrowIfNull(key);
 
-                _version++;
                 Entry entry = Find(key);
                 if (entry != null)
                     entry.m_value = value;
@@ -87,13 +85,11 @@ namespace System.Collections.Generic
             Entry entry = Find(key);
             if (entry != null)
                 throw new ArgumentException(SR.Format(SR.Argument_AddingDuplicateWithKey, key));
-            _version++;
             UncheckedAdd(key, value);
         }
 
         public void Clear(int capacity = DefaultSize)
         {
-            _version++;
             _buckets = new Entry[capacity];
             _numEntries = 0;
         }
@@ -117,7 +113,6 @@ namespace System.Collections.Generic
                     {
                         prev.m_next = entry.m_next;
                     }
-                    _version++;
                     _numEntries--;
                     return true;
                 }
@@ -212,93 +207,5 @@ namespace System.Collections.Generic
 
         private Entry?[] _buckets;
         private int _numEntries;
-        private int _version;
-
-        protected sealed class LowLevelDictEnumerator : IEnumerator<KeyValuePair<TKey, TValue>>
-        {
-            public LowLevelDictEnumerator(LowLevelDictionary<TKey, TValue> dict)
-            {
-                _dict = dict;
-                _version = _dict._version;
-                Entry[] entries = new Entry[_dict._numEntries];
-                int dst = 0;
-                for (int bucket = 0; bucket < _dict._buckets.Length; bucket++)
-                {
-                    Entry? entry = _dict._buckets[bucket];
-                    while (entry != null)
-                    {
-                        entries[dst++] = entry;
-                        entry = entry.m_next;
-                    }
-                }
-                _entries = entries;
-                Reset();
-            }
-
-            public KeyValuePair<TKey, TValue> Current
-            {
-                get
-                {
-                    if (_version != _dict._version)
-                        throw new InvalidOperationException("InvalidOperation_EnumFailedVersion");
-                    if (_curPosition == -1 || _curPosition == _entries.Length)
-                        throw new InvalidOperationException("InvalidOperation_EnumOpCantHappen");
-                    Entry entry = _entries[_curPosition];
-                    return new KeyValuePair<TKey, TValue>(entry.m_key, entry.m_value);
-                }
-            }
-
-            public void Dispose()
-            {
-            }
-
-            public bool MoveNext()
-            {
-                if (_version != _dict._version)
-                    throw new InvalidOperationException("InvalidOperation_EnumFailedVersion");
-                if (_curPosition != _entries.Length)
-                    _curPosition++;
-                bool anyMore = (_curPosition != _entries.Length);
-                return anyMore;
-            }
-
-            object IEnumerator.Current
-            {
-                get
-                {
-                    KeyValuePair<TKey, TValue> kv = Current;
-                    return kv;
-                }
-            }
-
-            public void Reset()
-            {
-                if (_version != _dict._version)
-                    throw new InvalidOperationException("InvalidOperation_EnumFailedVersion");
-                _curPosition = -1;
-            }
-
-            private LowLevelDictionary<TKey, TValue> _dict;
-            private Entry[] _entries;
-            private int _curPosition;
-            private int _version;
-        }
-    }
-
-    /// <summary>
-    /// LowLevelDictionary when enumeration is needed
-    /// </summary>
-    internal sealed class LowLevelDictionaryWithIEnumerable<TKey, TValue> : LowLevelDictionary<TKey, TValue>, IEnumerable<KeyValuePair<TKey, TValue>> where TKey : IEquatable<TKey>
-    {
-        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
-        {
-            return new LowLevelDictEnumerator(this);
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            IEnumerator<KeyValuePair<TKey, TValue>> ie = GetEnumerator();
-            return ie;
-        }
     }
 }

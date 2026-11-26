@@ -142,18 +142,6 @@ namespace System.Threading.Tasks.Dataflow.Tests
         }
     }
 
-    internal sealed class DelegateObservable<T> : IObservable<T>
-    {
-        public Func<IObserver<T>, IDisposable> SubscribeDelegate = null;
-
-        IDisposable IObservable<T>.Subscribe(IObserver<T> observer)
-        {
-            return SubscribeDelegate != null ?
-                SubscribeDelegate(observer) :
-                null;
-        }
-    }
-
     internal sealed class DelegateTaskScheduler : TaskScheduler
     {
         public Action<Task> QueueTaskDelegate = null;

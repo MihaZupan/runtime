@@ -3138,12 +3138,4 @@ namespace System.Linq.Expressions.Tests
     public class DerivedClass : BaseClass
     {
     }
-
-    internal class AssertionException : Exception
-    {
-        public AssertionException(string msg)
-            : base(msg)
-        {
-        }
-    }
 }

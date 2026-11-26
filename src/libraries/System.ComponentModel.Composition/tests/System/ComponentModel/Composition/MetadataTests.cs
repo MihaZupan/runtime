@@ -932,11 +932,6 @@ namespace System.ComponentModel.Composition
         string Foo { get; }
     }
 
-    public interface IMetadataBar
-    {
-        string Bar { get; }
-    }
-
     [Export]
     public class MyImporterWithExport
     {

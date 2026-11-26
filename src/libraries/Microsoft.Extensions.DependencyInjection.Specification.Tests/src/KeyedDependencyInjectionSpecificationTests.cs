@@ -1066,21 +1066,6 @@ namespace Microsoft.Extensions.DependencyInjection.Specification
             public IService Service2 { get; }
         }
 
-        internal class ServiceWithOtherService
-        {
-            public ServiceWithOtherService(
-                [FromKeyedServices("service1")] IService service1,
-                [FromKeyedServices("service2")] IService service2)
-            {
-                Service1 = service1;
-                Service2 = service2;
-            }
-
-            public IService Service1 { get; }
-
-            public IService Service2 { get; }
-        }
-
         internal class ServiceWithIntKey : IService
         {
             private readonly int _id;

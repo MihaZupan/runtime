@@ -1276,19 +1276,6 @@ namespace ComInterfaceGenerator.Unit.Tests
 
             public IComInterfaceAttributeProvider AttributeProvider { get; }
         }
-        public class ManagedToUnmanagedNoImplicitThis : IVirtualMethodIndexSignatureProvider
-        {
-            public MarshalDirection Direction => MarshalDirection.ManagedToUnmanaged;
-
-            public bool ImplicitThisParameter => false;
-
-            public ManagedToUnmanagedNoImplicitThis(IComInterfaceAttributeProvider attributeProvider)
-            {
-                AttributeProvider = attributeProvider;
-            }
-
-            public IComInterfaceAttributeProvider AttributeProvider { get; }
-        }
         public class UnmanagedToManaged : IVirtualMethodIndexSignatureProvider
         {
             public MarshalDirection Direction => MarshalDirection.UnmanagedToManaged;

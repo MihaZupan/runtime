@@ -24,10 +24,6 @@ Namespace Microsoft.VisualBasic
         Private Const ERROR_INVALID_ACCESS As Integer = 12
         Private Const ERROR_NOT_SAME_DEVICE As Integer = 17
 
-        Friend Enum vbFileType
-            vbPrintFile = 0
-            vbWriteFile = 1
-        End Enum
         'FILESYSTEM function vars
 
         Friend Const FIRST_LOCAL_CHANNEL As Integer = 1

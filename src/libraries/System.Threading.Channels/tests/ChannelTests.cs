@@ -281,10 +281,5 @@ namespace System.Threading.Channels.Tests
 
             public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken) => default;
         }
-
-        private sealed class CanReadFalseStream : MemoryStream
-        {
-            public override bool CanRead => false;
-        }
     }
 }

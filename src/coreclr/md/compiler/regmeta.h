@@ -21,24 +21,6 @@
 
 class FilterManager;
 
-// Support for symbol binding meta data.  This is a custom value hung off of
-// the Module entry.  The CORDBG_SYMBOL_URL needs to be allocated on top of
-// a buffer large enough to hold it.
-//
-#define SZ_CORDBG_SYMBOL_URL        W("DebugSymbolUrlData")
-
-struct CORDBG_SYMBOL_URL
-{
-    GUID        FormatID;               // ID of the format type.
-    WCHAR       rcName[2];              // Variable sized name of the item.
-
-    ULONG Size() const
-    {
-        return (ULONG)(sizeof(GUID) + ((u16_strlen(rcName) + 1) * 2));
-    }
-};
-
-
 //
 // Internal open flags.
 //
@@ -59,21 +41,6 @@ enum SetAPICallerType
 // Add a forward declaration for RegMeta.
 class RegMeta;
 typedef HRESULT (RegMeta::*ValidateRecordFunction)(RID);
-
-// Support for security attributes. Bundles of attributes (they look much like
-// custom attributes) are passed into a single API (DefineSecurityAttributeSet)
-// where they're processed and written into the metadata as one or more opaque
-// blobs of data.
-struct CORSEC_ATTR
-{
-    CORSEC_ATTR     *pNext;                 // Next structure in list or NULL.
-    mdToken         tkObj;                  // The object to put the value on.
-    mdMemberRef     tkCtor;                 // The security attribute constructor.
-    mdTypeRef       tkTypeRef;              // Ref to the security attribute type.
-    mdAssemblyRef   tkAssemblyRef;          // Ref to the assembly containing the security attribute class.
-    void const      *pCustomAttribute;      // The custom value data.
-    ULONG           cbCustomAttribute;      // The custom value data length.
-};
 
 // Support for "Pseudo Custom Attributes".
 struct CCustAttrHashKey

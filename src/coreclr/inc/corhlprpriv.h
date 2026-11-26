@@ -368,12 +368,6 @@ public:
     }
 };
 
-/* to be used as static variable - no constructor/destructor, assumes zero
-   initialized memory */
-class CQuickBytesStatic : public CQuickBytesBase
-{
-};
-
 template <SIZE_T CQUICKBYTES_BASE_SPECIFY_SIZE>
 class CQuickBytesSpecifySizeBase : public CQuickMemoryBase<CQUICKBYTES_BASE_SPECIFY_SIZE, CQUICKBYTES_INCREMENTAL_SIZE>
 {
@@ -392,13 +386,6 @@ public:
     {
         this->Destroy();
     }
-};
-
-/* to be used as static variable - no constructor/destructor, assumes zero
-   initialized memory */
-template <SIZE_T CQUICKBYTES_BASE_SPECIFY_SIZE>
-class CQuickBytesSpecifySizeStatic : public CQuickBytesSpecifySizeBase<CQUICKBYTES_BASE_SPECIFY_SIZE>
-{
 };
 
 template <class T> class CQuickArrayBase : public CQuickBytesBase
@@ -614,62 +601,11 @@ public:
 };
 
 
-/* to be used as static variable - no constructor/destructor, assumes zero
-   initialized memory */
-template <class T> class CQuickArrayStatic : public CQuickArrayBase<T>
-{
-};
-
 typedef CQuickArrayBase<WCHAR> CQuickWSTRBase;
 typedef CQuickArray<WCHAR> CQuickWSTR;
-typedef CQuickArrayStatic<WCHAR> CQuickWSTRStatic;
 
 typedef CQuickArrayBase<CHAR> CQuickSTRBase;
 typedef CQuickArray<CHAR> CQuickSTR;
-typedef CQuickArrayStatic<CHAR> CQuickSTRStatic;
-
-class RidBitmap
-{
-public:
-    HRESULT InsertToken(mdToken token)
-    {
-        HRESULT  hr     = S_OK;
-        mdToken  rid    = RidFromToken(token);
-        SIZE_T   index  = rid / 8;
-        BYTE     bit    = (BYTE)(1 << (rid % 8));
-
-        if (index >= buffer.Size())
-        {
-            SIZE_T oldSize = buffer.Size();
-            SIZE_T newSize = index+1+oldSize/8;
-            IfFailRet(buffer.ReSizeNoThrow(newSize));
-            memset(&buffer[oldSize], 0, newSize-oldSize);
-        }
-
-        buffer[index] |= bit;
-        return hr;
-    }
-
-    bool IsTokenInBitmap(mdToken token)
-    {
-        mdToken rid   = RidFromToken(token);
-        SIZE_T  index = rid / 8;
-        BYTE    bit   = (BYTE)(1 << (rid % 8));
-
-        return ((index < buffer.Size()) && (buffer[index] & bit));
-    }
-
-    void Reset()
-    {
-        if (buffer.Size())
-        {
-            memset(&buffer[0], 0, buffer.Size());
-        }
-    }
-
-private:
-    CQuickArray<BYTE> buffer;
-};
 
 //*****************************************************************************
 //

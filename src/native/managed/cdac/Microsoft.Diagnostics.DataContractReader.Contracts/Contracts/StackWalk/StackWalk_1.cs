@@ -157,12 +157,6 @@ internal partial class StackWalk_1 : IStackWalk
         }
     }
 
-    private enum ContextFlags
-    {
-        Full = 0x1,
-        All = 0x2,
-    }
-
     IEnumerable<IStackDataFrameHandle> IStackWalk.CreateStackWalk(ThreadData threadData)
     {
         IPlatformAgnosticContext context = IPlatformAgnosticContext.GetContextForPlatform(_target);

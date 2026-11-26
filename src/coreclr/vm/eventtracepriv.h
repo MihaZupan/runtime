@@ -76,14 +76,6 @@ struct EventStructGCBulkMovedObjectRangesValue
     ULONGLONG RangeLength;
 };
 
-struct EventStructStaticBulkFixedSizeData
-{
-    ULONGLONG TypeID;
-    ULONGLONG Address;
-    ULONGLONG Value;
-    ULONG Flags;
-};
-
 // This only contains the fixed-size data at the top of each struct in
 // the bulk type event.  These fields must still match exactly the initial
 // fields of the struct described in the manifest.

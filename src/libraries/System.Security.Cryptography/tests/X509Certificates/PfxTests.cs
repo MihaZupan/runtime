@@ -1177,7 +1177,5 @@ namespace System.Security.Cryptography.X509Certificates.Tests
             builder.SealWithMac(pfxPassword, HashAlgorithmName.SHA256, 25);
             return builder.Encode();
         }
-
-        internal delegate ulong GetIterationCountDelegate(ReadOnlySpan<byte> pkcs12, out int bytesConsumed);
     }
 }

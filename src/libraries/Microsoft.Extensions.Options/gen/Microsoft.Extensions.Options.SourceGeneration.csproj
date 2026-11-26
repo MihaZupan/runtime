@@ -35,7 +35,6 @@
     <Compile Include="ParserUtilities.cs" />
     <Compile Include="SymbolHolder.cs" />
     <Compile Include="SymbolLoader.cs" />
-    <Compile Include="TypeDeclarationSyntaxReceiver.cs" />
   </ItemGroup>
 
 </Project>

@@ -128,59 +128,6 @@ namespace System.DirectoryServices.ActiveDirectory
         public string? name;
     }
 
-    /*typedef struct {
-        LPTSTR      pNameTarget;
-        WORD        wPriority;
-        WORD        wWeight;
-        WORD        wPort;
-        WORD        Pad;            // keep ptrs DWORD aligned
-    }DNS_SRV_DATA, *PDNS_SRV_DATA;*/
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal sealed class DnsSrvData
-    {
-        public string targetName = null!;
-        public short priority;
-        public short weight;
-        public short port;
-        public short pad;
-    }
-
-    /*typedef struct _OSVERSIONINFOEX {
-        DWORD dwOSVersionInfoSize;
-        DWORD dwMajorVersion;
-        DWORD dwMinorVersion;
-        DWORD dwBuildNumber;
-        DWORD dwPlatformId;
-        TCHAR szCSDVersion[ 128 ];
-        WORD wServicePackMajor;
-        WORD wServicePackMinor;
-        WORD wSuiteMask;
-        BYTE wProductType;
-        BYTE wReserved;
-        } OSVERSIONINFOEX, *POSVERSIONINFOEX, *LPOSVERSIONINFOEX;*/
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal sealed class OSVersionInfoEx
-    {
-        public OSVersionInfoEx()
-        {
-            osVersionInfoSize = (int)Marshal.SizeOf(this);
-        }
-
-        // The OSVersionInfoSize field must be set to Marshal.SizeOf(this)
-        public int osVersionInfoSize;
-        public int majorVersion;
-        public int minorVersion;
-        public int buildNumber;
-        public int platformId;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        public string? csdVersion = null;
-        public short servicePackMajor;
-        public short servicePackMinor;
-        public short suiteMask;
-        public byte productType;
-        public byte reserved;
-    }
-
     /*typedef struct _NEGOTIATE_CALLER_NAME_RESPONSE {
             ULONG       MessageType ;
             PWSTR       CallerName ;

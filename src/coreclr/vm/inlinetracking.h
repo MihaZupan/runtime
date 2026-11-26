@@ -39,8 +39,6 @@
 class MethodDesc;
 typedef DPTR(class MethodDesc)          PTR_MethodDesc;
 
-class ZapHeap;
-
 struct MethodInModule
 {
     Module *m_module;

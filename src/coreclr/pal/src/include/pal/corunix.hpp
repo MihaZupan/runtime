@@ -327,16 +327,6 @@ namespace CorUnix
 
     };
 
-    class IPalProcess
-    {
-    public:
-        virtual
-        DWORD
-        GetProcessID(
-            void
-            ) = 0;
-    };
-
     class IPalObjectManager
     {
     public:
